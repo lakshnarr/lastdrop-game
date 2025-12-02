@@ -1,0 +1,18 @@
+# Zip archives
+*.zip
+
+# Temporary files
+temp.js
+*.tmp
+*.bak
+
+# Node modules (if any)
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
