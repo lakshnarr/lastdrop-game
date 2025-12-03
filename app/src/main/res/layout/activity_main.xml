@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0b1020"
+    android:fillViewport="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:gravity="top|center_horizontal"
     android:orientation="vertical"
     android:padding="16dp">
@@ -22,8 +27,33 @@
     <Button
         android:id="@+id/btnConnectDice"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Connect to GoDice" />
+        android:layout_height="56dp"
+        android:layout_marginTop="4dp"
+        android:backgroundTint="#4CAF50"
+        android:drawablePadding="8dp"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="🎲  Connect to GoDice"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnConnectESP32"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#2196F3"
+        android:drawablePadding="8dp"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="📡  Connect ESP32"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/tvDiceStatus"
@@ -40,6 +70,28 @@
         android:layout_marginTop="4dp"
         android:text="Battery: --%"
         android:textColor="#FFFFFF" />
+
+    <TextView
+        android:id="@+id/tvCurrentTurn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="4dp"
+        android:background="@android:color/transparent"
+        android:text="Current Turn: -"
+        android:textColor="#4CAF50"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvESP32Status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="ESP32: Not connected"
+        android:textColor="#FFB74D" />
 
     <TextView
         android:id="@+id/tvScoreboardTitle"
@@ -246,33 +298,345 @@
         android:id="@+id/tvUndoStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Undo: none"
+        android:layout_marginTop="8dp"
         android:padding="4dp"
-        android:textSize="12sp" />
+        android:text=""
+        android:textColor="#FFA726"
+        android:textSize="12sp"
+        android:visibility="gone" />
 
-    <Button
-        android:id="@+id/btnUndo"
-        android:layout_width="wrap_content"
+    <!-- Action Buttons Grid -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Undo Last Roll" />
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal"
+        android:weightSum="2">
 
-    <Button
-        android:id="@+id/btnUndoConfirm"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Confirm Undo"
-        android:enabled="false" />
+        <Button
+            android:id="@+id/btnUndo"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:backgroundTint="#FF9800"
+            android:elevation="4dp"
+            android:padding="8dp"
+            android:text="  ↩️  Undo Last Roll"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/btnRefreshScoreboard"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Refresh Scoreboard" />
+        <Button
+            android:id="@+id/btnRefreshScoreboard"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:backgroundTint="#2196F3"
+            android:elevation="4dp"
+            android:padding="8dp"
+            android:text="  🔄  Refresh"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnResetScore"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#F44336"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="  🔄  Reset Game"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <!-- Test Mode Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:text="🧪 Testing Tools"
+        android:textColor="#FFA500"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnTestMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#FF6600"
+        android:text="Test Mode: OFF"
+        android:textColor="#FFFFFF" />
+
+    <Button
+        android:id="@+id/btnSimulateRoll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#4CAF50"
+        android:text="Simulate Dice Roll"
+        android:textColor="#FFFFFF"
+        android:visibility="gone" />
+
+    <!-- Virtual Dice Controls (ESP32 Test Mode) -->
+    <LinearLayout
+        android:id="@+id/layoutVirtualDice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="#1a2530"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎲 Virtual Dice Controls"
+            android:textColor="#00FFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- Dice 1 Controls -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="Dice 1:"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnDice1Value1"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="1"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice1Value2"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="2"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice1Value3"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="3"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice1Value4"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="4"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice1Value5"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="5"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice1Value6"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#2196F3"
+                android:text="6"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Dice 2 Controls (for 2-dice mode) -->
+        <LinearLayout
+            android:id="@+id/layoutDice2Controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="Dice 2:"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnDice2Value1"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="1"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice2Value2"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="2"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice2Value3"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="3"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice2Value4"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="4"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice2Value5"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="5"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDice2Value6"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#FF9800"
+                android:text="6"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Selected Values Display -->
+        <TextView
+            android:id="@+id/tvVirtualDiceSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Selected: -"
+            android:textColor="#00FF00"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- Send Button -->
+        <Button
+            android:id="@+id/btnSendVirtualDice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#4CAF50"
+            android:text="Send to ESP32"
+            android:textColor="#FFFFFF"
+            android:enabled="false" />
+    </LinearLayout>
+
+    <!-- Test Log Section -->
+    <TextView
+        android:id="@+id/tvTestLogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:text="📋 ESP32 Test Log"
+        android:textColor="#00FFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/scrollTestLog"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:background="#0D1117"
+        android:padding="12dp"
+        android:scrollbars="vertical"
+        android:fadeScrollbars="false"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvTestLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="Console ready..."
+            android:textColor="#8B949E"
+            android:textSize="13sp"
+            android:lineSpacingExtra="2dp" />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnClearLog"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Reset Score" />
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#666666"
+        android:text="Clear Log"
+        android:textColor="#FFFFFF"
+        android:visibility="gone" />
 
 </LinearLayout>
+
+</ScrollView>

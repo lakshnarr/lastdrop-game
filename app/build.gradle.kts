@@ -1,8 +1,10 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose) // keep compose plugin so ui.theme compiles
-    id("kotlin-kapt")
+    id("com.google.devtools.ksp") version "1.9.25-1.0.20"
 }
 
 android {
@@ -17,10 +19,37 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Load API key from local.properties (NOT committed to version control)
+        val localProperties = project.rootProject.file("local.properties")
+        if (localProperties.exists()) {
+            val properties = Properties()
+            properties.load(FileInputStream(localProperties))
+            val apiKey = properties.getProperty("LASTDROP_API_KEY") ?: "ABC123"
+            buildConfigField("String", "API_KEY", "\"$apiKey\"")
+        } else {
+            buildConfigField("String", "API_KEY", "\"ABC123\"")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            val localProperties = project.rootProject.file("local.properties")
+            if (localProperties.exists()) {
+                val properties = Properties()
+                properties.load(FileInputStream(localProperties))
+                
+                storeFile = file("../lastdrop-release-key.jks")
+                storePassword = properties.getProperty("KEYSTORE_PASSWORD")
+                keyAlias = "lastdrop"
+                keyPassword = properties.getProperty("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -38,10 +67,8 @@ android {
         jvmTarget = "11"
     }
 
-    // We keep compose = true (for the theme files),
-    // but our MainActivity uses XML with setContentView, which is fine.
     buildFeatures {
-        compose = true
+        buildConfig = true
     }
 }
 
@@ -51,12 +78,6 @@ dependencies {
     // From your version catalog (original)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
     implementation(project(":godicesdklib"))
 
     // Extra standard UI libs (for AppCompat + Material XML widgets)
@@ -71,15 +92,11 @@ dependencies {
 
     // Room
     implementation("androidx.room:room-runtime:$room_version")
-    kapt("androidx.room:room-compiler:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
 
     // Tests (from your original file)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

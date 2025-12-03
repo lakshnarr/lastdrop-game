@@ -42,6 +42,18 @@ const int hallPins[NUM_TILES] = {
 
 #define DEVICE_NAME "LASTDROP-ESP32"
 
+// ==================== SECURITY CONFIGURATION ====================
+// BLE Pairing PIN (change this for your device!)
+// Set to 0 to disable pairing (less secure, but easier setup)
+#define BLE_PAIRING_ENABLED false
+#define BLE_PAIRING_PIN 123456
+
+// Trusted Android device addresses (optional - whitelist specific phones)
+// Leave empty {} to accept connections from any device
+// Example: {"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"}
+const char* TRUSTED_ANDROID_ADDRESSES[] = {};
+const int TRUSTED_ANDROID_COUNT = 0;
+
 // ==================== LED COLORS ====================
 const uint32_t TILE_COLORS[NUM_TILES] = {
   0x2E8B57, 0x3CB371, 0x90EE90, 0x98FB98, 0xADFF2F,  // Tiles 0-4 (Green shades)
@@ -93,13 +105,29 @@ const unsigned long SCAN_INTERVAL = 5000; // Scan all sensors every 5 seconds
 // ==================== BLE CALLBACKS ====================
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
+      // Get connected client address
+      std::string clientAddress = pServer->getConnId() >= 0 ? "connected" : "unknown";
+      
+      // Optional: Check if client is in whitelist
+      if (TRUSTED_ANDROID_COUNT > 0) {
+        // Note: BLE Server API doesn't expose peer address directly
+        // For production, implement custom authentication via first message
+        Serial.println("WARNING: Address filtering not fully implemented - verify via app");
+      }
+      
       deviceConnected = true;
       Serial.println("BLE Client Connected");
+      Serial.print("Connection established at: ");
+      Serial.println(millis());
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
       Serial.println("BLE Client Disconnected");
+      
+      // Reset game state on disconnect (security measure)
+      waitingForCoin = false;
+      expectedTile = -1;
     }
 };
 
@@ -149,6 +177,26 @@ void setup() {
 void initBLE() {
   // Create the BLE Device
   BLEDevice::init(DEVICE_NAME);
+
+  // Security Configuration (optional pairing with PIN)
+  if (BLE_PAIRING_ENABLED) {
+    BLESecurity *pSecurity = new BLESecurity();
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
+    pSecurity->setCapability(ESP_IO_CAP_OUT); // Display only
+    pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+    
+    uint32_t passkey = BLE_PAIRING_PIN;
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t));
+    
+    Serial.print("BLE Security enabled - Pairing PIN: ");
+    Serial.println(BLE_PAIRING_PIN);
+  } else {
+    Serial.println("BLE Security disabled - Open connection mode");
+  }
+
+  // Print MAC address for whitelisting
+  Serial.print("ESP32 MAC Address: ");
+  Serial.println(BLEDevice::getAddress().toString().c_str());
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();

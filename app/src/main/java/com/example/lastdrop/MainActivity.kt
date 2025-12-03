@@ -26,6 +26,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
+import org.json.JSONArray
+import org.json.JSONObject
 import org.sample.godicesdklib.GoDiceSDK
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,6 +39,7 @@ import java.util.TimerTask
 import java.util.UUID
 import kotlin.collections.HashMap
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 @SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
@@ -44,8 +47,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ---------- API config ----------
     companion object {
         private const val API_BASE_URL = "https://lastdrop.earth/api"
-        private const val API_KEY = "ABC123"
+        private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
+        
+        // ESP32 BLE Configuration
+        const val ESP32_DEVICE_NAME = "LASTDROP-ESP32"
+        val ESP32_SERVICE_UUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+        val ESP32_CHAR_RX_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        val ESP32_CHAR_TX_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+        val CCCDUUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
     }
 
     // ---------- UI ----------
@@ -69,9 +79,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private lateinit var btnConnectDice: Button
     private lateinit var btnUndo: Button
-    private lateinit var btnUndoConfirm: Button
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
+    private lateinit var btnTestMode: Button
+    private lateinit var btnSimulateRoll: Button
+    private lateinit var tvTestLog: TextView
+    private lateinit var tvTestLogTitle: TextView
+    private lateinit var scrollTestLog: ScrollView
+    private lateinit var btnClearLog: Button
 
     // ---------- Game / players ----------
     private var lastRoll: Int? = null
@@ -114,6 +129,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // dice mode
     private var playWithTwoDice: Boolean = false
     private val diceResults: MutableMap<Int, Int> = HashMap()
+    
+    // ---------- ESP32 BLE ----------
+    private var esp32Connected: Boolean = false
+    private var esp32Gatt: BluetoothGatt? = null
+    private var esp32TxCharacteristic: BluetoothGattCharacteristic? = null
+    private var esp32RxCharacteristic: BluetoothGattCharacteristic? = null
+    private var waitingForCoinPlacement: Boolean = false
+    private var esp32ScanCallback: ScanCallback? = null
+    
+    // Test mode (bypasses ESP32)
+    private var testModeEnabled: Boolean = false
 
     // battery per diceId
     private val diceBatteryLevels: MutableMap<Int, Int> = HashMap()
@@ -167,6 +193,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         GoDiceSDK.listener = this
 
         setupUiListeners()
+        
+        // Connect to ESP32 board
+        if (!testModeEnabled) {
+            handler.postDelayed({
+                connectESP32()
+            }, 2000) // Wait 2 seconds after startup
+        }
 
         // Ask user how many players and their names (2–4)
         configurePlayers()
@@ -182,6 +215,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         undoTimer?.cancel()
         mainScope.cancel()
         stopScan()
+        disconnectESP32()
+        stopESP32Scan()
         dices.values.forEach { dice ->
             try {
                 dice.gatt?.close()
@@ -215,9 +250,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         btnConnectDice = findViewById(R.id.btnConnectDice)
         btnUndo = findViewById(R.id.btnUndo)
-        btnUndoConfirm = findViewById(R.id.btnUndoConfirm)
         btnResetScore = findViewById(R.id.btnResetScore)
         btnRefreshScoreboard = findViewById(R.id.btnRefreshScoreboard)
+        btnTestMode = findViewById(R.id.btnTestMode)
+        btnSimulateRoll = findViewById(R.id.btnSimulateRoll)
+        tvTestLog = findViewById(R.id.tvTestLog)
+        tvTestLogTitle = findViewById(R.id.tvTestLogTitle)
+        scrollTestLog = findViewById(R.id.scrollTestLog)
+        btnClearLog = findViewById(R.id.btnClearLog)
 
         tvTitle.text = "Last Drop – GoDice Controller"
         tvDiceStatus.text = "Not connected"
@@ -228,18 +268,32 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnConnectDice.text = "Connect Dice"
         tvScoreP1.text = "P1: 10"
         tvScoreP2.text = "P2: 10"
-        tvScoreP3.text = "P3: 10"
-        tvScoreP4.text = "P4: 10"
-
-        btnUndoConfirm.isEnabled = false
+        // Initialize test mode UI
+        btnTestMode.text = "Test Mode: OFF"
+        btnSimulateRoll.isEnabled = false
+        tvTestLogTitle.visibility = View.GONE
+        scrollTestLog.visibility = View.GONE
+        btnClearLog.visibility = View.GONE
     }
 
     private fun setupUiListeners() {
         btnConnectDice.setOnClickListener { onConnectButtonClicked() }
-        btnUndo.setOnClickListener { startUndoWindow() }
-        btnUndoConfirm.setOnClickListener { confirmUndo() }
+        btnUndo.setOnClickListener {
+            if (btnUndo.text.toString().startsWith("Confirm")) {
+                confirmUndo()
+            } else {
+                startUndoWindow()
+            }
+        }
         btnResetScore.setOnClickListener { resetLocalGame() }
         btnRefreshScoreboard.setOnClickListener { fetchScoreboard() }
+        
+        btnTestMode.setOnClickListener { toggleTestMode() }
+        btnSimulateRoll.setOnClickListener { simulateDiceRoll() }
+        btnClearLog.setOnClickListener { 
+            tvTestLog.text = "Console cleared..."
+            Toast.makeText(this, "Test log cleared", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun onConnectButtonClicked() {
@@ -818,6 +872,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvLastEvent.text = eventText
 
         Log.d(TAG, "Stable roll $value by $playerName")
+        
+        // Send to ESP32 for physical board update
+        sendRollToESP32(safeIndex, value, currentPos, turnResult.newPosition)
 
         // advance turn 0..playerCount-1
         currentPlayer = (currentPlayer + 1) % playerCount
@@ -867,6 +924,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 modeTwoDice = playWithTwoDice // will be updated once player chooses mode
             )
             currentGameId = dao.insertGame(game)
+            
+            // Send reset command to ESP32
+            withContext(Dispatchers.Main) {
+                sendResetToESP32()
+            }
 
             // Push reset state to server
             pushResetStateToServer()
@@ -1354,17 +1416,20 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         undoTimer?.cancel()
-        btnUndoConfirm.isEnabled = true
+        btnUndo.text = "Confirm Undo"
+        btnUndo.setBackgroundColor(0xFFFF6B6B.toInt()) // Red highlight
 
         undoTimer = mainScope.launch {
             var seconds = 5
             while (seconds > 0) {
                 tvUndoStatus.text = "Tap CONFIRM to undo ($seconds s)"
+                btnUndo.text = "Confirm ($seconds s)"
                 delay(1000)
                 seconds--
             }
             tvUndoStatus.text = "Undo expired"
-            btnUndoConfirm.isEnabled = false
+            btnUndo.text = "Undo Last Move"
+            btnUndo.setBackgroundColor(0xFF6200EE.toInt()) // Reset color
         }
     }
 
@@ -1383,6 +1448,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         // Set current player back to the one who just rolled (so they play again)
         currentPlayer = previousPlayerIndex
+        
+        // Send undo command to ESP32
+        sendUndoToESP32(previousPlayerIndex, playerPositions[playerName] ?: 1, previousPosition)
 
         // Clear ALL roll data (critical: prevents server from showing stale data)
         lastRoll = null
@@ -1394,7 +1462,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         tvLastEvent.text = "Undo applied - $playerName returns to position $previousPosition"
         tvUndoStatus.text = "Undo applied"
-        btnUndoConfirm.isEnabled = false
+        btnUndo.text = "Undo Last Move"
+        btnUndo.setBackgroundColor(0xFF6200EE.toInt()) // Reset color
         undoTimer?.cancel()
 
         Log.d(TAG, "Undo confirmed: $playerName -> pos=$previousPosition, score=$previousScore")
@@ -1527,6 +1596,416 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
     }
+
+    // ------------------------------------------------------------------------
+    //  Test Mode Functions
+    // ------------------------------------------------------------------------
+
+    private fun toggleTestMode() {
+        Log.d(TAG, "toggleTestMode called, current state: $testModeEnabled")
+        
+        // Show test mode selection dialog
+        val options = arrayOf(
+            "Production Mode (GoDice + ESP32 + live.html)",
+            "Test Mode 1: Android Virtual Dice + ESP32",
+            "Test Mode 2: Android + live.html (No ESP32)"
+        )
+        
+        AlertDialog.Builder(this)
+            .setTitle("Select Test Mode")
+            .setSingleChoiceItems(options, if (testModeEnabled) 2 else 0) { dialog, which ->
+                when (which) {
+                    0 -> {
+                        // Production Mode
+                        testModeEnabled = false
+                        btnTestMode.text = "Test Mode: OFF"
+                        btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
+                        btnSimulateRoll.isEnabled = false
+                        
+                        // Hide test console
+                        tvTestLogTitle.visibility = View.GONE
+                        scrollTestLog.visibility = View.GONE
+                        btnClearLog.visibility = View.GONE
+                        
+                        appendTestLog("🔴 Production Mode - Using GoDice + ESP32")
+                        Toast.makeText(this, "Production Mode: GoDice + ESP32 + live.html", Toast.LENGTH_SHORT).show()
+                        
+                        // Try to connect ESP32
+                        if (!esp32Connected) {
+                            connectESP32()
+                        }
+                    }
+                    1 -> {
+                        // Test Mode 1: Virtual Dice + ESP32
+                        testModeEnabled = true
+                        btnTestMode.text = "Test Mode 1: ON"
+                        btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
+                        btnSimulateRoll.isEnabled = true
+                        
+                        // Show test console
+                        tvTestLogTitle.visibility = View.VISIBLE
+                        scrollTestLog.visibility = View.VISIBLE
+                        btnClearLog.visibility = View.VISIBLE
+                        
+                        appendTestLog("🟠 Test Mode 1 - Virtual Dice + ESP32 Board")
+                        Toast.makeText(this, "Test Mode 1: Simulated dice with ESP32 board", Toast.LENGTH_LONG).show()
+                        
+                        // Try to connect ESP32
+                        if (!esp32Connected) {
+                            connectESP32()
+                        }
+                    }
+                    2 -> {
+                        // Test Mode 2: Android + live.html only (no ESP32)
+                        testModeEnabled = true
+                        btnTestMode.text = "Test Mode 2: ON"
+                        btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
+                        btnSimulateRoll.isEnabled = true
+                        
+                        // Show test console
+                        tvTestLogTitle.visibility = View.VISIBLE
+                        scrollTestLog.visibility = View.VISIBLE
+                        btnClearLog.visibility = View.VISIBLE
+                        
+                        appendTestLog("🟢 Test Mode 2 - Virtual Dice + live.html (No ESP32)")
+                        Toast.makeText(this, "Test Mode 2: Simulated dice, live.html only", Toast.LENGTH_LONG).show()
+                        
+                        // Disconnect ESP32 if connected
+                        if (esp32Connected) {
+                            disconnectESP32()
+                            appendTestLog("ESP32 disconnected for Test Mode 2")
+                        }
+                    }
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+        
+        Log.d(TAG, "toggleTestMode dialog shown")
+    }
+
+    private fun simulateDiceRoll() {
+        Log.d(TAG, "simulateDiceRoll called, testModeEnabled: $testModeEnabled")
+        if (!testModeEnabled) {
+            Toast.makeText(this, "Enable Test Mode first!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val randomRoll = Random.nextInt(1, 7)
+        appendTestLog("🎲 Simulated roll: $randomRoll")
+        Log.d(TAG, "Simulating dice roll: $randomRoll")
+        
+        // Simulate dice stable callback
+        onDiceStable(0, randomRoll)
+    }
+
+    private fun appendTestLog(message: String) {
+        runOnUiThread {
+            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            val currentLog = tvTestLog.text.toString()
+            tvTestLog.text = "[$timestamp] $message\n$currentLog"
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    //  ESP32 BLE Integration
+    // ------------------------------------------------------------------------
+
+    @SuppressLint("MissingPermission")
+    private fun connectESP32() {
+        if (esp32Connected) {
+            Log.d(TAG, "ESP32 already connected")
+            return
+        }
+
+        if (!ensureBlePermissions()) {
+            Toast.makeText(this, "Bluetooth permissions required", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Log.d(TAG, "Starting ESP32 scan...")
+        
+        val scanner = bluetoothAdapter?.bluetoothLeScanner
+        if (scanner == null) {
+            Toast.makeText(this, "Bluetooth scanner not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val scanFilter = ScanFilter.Builder()
+            .setDeviceName(ESP32_DEVICE_NAME)
+            .build()
+
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+
+        esp32ScanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult?) {
+                result?.device?.let { device ->
+                    Log.d(TAG, "Found ESP32: ${device.name} - ${device.address}")
+                    stopESP32Scan()
+                    connectToESP32Device(device)
+                }
+            }
+
+            override fun onScanFailed(errorCode: Int) {
+                Log.e(TAG, "ESP32 scan failed: $errorCode")
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "ESP32 scan failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        scanner.startScan(listOf(scanFilter), scanSettings, esp32ScanCallback)
+        
+        // Stop scan after 10 seconds
+        handler.postDelayed({
+            stopESP32Scan()
+        }, 10000)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopESP32Scan() {
+        esp32ScanCallback?.let {
+            bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
+            esp32ScanCallback = null
+            Log.d(TAG, "ESP32 scan stopped")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectToESP32Device(device: BluetoothDevice) {
+        Log.d(TAG, "Connecting to ESP32: ${device.address}")
+        
+        esp32Gatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED -> {
+                        Log.d(TAG, "ESP32 connected, discovering services...")
+                        gatt?.discoverServices()
+                    }
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        Log.d(TAG, "ESP32 disconnected")
+                        esp32Connected = false
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+
+            override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+                if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
+                    val service = gatt.getService(ESP32_SERVICE_UUID)
+                    esp32TxCharacteristic = service?.getCharacteristic(ESP32_CHAR_TX_UUID)
+                    esp32RxCharacteristic = service?.getCharacteristic(ESP32_CHAR_RX_UUID)
+
+                    esp32TxCharacteristic?.let { char ->
+                        gatt.setCharacteristicNotification(char, true)
+                        val descriptor = char.getDescriptor(CCCDUUID)
+                        descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                        gatt.writeDescriptor(descriptor)
+                    }
+
+                    esp32Connected = true
+                    Log.d(TAG, "ESP32 ready for communication")
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                        sendConfigToESP32()
+                    }
+                }
+            }
+
+            override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
+                characteristic?.value?.let { data ->
+                    val message = String(data, Charsets.UTF_8)
+                    Log.d(TAG, "ESP32 ← $message")
+                    handleESP32Event(message)
+                }
+            }
+        })
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun sendToESP32(jsonString: String) {
+        if (!esp32Connected || esp32Gatt == null || esp32RxCharacteristic == null) {
+            Log.w(TAG, "ESP32 not connected, cannot send: $jsonString")
+            return
+        }
+
+        Log.d(TAG, "ESP32 → $jsonString")
+        esp32RxCharacteristic?.value = jsonString.toByteArray(Charsets.UTF_8)
+        esp32Gatt?.writeCharacteristic(esp32RxCharacteristic)
+    }
+
+    private fun sendConfigToESP32() {
+        if (testModeEnabled) return // Skip ESP32 in test mode
+        
+        val colors = playerColors.take(playerCount).map { color ->
+            when (color) {
+                "red" -> "FF0000"
+                "green" -> "00FF00"
+                "blue" -> "0000FF"
+                "yellow" -> "FFFF00"
+                else -> "FFFFFF"
+            }
+        }
+
+        val config = org.json.JSONObject().apply {
+            put("command", "config")
+            put("playerCount", playerCount)
+            put("colors", org.json.JSONArray(colors))
+        }
+
+        sendToESP32(config.toString())
+    }
+
+    private fun sendRollToESP32(playerId: Int, diceValue: Int, currentTile: Int, expectedTile: Int) {
+        if (testModeEnabled) {
+            // In test mode, skip ESP32 and immediately process the turn
+            Log.d(TAG, "Test mode: Skipping ESP32, processing turn immediately")
+            return
+        }
+        
+        if (!esp32Connected) {
+            Log.w(TAG, "ESP32 not connected, skipping roll command")
+            return
+        }
+
+        val playerName = if (playerId < playerNames.size) playerNames[playerId] else "Player ${playerId + 1}"
+        val color = if (playerId < playerColors.size) playerColors[playerId] else "red"
+
+        val rollCmd = org.json.JSONObject().apply {
+            put("command", "roll")
+            put("playerId", playerId)
+            put("playerName", playerName)
+            put("diceValue", diceValue)
+            put("currentTile", currentTile)
+            put("expectedTile", expectedTile)
+            put("color", color)
+        }
+
+        sendToESP32(rollCmd.toString())
+        waitingForCoinPlacement = true
+        
+        runOnUiThread {
+            tvDiceStatus.text = "Waiting for coin placement on tile $expectedTile..."
+        }
+    }
+
+    private fun sendUndoToESP32(playerId: Int, fromTile: Int, toTile: Int) {
+        if (testModeEnabled) return
+        if (!esp32Connected) return
+
+        val undoCmd = org.json.JSONObject().apply {
+            put("command", "undo")
+            put("playerId", playerId)
+            put("fromTile", fromTile)
+            put("toTile", toTile)
+        }
+
+        sendToESP32(undoCmd.toString())
+        waitingForCoinPlacement = true
+    }
+
+    private fun sendResetToESP32() {
+        if (testModeEnabled) return
+        if (!esp32Connected) return
+
+        val resetCmd = org.json.JSONObject().apply {
+            put("command", "reset")
+        }
+
+        sendToESP32(resetCmd.toString())
+    }
+
+    private fun handleESP32Event(jsonString: String) {
+        try {
+            val json = org.json.JSONObject(jsonString)
+            val event = json.optString("event", "")
+
+            when (event) {
+                "coin_placed" -> {
+                    val playerId = json.getInt("playerId")
+                    val tile = json.getInt("tile")
+                    val verified = json.optBoolean("verified", true)
+
+                    Log.d(TAG, "Coin placed: Player $playerId at tile $tile")
+                    waitingForCoinPlacement = false
+
+                    runOnUiThread {
+                        tvDiceStatus.text = "Coin placed! ✓"
+                        Toast.makeText(this, "Coin detected at tile $tile", Toast.LENGTH_SHORT).show()
+                        // Trigger live.html update
+                        pushLiveStateToBoard()
+                    }
+                }
+
+                "coin_timeout" -> {
+                    val tile = json.getInt("tile")
+                    Log.w(TAG, "Coin placement timeout at tile $tile")
+                    waitingForCoinPlacement = false
+
+                    runOnUiThread {
+                        Toast.makeText(this, "Coin placement timeout - continuing anyway", Toast.LENGTH_SHORT).show()
+                        pushLiveStateToBoard()
+                    }
+                }
+
+                "misplacement" -> {
+                    val errors = json.getJSONArray("errors")
+                    val errorList = mutableListOf<String>()
+
+                    for (i in 0 until errors.length()) {
+                        val error = errors.getJSONObject(i)
+                        val tile = error.getInt("tile")
+                        val issue = error.getString("issue")
+                        errorList.add("Tile $tile: $issue")
+                    }
+
+                    runOnUiThread {
+                        AlertDialog.Builder(this)
+                            .setTitle("Coin Misplacement Detected")
+                            .setMessage("Please fix:\n" + errorList.joinToString("\n"))
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                }
+
+                "config_complete" -> {
+                    Log.d(TAG, "ESP32 configuration complete")
+                    runOnUiThread {
+                        Toast.makeText(this, "ESP32 configured with $playerCount players", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                "ready" -> {
+                    val message = json.optString("message", "ESP32 Ready")
+                    Log.d(TAG, "ESP32: $message")
+                }
+
+                else -> {
+                    Log.w(TAG, "Unknown ESP32 event: $event")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing ESP32 event: ${e.message}")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnectESP32() {
+        esp32Gatt?.disconnect()
+        esp32Gatt?.close()
+        esp32Gatt = null
+        esp32Connected = false
+        esp32TxCharacteristic = null
+        esp32RxCharacteristic = null
+        waitingForCoinPlacement = false
+        Log.d(TAG, "ESP32 disconnected and cleaned up")
+    }
 }
 
 // ============================================================================
@@ -1591,6 +2070,7 @@ class Dice(private val id: Int, val device: BluetoothDevice) {
     }
 
     companion object {
+        // GoDice BLE UUIDs (Nordic UART Service)
         val serviceUUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
         val writeCharUUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
         val readCharUUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")

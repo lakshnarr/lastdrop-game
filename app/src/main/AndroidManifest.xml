@@ -47,6 +47,14 @@
             </intent-filter>
 
         </activity>
+        
+        <!-- Profile Selection Screen -->
+        <activity
+            android:name=".ProfileSelectionActivity"
+            android:exported="false"
+            android:label="Select Players"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
     </application>
 
 </manifest>

@@ -90,6 +90,15 @@
       color: var(--text-muted);
       text-align: center;
       margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .last-updated {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-style: italic;
     }
 
     .main-content {
@@ -478,6 +487,42 @@
       filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.6)) drop-shadow(0 2px 12px rgba(0, 0, 0, 0.4));
       transition: all 0.4s ease-out;
       z-index: 2000;
+    }
+    
+    /* Eliminated player styling */
+    .player-token.eliminated {
+      filter: grayscale(100%) blur(2px) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+      opacity: 0.4;
+      position: relative;
+    }
+    
+    .player-token.eliminated::before {
+      content: '☠';
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      font-size: 20px;
+      background: var(--danger);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(249, 115, 115, 0.8);
+      z-index: 100;
+    }
+    
+    .player-token.eliminated::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: -5px;
+      right: -5px;
+      height: 3px;
+      background: var(--danger);
+      transform: translateY(-50%) rotate(-15deg);
+      box-shadow: 0 0 8px rgba(249, 115, 115, 0.8);
     }
 
     .player-token[data-player="P1"] {
@@ -1078,11 +1123,49 @@
       </div>
     </div>
   </div>
+  
+  <!-- Reconnection Overlay -->
+  <div id="reconnectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🔄 Reconnecting...</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator">
+            <div class="spinner"></div>
+            <span id="reconnectionText">Attempting to reconnect...</span>
+          </div>
+        </div>
+        <div class="reconnection-info" id="reconnectionInfo">
+          <p>Retry attempt: <strong id="retryAttempt">1</strong>/5</p>
+          <p>Next retry in: <strong id="retryDelay">2</strong>s</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="connection-overlay">
+    <div class="connection-card">
+      <div class="connection-title">Loading Game State...</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator">
+            <div class="spinner"></div>
+            <span>Fetching live data from server...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Header -->
   <header class="header">
     <h1>LAST DROP – LIVE BOARD</h1>
-    <div class="subtitle">Real-time visualisation of the physical board – powered by ESP32 + Android + Web</div>
+    <div class="subtitle">
+      Real-time visualisation of the physical board – powered by ESP32 + Android + Web
+      <span id="sessionInfo" class="last-updated" style="color: #60a5fa;"></span>
+      <span id="lastUpdated" class="last-updated"></span>
+    </div>
   </header>
 
   <!-- Main Content Area -->
@@ -1416,7 +1499,35 @@
   </div>
 
   <script>
-    const LIVE_STATE_URL = "/api/live_state.php?key=ABC123";
+    // Parse URL parameters for session-specific viewing
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionParam = urlParams.get('session');  // Format: "LASTDROP-0001_uuid"
+    const boardIdParam = urlParams.get('board');     // Alternative: just board ID
+    
+    // Extract boardId and sessionId from URL
+    let activeBoardId = null;
+    let activeSessionId = null;
+    
+    if (sessionParam) {
+      const parts = sessionParam.split('_');
+      activeBoardId = parts[0];
+      activeSessionId = parts.length > 1 ? parts[1] : null;
+    } else if (boardIdParam) {
+      activeBoardId = boardIdParam;
+    }
+    
+    // Build API URL with session parameters
+    let LIVE_STATE_URL = "/api/live_state.php?key=ABC123";
+    if (activeBoardId) {
+      LIVE_STATE_URL += `&boardId=${encodeURIComponent(activeBoardId)}`;
+    }
+    if (activeSessionId) {
+      LIVE_STATE_URL += `&sessionId=${encodeURIComponent(activeSessionId)}`;
+    }
+    
+    console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
+    console.log('[live] API URL:', LIVE_STATE_URL);
+    
     const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
     let demoMode = false;
 
@@ -1498,6 +1609,21 @@
     const winnerOverlay = document.getElementById("winnerOverlay");
     const winnerName = document.getElementById("winnerName");
     const winnerDrops = document.getElementById("winnerDrops");
+    const sessionInfoEl = document.getElementById("sessionInfo");
+    
+    // Display session info in header if present
+    if (activeBoardId || activeSessionId) {
+      let sessionText = "Viewing: ";
+      if (activeBoardId) {
+        sessionText += `Board ${activeBoardId}`;
+      }
+      if (activeSessionId) {
+        const shortSession = activeSessionId.substring(0, 8);
+        sessionText += ` (Session: ${shortSession}...)`;
+      }
+      sessionInfoEl.textContent = sessionText;
+      console.log('[live] Session info displayed:', sessionText);
+    }
     
     // Track previously eliminated players to detect new eliminations
     let previouslyEliminatedIds = new Set();
@@ -1529,6 +1655,10 @@
 
     // Connection popup elements - moved inside load event to ensure DOM is ready
     let connectionOverlay, connectionIndicator, connectionText, skipConnection;
+    let reconnectionOverlay, reconnectionText, retryAttemptEl, retryDelayEl, reconnectionInfo;
+    let loadingOverlay;
+    let firstFetchComplete = false;
+    let lastUpdatedEl;
 
     // Dice elements
     let diceDisplay, dice1El, dice2El;
@@ -2024,10 +2154,11 @@
           ensureTokenForPlayer(p);
           const token = tokensByPlayerId[p.id];
           
-          // Hide eliminated player tokens
+          // Mark eliminated players with special styling
           if (p.eliminated) {
-            token.style.display = 'none';
+            token.classList.add('eliminated');
           } else {
+            token.classList.remove('eliminated');
             token.style.display = 'block';
           }
           
@@ -2226,29 +2357,73 @@
 
     async function fetchAndUpdate() {
       if (demoMode) return;
-      try {
-        const res = await fetch(LIVE_STATE_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const state = await res.json();
-
-        // Check if this is the first successful connection
-        if (!connectionEstablished && state.players && state.players.length > 0) {
-          connectionEstablished = true;
-          onControllerConnected();
-        }
-
-        connStatus.textContent = "ONLINE";
-        connStatus.classList.remove("badge-red");
-        connStatus.classList.add("badge-green");
-        modeStatus.textContent = "LIVE";
-        updateUIFromState(state);
-      } catch (err) {
-        console.error("Live state error:", err);
-        connStatus.textContent = "OFFLINE";
-        connStatus.classList.remove("badge-green");
-        connStatus.classList.add("badge-red");
-        modeStatus.textContent = "DEMO";
+      if (!navigator.onLine) {
+        console.log('Skipping fetch - offline');
+        return;
       }
+      
+      let retryAttempt = 0;
+      const maxRetries = 5;
+      const retryDelays = [2000, 4000, 8000, 16000, 32000];  // Exponential backoff
+      
+      async function attemptFetch() {
+        try {
+          const res = await fetch(LIVE_STATE_URL, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const state = await res.json();
+
+          // Check if this is the first successful connection
+          if (!connectionEstablished && state.players && state.players.length > 0) {
+            connectionEstablished = true;
+            onControllerConnected();
+          }
+
+          connStatus.textContent = "ONLINE";
+          connStatus.classList.remove("badge-red");
+          connStatus.classList.add("badge-green");
+          modeStatus.textContent = "LIVE";
+          
+          // Hide reconnection overlay if visible
+          hideReconnectionOverlay();
+          
+          // Hide loading overlay on first successful fetch
+          if (!firstFetchComplete) {
+            firstFetchComplete = true;
+            loadingOverlay.classList.add('hidden');
+          }
+          
+          // Reset retry counter on success
+          retryAttempt = 0;
+          
+          // Update "Last Updated" timestamp
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          lastUpdatedEl.textContent = `Last updated: ${timeStr}`;
+          
+          updateUIFromState(state);
+        } catch (err) {
+          console.error("Live state error (attempt " + (retryAttempt + 1) + "/" + maxRetries + "):", err);
+          
+          if (retryAttempt < maxRetries) {
+            // Show reconnection overlay
+            showReconnectionOverlay(retryAttempt + 1, retryDelays[retryAttempt]);
+            
+            // Wait and retry
+            await new Promise(resolve => setTimeout(resolve, retryDelays[retryAttempt]));
+            retryAttempt++;
+            return attemptFetch();  // Retry
+          } else {
+            // Max retries reached
+            connStatus.textContent = "OFFLINE";
+            connStatus.classList.remove("badge-green");
+            connStatus.classList.add("badge-red");
+            modeStatus.textContent = "DEMO";
+            showReconnectionOverlay(maxRetries, null);  // Show permanent error
+          }
+        }
+      }
+      
+      await attemptFetch();
     }
 
     // Start live polling interval only if not in demo mode
@@ -2281,6 +2456,25 @@
       setTimeout(() => {
         hideConnectionPopup();
       }, 2000);
+    }
+    
+    // Reconnection overlay functions
+    function showReconnectionOverlay(attempt, delayMs) {
+      reconnectionOverlay.classList.remove('hidden');
+      
+      if (delayMs === null) {
+        // Max retries reached
+        reconnectionText.textContent = 'Connection lost - Max retries reached';
+        reconnectionInfo.innerHTML = '<p style="color: var(--danger);">Unable to reach server. Please check your network connection.</p>';
+      } else {
+        reconnectionText.textContent = 'Attempting to reconnect...';
+        retryAttemptEl.textContent = attempt;
+        retryDelayEl.textContent = (delayMs / 1000).toFixed(0);
+      }
+    }
+    
+    function hideReconnectionOverlay() {
+      reconnectionOverlay.classList.add('hidden');
     }
 
     // Dice animation function for board overlay (kept for compatibility)
@@ -2798,6 +2992,19 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       connectionIndicator = document.getElementById("connectionIndicator");
       connectionText = document.getElementById("connectionText");
       skipConnection = document.getElementById("skipConnection");
+      
+      // Initialize reconnection overlay elements
+      reconnectionOverlay = document.getElementById("reconnectionOverlay");
+      reconnectionText = document.getElementById("reconnectionText");
+      retryAttemptEl = document.getElementById("retryAttempt");
+      retryDelayEl = document.getElementById("retryDelay");
+      reconnectionInfo = document.getElementById("reconnectionInfo");
+      
+      // Initialize loading overlay
+      loadingOverlay = document.getElementById("loadingOverlay");
+      
+      // Initialize last updated element
+      lastUpdatedEl = document.getElementById("lastUpdated");
 
       // Initialize disclaimer elements
       const smallScreenDisclaimer = document.getElementById("smallScreenDisclaimer");
@@ -2839,6 +3046,34 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       boardWrapper.style.transform = `scale(${zoom})`;
       board3d.style.transform = "rotateX(0deg) rotateY(0deg) rotateZ(0deg)";
       // Demo will start via interval, don't call runDemoStep() here
+      
+      // Network health monitoring
+      let isOnline = navigator.onLine;
+      
+      window.addEventListener('online', () => {
+        isOnline = true;
+        console.log('Network connection restored');
+        connStatus.textContent = 'ONLINE';
+        connStatus.classList.remove('badge-red');
+        connStatus.classList.add('badge-green');
+        
+        // Resume polling if not in demo mode
+        if (!demoMode) {
+          startLivePolling();
+          fetchAndUpdate();  // Immediate fetch on reconnect
+        }
+      });
+      
+      window.addEventListener('offline', () => {
+        isOnline = false;
+        console.log('Network connection lost');
+        connStatus.textContent = 'OFFLINE';
+        connStatus.classList.remove('badge-green');
+        connStatus.classList.add('badge-red');
+        
+        // Show reconnection overlay
+        showReconnectionOverlay(0, null);
+      });
     });
   </script>
 </body>
@@ -2877,6 +3112,32 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+  }
+  
+  /* Spinner for reconnection */
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(64, 224, 208, 0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .reconnection-info {
+    background: rgba(15,23,42,0.3);
+    padding: 16px;
+    border-radius: 8px;
+    border-left: 4px solid var(--accent);
+  }
+  
+  .reconnection-info p {
+    margin: 8px 0;
+    font-size: 0.9rem;
   }
 
   /* Dice Display */
