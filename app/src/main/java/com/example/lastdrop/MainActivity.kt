@@ -1623,6 +1623,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Test Mode: OFF"
                         btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
                         btnSimulateRoll.isEnabled = false
+                        btnSimulateRoll.visibility = View.GONE
                         
                         // Hide test console
                         tvTestLogTitle.visibility = View.GONE
@@ -1641,9 +1642,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         // Test Mode 1: Virtual Dice + ESP32
                         testModeEnabled = true
                         testModeType = 1
+                        Log.d(TAG, "Test Mode 1 activated: testModeType=$testModeType, testModeEnabled=$testModeEnabled")
                         btnTestMode.text = "Test Mode 1: ON"
                         btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
                         btnSimulateRoll.isEnabled = true
+                        btnSimulateRoll.visibility = View.VISIBLE
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
@@ -1662,9 +1665,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         // Test Mode 2: Android + live.html only (no ESP32)
                         testModeEnabled = true
                         testModeType = 2
+                        Log.d(TAG, "Test Mode 2 activated: testModeType=$testModeType, testModeEnabled=$testModeEnabled")
                         btnTestMode.text = "Test Mode 2: ON"
                         btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
                         btnSimulateRoll.isEnabled = true
+                        btnSimulateRoll.visibility = View.VISIBLE
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
@@ -1700,6 +1705,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         when (testModeType) {
             1 -> {
                 // Test Mode 1: Show dice value picker (manual selection for ESP32 testing)
+                Log.d(TAG, "Showing dice value picker for Test Mode 1")
+                Toast.makeText(this, "Select dice value (1-6) for ESP32 test", Toast.LENGTH_SHORT).show()
                 val diceValues = arrayOf("1", "2", "3", "4", "5", "6")
                 AlertDialog.Builder(this)
                     .setTitle("Select Dice Value")
