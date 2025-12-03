@@ -140,6 +140,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     
     // Test mode (bypasses ESP32)
     private var testModeEnabled: Boolean = false
+    private var testModeType: Int = 0 // 0=Production, 1=Test Mode 1 (ESP32), 2=Test Mode 2 (No ESP32)
 
     // battery per diceId
     private val diceBatteryLevels: MutableMap<Int, Int> = HashMap()
@@ -1618,6 +1619,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     0 -> {
                         // Production Mode
                         testModeEnabled = false
+                        testModeType = 0
                         btnTestMode.text = "Test Mode: OFF"
                         btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
                         btnSimulateRoll.isEnabled = false
@@ -1638,6 +1640,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     1 -> {
                         // Test Mode 1: Virtual Dice + ESP32
                         testModeEnabled = true
+                        testModeType = 1
                         btnTestMode.text = "Test Mode 1: ON"
                         btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
                         btnSimulateRoll.isEnabled = true
@@ -1658,6 +1661,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     2 -> {
                         // Test Mode 2: Android + live.html only (no ESP32)
                         testModeEnabled = true
+                        testModeType = 2
                         btnTestMode.text = "Test Mode 2: ON"
                         btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
                         btnSimulateRoll.isEnabled = true
@@ -1686,18 +1690,46 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun simulateDiceRoll() {
-        Log.d(TAG, "simulateDiceRoll called, testModeEnabled: $testModeEnabled")
+        Log.d(TAG, "simulateDiceRoll called, testModeEnabled: $testModeEnabled, testModeType: $testModeType")
+        
         if (!testModeEnabled) {
             Toast.makeText(this, "Enable Test Mode first!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val randomRoll = Random.nextInt(1, 7)
-        appendTestLog("🎲 Simulated roll: $randomRoll")
-        Log.d(TAG, "Simulating dice roll: $randomRoll")
-        
-        // Simulate dice stable callback
-        onDiceStable(0, randomRoll)
+        when (testModeType) {
+            1 -> {
+                // Test Mode 1: Show dice value picker (manual selection for ESP32 testing)
+                val diceValues = arrayOf("1", "2", "3", "4", "5", "6")
+                AlertDialog.Builder(this)
+                    .setTitle("Select Dice Value")
+                    .setItems(diceValues) { _, which ->
+                        val selectedValue = which + 1
+                        appendTestLog("🎲 Manual roll selected: $selectedValue")
+                        Log.d(TAG, "User selected dice value: $selectedValue")
+                        
+                        // Simulate dice stable callback with selected value
+                        onDiceStable(0, selectedValue)
+                    }
+                    .setNegativeButton("Cancel") { dialog, _ ->
+                        dialog.dismiss()
+                        appendTestLog("❌ Dice roll cancelled")
+                    }
+                    .show()
+            }
+            2 -> {
+                // Test Mode 2: Random dice roll (for Android/web testing without ESP32)
+                val randomRoll = Random.nextInt(1, 7)
+                appendTestLog("🎲 Random roll: $randomRoll")
+                Log.d(TAG, "Simulating random dice roll: $randomRoll")
+                
+                // Simulate dice stable callback
+                onDiceStable(0, randomRoll)
+            }
+            else -> {
+                Toast.makeText(this, "Unknown test mode", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun appendTestLog(message: String) {
