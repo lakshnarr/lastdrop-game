@@ -163,6 +163,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32Manager: ESP32ConnectionManager
     private lateinit var uiUpdateManager: UIUpdateManager
     private lateinit var batteryMonitor: BatteryMonitor
+    private lateinit var esp32ErrorHandler: ESP32ErrorHandler
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
@@ -219,6 +220,23 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Initialize helper classes
         uiUpdateManager = UIUpdateManager()
         batteryMonitor = BatteryMonitor(this)
+        esp32ErrorHandler = ESP32ErrorHandler(
+            context = this,
+            onLogMessage = { message -> appendTestLog(message) },
+            onCoinTimeoutExpired = { 
+                // Handle coin timeout - could skip turn or continue
+                runOnUiThread {
+                    uiUpdateManager.cancelCountdown()
+                    tvCoinTimeout.visibility = View.GONE
+                }
+            },
+            onHeartbeatLost = {
+                // Handle heartbeat loss - try reconnect
+                runOnUiThread {
+                    Toast.makeText(this, "ESP32 connection lost", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
 
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
@@ -254,6 +272,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         undoTimer?.cancel()
         mainScope.cancel()
         uiUpdateManager.cleanup()  // Cleanup helper classes
+        esp32ErrorHandler.cleanup()  // Cleanup error handler
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -1960,6 +1979,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         esp32ReconnectAttempts = 0  // Reset counter on successful connection
                         esp32ScanJob?.cancel()  // Cancel timeout timer
                         gameActive = true
+                        
+                        // Start heartbeat monitoring
+                        esp32ErrorHandler.startHeartbeatMonitoring()
+                        
                         appendTestLog("✅ ESP32 Connected")
                         gatt?.discoverServices()
                     }
@@ -1968,6 +1991,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         esp32Connected = false
                         esp32Gatt?.close()
                         esp32Gatt = null
+                        
+                        // Stop heartbeat monitoring
+                        esp32ErrorHandler.stopHeartbeatMonitoring()
                         
                         appendTestLog("❌ ESP32 Disconnected")
                         runOnUiThread {
@@ -2102,8 +2128,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 totalSeconds = 30,
                 prefix = "⏱ Coin placement timeout: ",
                 onComplete = {
-                    // Timeout reached - show warning
-                    Toast.makeText(this, "Coin placement timeout! Please place coin.", Toast.LENGTH_LONG).show()
+                    // Countdown complete - now show graceful dialog
+                    esp32ErrorHandler.startCoinPlacementTimeout(expectedTile)
                 }
             )
         }
@@ -2149,8 +2175,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Log.d(TAG, "Coin placed: Player $playerId at tile $tile")
                     waitingForCoinPlacement = false
                     
-                    // Cancel countdown and hide UI elements
+                    // Cancel countdown and timeout dialog
                     uiUpdateManager.cancelCountdown()
+                    esp32ErrorHandler.cancelCoinPlacementTimeout()
+                    
+                    // Update heartbeat
+                    esp32ErrorHandler.updateHeartbeat()
 
                     runOnUiThread {
                         tvDiceStatus.text = "Coin placed! ✓"
@@ -2167,6 +2197,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Log.w(TAG, "Coin placement timeout at tile $tile")
                     waitingForCoinPlacement = false
                     
+                    // Update heartbeat
+                    esp32ErrorHandler.updateHeartbeat()
+                    
                     // Cancel countdown
                     uiUpdateManager.cancelCountdown()
 
@@ -2179,6 +2212,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
 
                 "misplacement" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    
                     val errors = json.getJSONArray("errors")
                     val errorList = mutableListOf<String>()
 
@@ -2199,6 +2234,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
 
                 "config_complete" -> {
+                    esp32ErrorHandler.updateHeartbeat()
                     Log.d(TAG, "ESP32 configuration complete")
                     runOnUiThread {
                         Toast.makeText(this, "ESP32 configured with $playerCount players", Toast.LENGTH_SHORT).show()
@@ -2206,6 +2242,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
 
                 "ready" -> {
+                    esp32ErrorHandler.updateHeartbeat()
                     val message = json.optString("message", "ESP32 Ready")
                     Log.d(TAG, "ESP32: $message")
                 }
