@@ -1143,16 +1143,42 @@
     </div>
   </div>
   
-  <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="connection-overlay">
-    <div class="connection-card">
-      <div class="connection-title">Loading Game State...</div>
-      <div class="connection-content">
-        <div class="connection-status">
-          <div class="status-indicator">
-            <div class="spinner"></div>
-            <span>Fetching live data from server...</span>
-          </div>
+  <!-- Welcome Screen (Demo Mode) -->
+  <div id="welcomeOverlay" class="connection-overlay">
+    <div class="connection-card" style="max-width: 600px;">
+      <div class="connection-title">💧 Welcome to Last Drop Demo!</div>
+      <div class="connection-content" style="text-align: left;">
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎯 Game Objective</h3>
+          <p style="margin: 8px 0; font-size: 0.9rem; line-height: 1.6;">
+            Be the last player standing with water drops! Collect drops by landing on positive tiles, 
+            avoid negative tiles, and survive till the end.
+          </p>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎲 How to Play</h3>
+          <ul style="margin: 8px 0; padding-left: 20px; font-size: 0.85rem; line-height: 1.8;">
+            <li><strong>Roll the dice</strong> - Move forward based on dice value</li>
+            <li><strong>Tile effects</strong> - Gain or lose water drops depending on where you land</li>
+            <li><strong>Chance cards</strong> - Land on special tiles to draw random events</li>
+            <li><strong>Complete laps</strong> - Pass START to earn +5 bonus drops</li>
+            <li><strong>Elimination</strong> - Players with 0 drops are out of the game</li>
+          </ul>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">⚡ Demo Features</h3>
+          <p style="margin: 8px 0; font-size: 0.85rem; line-height: 1.6;">
+            Watch 4 AI players compete automatically. See dice rolls, token movement, 
+            chance cards, and real-time scoring in action!
+          </p>
+        </div>
+        
+        <div style="text-align: center;">
+          <button id="startDemoBtn" class="btn-small" style="font-size: 1rem; padding: 12px 32px; background: linear-gradient(135deg, var(--accent), #60a5fa); border: none; cursor: pointer;">
+            🎮 Start Demo Game
+          </button>
         </div>
       </div>
     </div>
@@ -3000,8 +3026,9 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       retryDelayEl = document.getElementById("retryDelay");
       reconnectionInfo = document.getElementById("reconnectionInfo");
       
-      // Initialize loading overlay
-      loadingOverlay = document.getElementById("loadingOverlay");
+      // Initialize welcome overlay
+      const welcomeOverlay = document.getElementById("welcomeOverlay");
+      const startDemoBtn = document.getElementById("startDemoBtn");
       
       // Initialize last updated element
       lastUpdatedEl = document.getElementById("lastUpdated");
@@ -3021,13 +3048,21 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       scoreboardDice2 = document.getElementById("scoreboardDice2");
       dicePlayerName = document.getElementById("dicePlayerName");
 
-      // Auto-start demo mode (skip connection popup)
-      demoMode = true;
-      demoStatus.textContent = "ON";
-      modeStatus.textContent = "DEMO";
-      connStatus.textContent = "OFFLINE";
-      connStatus.classList.remove("badge-green");
-      connStatus.classList.add("badge-red");
+      // Show welcome screen first
+      welcomeOverlay.classList.remove("hidden");
+      
+      // Start demo when button clicked
+      startDemoBtn?.addEventListener('click', () => {
+        welcomeOverlay.classList.add("hidden");
+        
+        // Auto-start demo mode
+        demoMode = true;
+        demoStatus.textContent = "ON";
+        modeStatus.textContent = "DEMO";
+        connStatus.textContent = "OFFLINE";
+        connStatus.classList.remove("badge-green");
+        connStatus.classList.add("badge-red");
+      });
       
       // Show disclaimer on small screens with modified button
       if (window.innerWidth <= 768) {
