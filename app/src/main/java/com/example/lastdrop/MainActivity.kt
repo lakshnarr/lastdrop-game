@@ -1883,6 +1883,54 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         sendToESP32(config.toString())
     }
+    
+    /**
+     * Show board settings dialog to change ESP32 password and nickname
+     */
+    private fun showBoardSettings() {
+        if (!esp32Connected) {
+            Toast.makeText(this, "Please connect to a board first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        esp32Gatt?.device?.let { device ->
+            val boardId = device.name ?: "Unknown Board"
+            val savedBoard = boardPreferencesManager.getSavedBoard(boardId)
+            val currentNickname = savedBoard?.nickname ?: boardId
+            val currentPassword = if (savedBoard?.passwordHash != null) "saved" else null
+            
+            BoardSettingsDialog.show(
+                context = this,
+                currentNickname = currentNickname,
+                currentPassword = currentPassword,
+                onSettingsUpdate = { nickname, password ->
+                    sendBoardSettingsUpdate(nickname, password)
+                }
+            )
+        }
+    }
+    
+    /**
+     * Send update_settings command to ESP32
+     */
+    private fun sendBoardSettingsUpdate(nickname: String?, password: String?) {
+        if (testModeEnabled) {
+            Toast.makeText(this, "Board settings update not available in test mode", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (!esp32Connected) {
+            Toast.makeText(this, "Board not connected", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val command = BoardSettingsDialog.generateUpdateCommand(nickname, password)
+        sendToESP32(command)
+        
+        val passwordMask = if (password != null) "***" else "null"
+        Log.d(TAG, "Sent board settings update: nickname=$nickname, password=$passwordMask")
+        Toast.makeText(this, "Updating board settings...", Toast.LENGTH_SHORT).show()
+    }
 
     private fun sendRollToESP32(playerId: Int, diceValue: Int, currentTile: Int, expectedTile: Int) {
         if (testModeEnabled) {
@@ -2064,6 +2112,36 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Log.d(TAG, "ESP32 configuration complete")
                     runOnUiThread {
                         Toast.makeText(this, "ESP32 configured with $playerCount players", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                "settings_updated" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    val newPassword = json.optString("password", null)
+                    val newNickname = json.optString("nickname", null)
+                    val restartRequired = json.optBoolean("restartRequired", false)
+                    
+                    Log.d(TAG, "ESP32 settings updated - Nickname: $newNickname, Restart: $restartRequired")
+                    
+                    // Save updated settings to preferences
+                    esp32Gatt?.device?.let { device ->
+                        device.name?.let { boardId ->
+                            if (newNickname != null) {
+                                boardPreferencesManager.updateBoardNickname(boardId, newNickname)
+                            }
+                            if (newPassword != null) {
+                                boardPreferencesManager.saveBoard(boardId, device.address, newNickname, newPassword)
+                            }
+                        }
+                    }
+                    
+                    runOnUiThread {
+                        BoardSettingsDialog.showUpdateConfirmation(
+                            this,
+                            newNickname,
+                            newPassword != null,
+                            restartRequired
+                        )
                     }
                 }
 

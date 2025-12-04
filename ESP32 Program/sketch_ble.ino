@@ -190,6 +190,10 @@ bool isPaired = false;
 unsigned long pairTimeout = 0;
 const unsigned long PAIR_TIMEOUT_MS = 30000;  // 30 seconds to enter password
 
+// Board Settings (customizable from Android)
+String boardPassword = BOARD_PASSWORD;  // Current password (can be changed)
+String boardNickname = BOARD_UNIQUE_ID; // Current nickname (can be changed)
+
 // Connection status LED modes
 enum ConnectionMode {
   MODE_DISCONNECTED,    // Light sea blue blink (waiting for Android)
@@ -387,6 +391,12 @@ void setup() {
 
   // Initialize preferences
   preferences.begin("lastdrop", false);
+  
+  // Load custom board settings (password and nickname)
+  boardPassword = preferences.getString("password", BOARD_PASSWORD);
+  boardNickname = preferences.getString("nickname", BOARD_UNIQUE_ID);
+  Serial.printf("Board Password: %s\n", boardPassword.c_str());
+  Serial.printf("Board Nickname: %s\n", boardNickname.c_str());
   loadGameState();
 
   // Initialize BLE
@@ -432,11 +442,12 @@ bool isTrustedDevice(BLEAddress address) {
 
 // ==================== BLE INITIALIZATION ====================
 void initBLE() {
-  BLEDevice::init(BOARD_UNIQUE_ID);  // Use unique board ID instead of generic name
+  BLEDevice::init(boardNickname.c_str());  // Use custom nickname (defaults to BOARD_UNIQUE_ID)
   
   Serial.print("ESP32 MAC Address: ");
   Serial.println(BLEDevice::getAddress().toString().c_str());
   Serial.printf("Board ID: %s\n", BOARD_UNIQUE_ID);
+  Serial.printf("Board Nickname: %s\n", boardNickname.c_str());
   Serial.printf("Board Version: %s\n", BOARD_VERSION);
 
   #if BLE_PAIRING_ENABLED
@@ -479,7 +490,7 @@ void initBLE() {
   
   // Add manufacturer-specific data for board identification
   BLEAdvertisementData advData;
-  advData.setName(BOARD_UNIQUE_ID);
+  advData.setName(boardNickname.c_str());  // Use custom nickname
   advData.setManufacturerData(MANUFACTURER_DATA);
   pAdvertising->setAdvertisementData(advData);
   
@@ -489,7 +500,7 @@ void initBLE() {
   BLEDevice::startAdvertising();
   
   Serial.println("✓ BLE Service Started");
-  Serial.printf("  Device Name: %s\n", BOARD_UNIQUE_ID);
+  Serial.printf("  Device Name: %s\n", boardNickname.c_str());
   Serial.printf("  Manufacturer Data: %s\n", MANUFACTURER_DATA);
   Serial.printf("  Service UUID: %s\n\n", SERVICE_UUID);
 }
@@ -533,6 +544,8 @@ void processCommandQueue() {
     handleUnpair();
   } else if (strcmp(command, "config") == 0) {
     handleConfig(doc);
+  } else if (strcmp(command, "update_settings") == 0) {
+    handleUpdateSettings(doc);
   } else if (strcmp(command, "status") == 0) {
     sendStatus();
   } else {
@@ -563,8 +576,8 @@ void handlePair(JsonDocument& doc) {
     return;
   }
   
-  // Validate password
-  if (strcmp(password, BOARD_PASSWORD) == 0) {
+  // Validate against custom board password
+  if (strcmp(password, boardPassword.c_str()) == 0) {
     isPaired = true;
     pairTimeout = 0;
     Serial.println("✓ Password correct - device paired");
@@ -684,6 +697,77 @@ void handleConfig(JsonDocument& doc) {
   pTxCharacteristic->notify();
   
   Serial.println("✓ Config applied\n");
+}
+
+// ==================== HANDLE UPDATE SETTINGS ====================
+void handleUpdateSettings(JsonDocument& doc) {
+  Serial.println("\n⚙️ Processing UPDATE_SETTINGS command...");
+  resetIdleTimer();
+  
+  // Security: Only allow settings update when paired
+  if (PAIRING_REQUIRED && !isPaired) {
+    Serial.println("  🔒 SECURITY: Settings update rejected - device not paired");
+    sendErrorResponse("Device not paired - pairing required");
+    return;
+  }
+  
+  bool updated = false;
+  
+  // Update password if provided
+  if (doc.containsKey("password")) {
+    const char* newPassword = doc["password"];
+    if (strlen(newPassword) >= 6) {  // Minimum 6 characters
+      boardPassword = String(newPassword);
+      preferences.putString("password", boardPassword);
+      Serial.printf("  ✓ Password updated: %s\n", boardPassword.c_str());
+      updated = true;
+    } else {
+      Serial.println("  ⚠️ Password too short (min 6 chars)");
+      sendErrorResponse("Password must be at least 6 characters");
+      return;
+    }
+  }
+  
+  // Update nickname if provided
+  if (doc.containsKey("nickname")) {
+    const char* newNickname = doc["nickname"];
+    if (strlen(newNickname) > 0 && strlen(newNickname) <= 30) {
+      boardNickname = String(newNickname);
+      preferences.putString("nickname", boardNickname);
+      Serial.printf("  ✓ Nickname updated: %s\n", boardNickname.c_str());
+      
+      // Update BLE device name (requires restart to take effect)
+      // Note: BLE device name is set in setup(), will apply on next boot
+      updated = true;
+    } else {
+      Serial.println("  ⚠️ Invalid nickname (1-30 chars)");
+      sendErrorResponse("Nickname must be 1-30 characters");
+      return;
+    }
+  }
+  
+  if (updated) {
+    // Send confirmation with new settings
+    StaticJsonDocument<512> response;
+    response["event"] = "settings_updated";
+    response["password"] = boardPassword;
+    response["nickname"] = boardNickname;
+    response["restartRequired"] = doc.containsKey("nickname");  // Nickname needs restart
+    
+    String output;
+    serializeJson(response, output);
+    pTxCharacteristic->setValue(output.c_str());
+    pTxCharacteristic->notify();
+    
+    Serial.println("✓ Settings updated successfully");
+    if (doc.containsKey("nickname")) {
+      Serial.println("  ⚠️ Board restart required for nickname to take effect in BLE advertising");
+    }
+  } else {
+    sendErrorResponse("No valid settings provided");
+  }
+  
+  Serial.println();
 }
 
 // ==================== HANDLE DICE ROLL ====================
