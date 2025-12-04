@@ -10,6 +10,8 @@ import { Scoreboard } from './assets/js/ui/scoreboard.js';
 import { EventLog } from './assets/js/ui/event-log.js';
 import { Overlays } from './assets/js/ui/overlays.js';
 import { SettingsPanel } from './assets/js/ui/settings-panel.js';
+import { ApiClient } from './assets/js/network/api-client.js';
+import { SessionManager } from './assets/js/network/session-manager.js';
 import { TILE_NAMES, PLAYER_COLORS } from './assets/js/utils/constants.js';
 
 // Initialize on page load
@@ -127,7 +129,53 @@ window.addEventListener('load', () => {
     audioManager: audioManager
   });
   
-  // 8. Example: Create players
+  // 8. Create Session Manager
+  const sessionManager = new SessionManager({
+    onSessionChange: (boardId, sessionId) => {
+      console.log('Session changed:', { boardId, sessionId });
+    }
+  });
+  
+  // Parse session from URL (e.g., ?session=LASTDROP-0001_abc-123)
+  sessionManager.parseFromUrl();
+  
+  // 9. Create API Client (for live mode)
+  const apiClient = new ApiClient({
+    baseUrl: '/api/live_state.php',
+    apiKey: 'ABC123',
+    pollingInterval: 2000,
+    onStateUpdate: (state) => {
+      // Update scoreboard and board when state is received
+      if (state.players) {
+        scoreboard.updatePlayers(state.players);
+      }
+      console.log('State updated from API:', state);
+    },
+    onConnectionChange: (status) => {
+      console.log('Connection status:', status);
+      if (status === 'connected') {
+        eventLog.showCustom('Connected to live game!', true);
+      } else if (status === 'offline') {
+        eventLog.showCustom('Connection lost', true);
+      }
+    },
+    onRetry: (attempt, delay) => {
+      console.log(`Retry attempt ${attempt}, waiting ${delay}ms`);
+      overlays.showReconnectionOverlay(attempt, delay, 5);
+    },
+    onFirstConnection: () => {
+      overlays.onControllerConnected();
+    }
+  });
+  
+  // Set session for API client
+  if (sessionManager.hasSession()) {
+    apiClient.setSession(sessionManager.getBoardId(), sessionManager.getSessionId());
+  }
+  
+  // Note: apiClient.start() to begin polling (not started in demo)
+  
+  // 10. Example: Create playerss
   const players = [
     { id: 'P1', name: 'Player 1', color: 'red', pos: 1, score: 10 },
     { id: 'P2', name: 'Player 2', color: 'green', pos: 1, score: 10 },
@@ -135,7 +183,7 @@ window.addEventListener('load', () => {
     { id: 'P4', name: 'Player 4', color: 'yellow', pos: 1, score: 10 }
   ];
   
-  // 9. Example: Initialize tokens on board and scoreboard
+  // 11. Example: Initialize tokens on board and scoreboard
   players.forEach((player, index) => {
     boardRenderer.ensureTokenForPlayer(player);
     boardRenderer.positionToken(player.id, player.pos, index);
@@ -144,7 +192,7 @@ window.addEventListener('load', () => {
   // Update scoreboard with initial player data
   scoreboard.updatePlayers(players);
   
-  // 10. Example: Simulate a dice roll and token movement
+  // 12. Example: Simulate a dice roll and token movement
   function simulateRoll(playerId, playerName, diceValue) {
     // Show rolling message
     eventLog.showRolling(playerName, 1);
@@ -197,7 +245,7 @@ window.addEventListener('load', () => {
     });
   }
   
-  // 11. Example: Test button - simulate Player 1 rolling dice
+  // 13. Example: Test button - simulate Player 1 rolling dice
   const testButton = document.createElement('button');
   testButton.textContent = 'Test: Roll Dice for Player 1';
   testButton.className = 'btn-small';
@@ -215,7 +263,7 @@ window.addEventListener('load', () => {
   
   document.body.appendChild(testButton);
   
-  // 12. Example: Eliminated player
+  // 14. Example: Eliminated player
   function eliminatePlayer(playerId) {
     boardRenderer.markTokenAsEliminated(playerId);
     
@@ -229,7 +277,7 @@ window.addEventListener('load', () => {
     }
   }
   
-  // 13. Example: Winner announcement
+  // 15. Example: Winner announcement
   function announceWinner(playerId) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -246,7 +294,7 @@ window.addEventListener('load', () => {
     console.log(`${player.name} wins with ${player.score} drops!`);
   }
   
-  // 14. Global access for debugging
+  // 16. Global access for debugging
   window.lastDropModules = {
     audioManager,
     boardRenderer,
@@ -255,6 +303,8 @@ window.addEventListener('load', () => {
     eventLog,
     overlays,
     settingsPanel,
+    apiClient,
+    sessionManager,
     players,
     simulateRoll,
     eliminatePlayer,
@@ -266,4 +316,6 @@ window.addEventListener('load', () => {
   console.log('Or: lastDropModules.eliminatePlayer("P3")');
   console.log('Or: lastDropModules.overlays.showChanceCard("5", "Lucky bonus!")');
   console.log('Or: lastDropModules.settingsPanel.toggle()');
+  console.log('Or: lastDropModules.apiClient.start() // Start live polling');
+  console.log('Session:', lastDropModules.sessionManager.toString());
 });

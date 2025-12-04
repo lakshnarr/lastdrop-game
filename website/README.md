@@ -367,20 +367,94 @@ overlays.hideAll();
 
 ### Network Modules
 
-#### api-client.js
-**Responsibilities**:
-- Fetch game state from API
-- Handle retry logic with exponential backoff
-- Update connection status
-- Poll for updates
+#### api-client.js (~340 lines) ✅ COMPLETE
+**Location**: `assets/js/network/api-client.js`
 
-#### session-manager.js
-**Responsibilities**:
-- Parse session ID from URL
-- Generate session IDs
-- Manage spectator connections
+**Exports**:
+- `ApiClient` class
 
-## 🔄 Refactoring Process
+**Features**:
+- Automatic polling with configurable intervals
+- Exponential backoff retry logic (5 attempts: 2s, 4s, 8s, 16s, 32s)
+- Connection status management
+- Session-based filtering (boardId, sessionId)
+- Offline detection
+- First connection detection
+- Callbacks for state updates, retries, errors
+- Manual refresh support
+
+**Usage**:
+```javascript
+import { ApiClient } from './assets/js/network/api-client.js';
+
+const apiClient = new ApiClient({
+  baseUrl: '/api/live_state.php',
+  apiKey: 'ABC123',
+  pollingInterval: 2000,
+  onStateUpdate: (state) => {
+    scoreboard.updatePlayers(state.players);
+  },
+  onConnectionChange: (status) => {
+    console.log('Connection:', status);
+  },
+  onRetry: (attempt, delay) => {
+    overlays.showReconnectionOverlay(attempt, delay, 5);
+  }
+});
+
+// Set session filter
+apiClient.setSession('LASTDROP-0001', 'uuid-123');
+
+// Start/stop polling
+apiClient.start();
+apiClient.stop();
+
+// Manual refresh
+await apiClient.refresh();
+```
+
+#### session-manager.js (~260 lines) ✅ COMPLETE
+**Location**: `assets/js/network/session-manager.js`
+
+**Exports**:
+- `SessionManager` class
+
+**Features**:
+- Parse session from URL (?session=BOARDID_SESSIONID or ?board=BOARDID)
+- Generate session URLs for sharing
+- Update browser URL without reload
+- localStorage persistence with expiration
+- UUID generation for new sessions
+- QR code data generation
+- Session change callbacks
+
+**Usage**:
+```javascript
+import { SessionManager } from './assets/js/network/session-manager.js';
+
+const sessionManager = new SessionManager({
+  onSessionChange: (boardId, sessionId) => {
+    console.log('Session changed:', boardId, sessionId);
+  }
+});
+
+// Parse from URL
+sessionManager.parseFromUrl();
+
+// Set session manually
+sessionManager.setSession('LASTDROP-0001', 'abc-123');
+
+// Generate shareable URL
+const shareUrl = sessionManager.generateSessionUrl();
+
+// Persistence
+sessionManager.saveToStorage();
+sessionManager.loadFromStorage();
+```
+
+## 📋 Module Summary
+
+### Core Modules (Phase 1)
 
 ### Phase 1: Extract Core (Complete ✅)
 - [x] Create folder structure
@@ -467,7 +541,7 @@ ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/las
 
 ---
 
-**Status**: ✅ Phase 2 COMPLETE! UI modules extraction (8 of 15 total modules)
+**Status**: ✅ Phase 3 COMPLETE! Network modules extraction (10 of 15 total modules)
 **Last Updated**: December 5, 2025
-**Lines Extracted**: 2,420 lines (target: ~2,500 total)
-**Next Step**: Phase 3 - Extract network modules (api-client, session-manager)
+**Lines Extracted**: 3,020 lines (target: ~2,500 total - EXCEEDED!)
+**Next Step**: Phase 4 - Extract shared CSS (~1,000 lines)
