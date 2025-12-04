@@ -1,0 +1,281 @@
+# Last Drop Website - Modular Architecture
+
+## 📁 Folder Structure
+
+```
+website/
+├── index.html          # Landing page (TO BE BUILT)
+├── demo.html           # Demo mode (REFACTORING)
+├── host.html           # Host mode (TO BE BUILT)
+├── live.html           # Live spectator view (REFACTORING)
+├── spectate.html       # Browse active games (TO BE BUILT)
+├── assets/
+│   ├── css/
+│   │   └── shared.css       # Shared stylesheet (3,400+ lines → 1 file)
+│   ├── js/
+│   │   ├── core/
+│   │   │   ├── dice-animator.js    # ✅ 3D dice animations (370 lines)
+│   │   │   ├── board-renderer.js   # Board rendering & token positioning
+│   │   │   ├── game-state.js       # State management & updates
+│   │   │   └── audio-manager.js    # Sound effects
+│   │   ├── ui/
+│   │   │   ├── settings-panel.js   # Settings sidebar
+│   │   │   ├── scoreboard.js       # Player list & scores
+│   │   │   ├── event-log.js        # Event messages
+│   │   │   └── overlays.js         # Popups, modals, winner screen
+│   │   ├── network/
+│   │   │   ├── api-client.js       # Fetch game state
+│   │   │   └── session-manager.js  # Session handling
+│   │   └── utils/
+│   │       ├── constants.js        # ✅ Tile names, effects, colors (130 lines)
+│   │       └── helpers.js          # Common utilities
+│   ├── images/
+│   ├── tiles/          # 20 tile images
+│   ├── chance/         # 20 chance card images
+│   └── pawns/          # 4 pawn SVGs
+└── api/
+    ├── live_state.php      # Get game state
+    ├── live_push.php       # Push game state
+    ├── active_games.php    # List active games (NEW)
+    └── session_info.php    # Get session details (NEW)
+```
+
+## 🎯 Refactoring Goals
+
+### Before (Current State)
+- `live.html`: **3,432 lines** of inline code
+- `demo.html`: **3,437 lines** of inline code
+- **~95% duplication** between files
+- Every bug fix requires editing both files manually
+- Adding features compounds the duplication problem
+
+### After (Target State)
+- `live.html`: **~500 lines** (imports modules + live-specific logic)
+- `demo.html`: **~500 lines** (imports modules + demo-specific logic)
+- **Shared modules**: Single source of truth (~2,500 lines across 10-15 files)
+- Bug fixes update ONE module, both pages benefit
+- New features add to modules, automatically available everywhere
+
+## ✅ Completed Modules
+
+### 1. dice-animator.js (370 lines)
+**Location**: `assets/js/core/dice-animator.js`
+
+**Exports**:
+- `DiceAnimator` class
+
+**Features**:
+- 3D dice roll animations
+- Static dice display
+- Rolling state animations (for GoDice sensors)
+- Per-die color customization
+- Callback support for animation completion
+
+**Usage**:
+```javascript
+import { DiceAnimator } from './assets/js/core/dice-animator.js';
+
+const diceAnimator = new DiceAnimator({
+  scoreboardDiceDisplay: document.getElementById('scoreboardDiceDisplay'),
+  scoreboardDice1: document.getElementById('scoreboardDice1'),
+  scoreboardDice2: document.getElementById('scoreboardDice2'),
+  dicePlayerName: document.getElementById('dicePlayerName'),
+  soundManager: soundManager  // Optional
+});
+
+// Show 3D animation
+diceAnimator.show3DDiceRoll({
+  value1: 4,
+  value2: 6,
+  playerName: "Player 1",
+  diceColor1: "red",
+  diceColor2: "blue",
+  callback: () => console.log('Animation complete!')
+});
+```
+
+### 2. constants.js (130 lines)
+**Location**: `assets/js/utils/constants.js`
+
+**Exports**:
+- `TILE_NAMES` - Array of 20 tile names
+- `TILE_EFFECTS` - Water drop changes per tile
+- `CHANCE_CARD_EFFECTS` - Chance card water drop changes
+- `BOARD_GRID` - Tile layout for rendering
+- `BOARD_SEQUENCE` - Tile order for movement
+- `PLAYER_COLORS` - Color hex codes
+- `PAWN_IMAGES` - SVG paths
+- `PLAYER_GRADIENTS` - Scoreboard gradients
+- `DEFAULT_AUDIO_VOLUMES` - Audio settings
+- `SOUND_FREQUENCIES` - Beep frequencies
+- `API_CONFIG` - Endpoint URLs & polling settings
+- `ANIMATION_DURATIONS` - Timing constants
+
+**Usage**:
+```javascript
+import { TILE_NAMES, TILE_EFFECTS, API_CONFIG } from './assets/js/utils/constants.js';
+
+console.log(TILE_NAMES[0]); // "START"
+console.log(TILE_EFFECTS[7]); // -4 (Oil Spill Bay)
+fetch(API_CONFIG.liveStateUrl);
+```
+
+## 📋 Modules To Be Created
+
+### Core Modules
+
+#### board-renderer.js
+**Responsibilities**:
+- Render 20-tile board grid
+- Compute tile centers
+- Handle board transformations (zoom, rotate, 3D/2D view)
+- Position tokens on tiles
+- Animate token movement
+- Handle responsive layouts
+
+#### game-state.js
+**Responsibilities**:
+- Manage player data (score, position, status)
+- Track game state
+- Process API responses
+- Detect state changes (new rolls, eliminations, winner)
+- Queue states during animations
+
+#### audio-manager.js
+**Responsibilities**:
+- Play sound effects (dice, move, chance, tile, eliminated, winner)
+- Manage volume controls
+- Handle audio enable/disable
+
+### UI Modules
+
+#### scoreboard.js
+**Responsibilities**:
+- Render active players list with ranks
+- Render eliminated players list
+- Update player scores in real-time
+- Sort players by score
+
+#### event-log.js
+**Responsibilities**:
+- Display event messages
+- Format event text with highlights
+- Handle rolling, undo, reset messages
+
+#### overlays.js
+**Responsibilities**:
+- Winner celebration overlay
+- Chance card popups
+- Connection status overlays
+- Loading screens
+
+#### settings-panel.js
+**Responsibilities**:
+- Manage settings sidebar
+- Audio controls
+- Board view controls
+- Coin offset adjustments
+
+### Network Modules
+
+#### api-client.js
+**Responsibilities**:
+- Fetch game state from API
+- Handle retry logic with exponential backoff
+- Update connection status
+- Poll for updates
+
+#### session-manager.js
+**Responsibilities**:
+- Parse session ID from URL
+- Generate session IDs
+- Manage spectator connections
+
+## 🔄 Refactoring Process
+
+### Phase 1: Extract Core (In Progress)
+- [x] Create folder structure
+- [x] Extract dice-animator.js
+- [x] Extract constants.js
+- [ ] Extract board-renderer.js
+- [ ] Extract game-state.js
+- [ ] Extract audio-manager.js
+
+### Phase 2: Extract UI
+- [ ] Extract scoreboard.js
+- [ ] Extract event-log.js
+- [ ] Extract overlays.js
+- [ ] Extract settings-panel.js
+
+### Phase 3: Extract Network
+- [ ] Extract api-client.js
+- [ ] Extract session-manager.js
+
+### Phase 4: Create Shared CSS
+- [ ] Move all CSS to `assets/css/shared.css`
+- [ ] Extract critical CSS for above-the-fold content
+- [ ] Optimize for performance
+
+### Phase 5: Update HTML Files
+- [ ] Update `demo.html` to import modules
+- [ ] Update `live.html` to import modules
+- [ ] Remove duplicated code from both files
+- [ ] Test all functionality
+
+### Phase 6: Build New Pages
+- [ ] Create `index.html` using modules
+- [ ] Create `host.html` using modules
+- [ ] Create `spectate.html` using modules
+
+## 🧪 Testing Strategy
+
+After refactoring each module:
+1. Test in `live.html` (with real API)
+2. Test in `demo.html` (with auto-play mode)
+3. Test on mobile devices (Chrome & Firefox)
+4. Verify all features work:
+   - [ ] 3D board rendering
+   - [ ] Dice animations
+   - [ ] Token movement
+   - [ ] Scoreboard updates
+   - [ ] Settings panel
+   - [ ] Audio playback
+   - [ ] Chance cards
+   - [ ] Winner overlay
+   - [ ] Connection status
+
+## 💡 Development Principles
+
+1. **Single Source of Truth**: Each piece of functionality exists in ONE file only
+2. **Test Both Pages**: Every change must work in `live.html` AND `demo.html`
+3. **Modular First**: Before adding features, extract to modules
+4. **No Duplication**: If code exists in 2+ places, extract it
+5. **ES6 Modules**: Use `import`/`export` for clean dependencies
+
+## 📦 Deployment
+
+After refactoring:
+```bash
+# Commit changes
+git add website/
+git commit -m "refactor: Modularize codebase - extract dice-animator and constants"
+git push origin main
+
+# Deploy to VPS
+ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/lastdrop.earth/public/"
+```
+
+## 🚀 Future Benefits
+
+- **Faster Development**: Add features once, use everywhere
+- **Easier Debugging**: Fix bugs in one place
+- **Better Testing**: Test modules in isolation
+- **Scalability**: Build new pages quickly using existing modules
+- **Maintainability**: Clear separation of concerns
+- **Performance**: Load only what's needed per page
+
+---
+
+**Status**: Refactoring in progress (2 of 15 modules complete)
+**Last Updated**: December 5, 2025
+**Next Step**: Extract board-renderer.js
