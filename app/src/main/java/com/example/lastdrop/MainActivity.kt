@@ -75,6 +75,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvBattery: TextView
     private lateinit var tvLastEvent: TextView
     private lateinit var tvUndoStatus: TextView
+    private lateinit var tvCoinTimeout: TextView
+    private lateinit var tvCurrentTurn: TextView
     private lateinit var tvScoreP1: TextView
     private lateinit var tvScoreP2: TextView
     private lateinit var tvScoreP3: TextView
@@ -157,7 +159,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private var playWithTwoDice: Boolean = false
     private val diceResults: MutableMap<Int, Int> = HashMap()
     
-    // ---------- ESP32 BLE ----------
+    // ---------- Helper Classes ----------
+    private lateinit var esp32Manager: ESP32ConnectionManager
+    private lateinit var uiUpdateManager: UIUpdateManager
+    private lateinit var batteryMonitor: BatteryMonitor
+    
+    // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
     private var esp32Gatt: BluetoothGatt? = null
     private var esp32TxCharacteristic: BluetoothGattCharacteristic? = null
@@ -208,6 +215,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         dao = db.dao()
 
         gameEngine = GameEngine()
+        
+        // Initialize helper classes
+        uiUpdateManager = UIUpdateManager()
+        batteryMonitor = BatteryMonitor(this)
 
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
@@ -242,6 +253,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         super.onDestroy()
         undoTimer?.cancel()
         mainScope.cancel()
+        uiUpdateManager.cleanup()  // Cleanup helper classes
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -263,6 +275,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvBattery = findViewById(R.id.tvBattery)
         tvLastEvent = findViewById(R.id.tvLastEvent)
         tvUndoStatus = findViewById(R.id.tvUndoStatus)
+        tvCoinTimeout = findViewById(R.id.tvCoinTimeout)
+        tvCurrentTurn = findViewById(R.id.tvCurrentTurn)
         tvScoreP1 = findViewById(R.id.tvScoreP1)
         tvScoreP2 = findViewById(R.id.tvScoreP2)
         tvScoreP3 = findViewById(R.id.tvScoreP3)
@@ -2022,6 +2036,24 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         runOnUiThread {
             tvDiceStatus.text = "Waiting for coin placement on tile $expectedTile..."
+            tvCoinTimeout.visibility = View.VISIBLE
+            tvCurrentTurn.visibility = View.VISIBLE
+            
+            // Show turn indicator
+            val currentPlayerName = playerNames[currentPlayer]
+            val currentPlayerColor = playerColors[currentPlayer]
+            uiUpdateManager.updateTurnIndicator(tvCurrentTurn, currentPlayerName, currentPlayerColor)
+            
+            // Start 30-second countdown for coin placement
+            uiUpdateManager.startCountdown(
+                textView = tvCoinTimeout,
+                totalSeconds = 30,
+                prefix = "⏱ Coin placement timeout: ",
+                onComplete = {
+                    // Timeout reached - show warning
+                    Toast.makeText(this, "Coin placement timeout! Please place coin.", Toast.LENGTH_LONG).show()
+                }
+            )
         }
     }
 
@@ -2064,9 +2096,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
                     Log.d(TAG, "Coin placed: Player $playerId at tile $tile")
                     waitingForCoinPlacement = false
+                    
+                    // Cancel countdown and hide UI elements
+                    uiUpdateManager.cancelCountdown()
 
                     runOnUiThread {
                         tvDiceStatus.text = "Coin placed! ✓"
+                        tvCoinTimeout.visibility = View.GONE
+                        tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin detected at tile $tile", Toast.LENGTH_SHORT).show()
                         // Trigger live.html update
                         pushLiveStateToBoard()
@@ -2077,8 +2114,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     val tile = json.getInt("tile")
                     Log.w(TAG, "Coin placement timeout at tile $tile")
                     waitingForCoinPlacement = false
+                    
+                    // Cancel countdown
+                    uiUpdateManager.cancelCountdown()
 
                     runOnUiThread {
+                        tvCoinTimeout.visibility = View.GONE
+                        tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin placement timeout - continuing anyway", Toast.LENGTH_SHORT).show()
                         pushLiveStateToBoard()
                     }
@@ -2128,6 +2170,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     @SuppressLint("MissingPermission")
     private fun disconnectESP32() {
         reconnectJob?.cancel()  // Cancel any pending reconnect attempts
+        uiUpdateManager.cancelCountdown()  // Cancel coin timeout countdown
         esp32Gatt?.disconnect()
         esp32Gatt?.close()
         esp32Gatt = null
@@ -2136,6 +2179,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         esp32RxCharacteristic = null
         waitingForCoinPlacement = false
         gameActive = false  // Mark game as inactive
+        
+        runOnUiThread {
+            tvCoinTimeout.visibility = View.GONE
+            tvCoinTimeout.text = ""
+        }
+        
         Log.d(TAG, "ESP32 disconnected and cleaned up")
     }
 

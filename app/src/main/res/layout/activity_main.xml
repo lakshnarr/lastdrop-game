@@ -86,6 +86,16 @@
         android:visibility="gone" />
 
     <TextView
+        android:id="@+id/tvCoinTimeout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text=""
+        android:textColor="#FFA726"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/tvESP32Status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
