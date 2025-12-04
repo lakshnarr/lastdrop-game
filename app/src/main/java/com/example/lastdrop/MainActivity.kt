@@ -1422,6 +1422,19 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Restore the player who made the last roll
         val playerName = playerNames[previousPlayerIndex]
 
+        // Cancel any pending coin placement operations (undo before coin placed)
+        if (waitingForCoinPlacement) {
+            waitingForCoinPlacement = false
+            uiUpdateManager.cancelCountdown()
+            esp32ErrorHandler.cancelCoinPlacementTimeout()
+            appendTestLog("🔄 Undo: Cancelled pending coin placement")
+            
+            runOnUiThread {
+                tvCoinTimeout.visibility = View.GONE
+                tvCoinTimeout.text = ""
+            }
+        }
+
         // Revert position and score
         playerPositions[playerName] = previousPosition
         playerScores[playerName] = previousScore
@@ -1432,7 +1445,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Update turn indicator
         updateTurnIndicatorDisplay()
         
-        // Send undo command to ESP32
+        // Send undo command to ESP32 (works in Production and Test Mode 1)
         sendUndoToESP32(previousPlayerIndex, playerPositions[playerName] ?: 1, previousPosition)
 
         // Clear ALL roll data (critical: prevents server from showing stale data)
@@ -1442,14 +1455,27 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         lastAvg = null
         lastTile = null
         lastChanceCard = null
+        
+        // Clear previous roll to prevent double undo
+        previousRoll = null
 
-        tvLastEvent.text = "Undo applied - $playerName returns to position $previousPosition"
+        val undoMessage = if (testModeEnabled) {
+            "🔄 Undo: $playerName returns to position $previousPosition"
+        } else {
+            "Undo applied - $playerName returns to position $previousPosition"
+        }
+        
+        tvLastEvent.text = undoMessage
         tvUndoStatus.text = "Undo applied"
         btnUndo.text = "Undo Last Move"
         btnUndo.setBackgroundColor(0xFF6200EE.toInt()) // Reset color
         undoTimer?.cancel()
 
         Log.d(TAG, "Undo confirmed: $playerName -> pos=$previousPosition, score=$previousScore")
+        
+        if (testModeEnabled) {
+            appendTestLog("✅ Undo applied: $playerName → Tile $previousPosition, Score $previousScore")
+        }
 
         // Update UI
         updateScoreboard()
@@ -1644,11 +1670,39 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         when (testModeType) {
             1 -> {
                 // Test Mode 1: Manual dice value for ESP32 testing
-                appendTestLog("🎲 Manual roll: $diceValue")
+                // Send to ESP32 and wait for ESP32 response (don't process locally)
+                appendTestLog("🎲 Manual roll: $diceValue (sending to ESP32)")
                 Log.d(TAG, "Test Mode 1 - Sending dice value $diceValue to ESP32")
                 
-                // Simulate dice stable callback with selected value
-                onDiceStable(0, diceValue)
+                if (!esp32Connected) {
+                    Toast.makeText(this, "ESP32 not connected!", Toast.LENGTH_SHORT).show()
+                    appendTestLog("❌ ESP32 not connected - cannot process roll")
+                    return
+                }
+                
+                // Save dice value for server reporting
+                lastDice1 = diceValue
+                lastDice2 = null
+                lastAvg = diceValue
+                lastModeTwoDice = false
+                
+                // Send roll to ESP32 - it will respond with roll_processed or coin_placed
+                val safeIndex = currentPlayer.coerceIn(0, playerCount - 1)
+                val playerName = playerNames[safeIndex]
+                val currentPos = playerPositions[playerName] ?: 1
+                
+                // Save state BEFORE sending to ESP32 (for undo)
+                previousPlayerIndex = safeIndex
+                previousPosition = currentPos
+                previousScore = playerScores[playerName] ?: 10
+                previousRoll = diceValue
+                previousDice1 = diceValue
+                previousDice2 = null
+                previousAvg = diceValue
+                
+                sendRollToESP32(safeIndex, diceValue, currentPos, currentPos + diceValue)
+                
+                appendTestLog("📤 Sent to ESP32, waiting for response...")
             }
             2 -> {
                 // Test Mode 2: Manual dice value for Android/web testing (no ESP32)
@@ -1989,8 +2043,16 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun sendUndoToESP32(playerId: Int, fromTile: Int, toTile: Int) {
-        if (testModeEnabled) return
-        if (!esp32Connected) return
+        // Allow undo in Test Mode 1 (ESP32 testing) and Production
+        if (testModeType == 2) {
+            // Test Mode 2: No ESP32, undo is local only
+            return
+        }
+        
+        if (!esp32Connected) {
+            Log.w(TAG, "ESP32 not connected, undo will be local only")
+            return
+        }
 
         val undoCmd = org.json.JSONObject().apply {
             put("command", "undo")
@@ -2000,7 +2062,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         sendToESP32(undoCmd.toString())
-        waitingForCoinPlacement = true
+        
+        appendTestLog("📤 Sent undo command to ESP32")
+        Log.d(TAG, "Undo command sent to ESP32: Player $playerId, $fromTile → $toTile")
     }
 
     private fun sendResetToESP32() {
@@ -2027,6 +2091,73 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             val event = json.optString("event", "")
 
             when (event) {
+                "roll_processed" -> {
+                    // Test Mode 1: ESP32 processed the roll and returns complete game state
+                    esp32ErrorHandler.updateHeartbeat()
+                    
+                    val playerId = json.getInt("playerId")
+                    val playerName = playerNames.getOrNull(playerId) ?: "Player ${playerId + 1}"
+                    
+                    // Extract movement data
+                    val movement = json.getJSONObject("movement")
+                    val fromTile = movement.getInt("from")
+                    val toTile = movement.getInt("to")
+                    
+                    // Extract tile data
+                    val tileObj = json.getJSONObject("tile")
+                    val tileName = tileObj.getString("name")
+                    val tileType = tileObj.getString("type")
+                    
+                    // Extract score data
+                    val scoreObj = json.getJSONObject("score")
+                    val newScore = scoreObj.getInt("new")
+                    val scoreChange = scoreObj.getInt("change")
+                    
+                    // Extract chance card if present
+                    var chanceCardText = ""
+                    if (json.has("chanceCard")) {
+                        val cardObj = json.getJSONObject("chanceCard")
+                        val cardNum = cardObj.getInt("number")
+                        val cardDesc = cardObj.getString("description")
+                        val cardEffect = cardObj.getInt("effect")
+                        chanceCardText = "\nChance Card #$cardNum: $cardDesc ($cardEffect)"
+                        
+                        // Store for live.html
+                        lastChanceCard = ChanceCard(cardNum, cardDesc, cardEffect)
+                    } else {
+                        lastChanceCard = null
+                    }
+                    
+                    // Update local game state
+                    playerPositions[playerName] = toTile
+                    playerScores[playerName] = newScore
+                    
+                    // Store for live.html
+                    lastTile = gameEngine.tiles.find { it.index == toTile }
+                    
+                    // Advance turn
+                    currentPlayer = (currentPlayer + 1) % playerCount
+                    updateTurnIndicatorDisplay()
+                    
+                    // Update UI
+                    runOnUiThread {
+                        val eventText = "$playerName: Tile $fromTile → $toTile ($tileName)\n" +
+                                       "Score: $newScore ($scoreChange)$chanceCardText"
+                        tvLastEvent.text = eventText
+                        tvDiceStatus.text = "Waiting for coin placement..."
+                        
+                        appendTestLog("📥 ESP32 response: $playerName → Tile $toTile, Score: $newScore")
+                        
+                        updateScoreboard()
+                        
+                        // Send to server and live.html
+                        sendLastRollToServer()
+                        pushLiveStateToBoard()
+                    }
+                    
+                    Log.d(TAG, "Roll processed by ESP32: $playerName → Tile $toTile, Score: $newScore")
+                }
+                
                 "coin_placed" -> {
                     val playerId = json.getInt("playerId")
                     val tile = json.getInt("tile")
@@ -2063,6 +2194,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvCoinTimeout.visibility = View.GONE
                         tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin detected at tile $tile", Toast.LENGTH_SHORT).show()
+                        
+                        appendTestLog("✅ Coin placed at tile $tile")
+                        
                         // Trigger live.html update
                         pushLiveStateToBoard()
                     }
@@ -2084,6 +2218,45 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin placement timeout - continuing anyway", Toast.LENGTH_SHORT).show()
                         pushLiveStateToBoard()
+                    }
+                }
+                
+                "undo_complete" -> {
+                    // ESP32 confirmed undo and is waiting for coin at reverted position
+                    esp32ErrorHandler.updateHeartbeat()
+                    
+                    val playerId = json.getInt("playerId")
+                    val playerName = playerNames.getOrNull(playerId) ?: "Player ${playerId + 1}"
+                    
+                    val movement = json.getJSONObject("movement")
+                    val fromTile = movement.getInt("from")
+                    val toTile = movement.getInt("to")
+                    
+                    val scoreObj = json.getJSONObject("score")
+                    val restoredScore = scoreObj.getInt("restored")
+                    
+                    Log.d(TAG, "Undo complete: $playerName → Tile $toTile, Score: $restoredScore")
+                    
+                    // Wait for coin placement at reverted position
+                    waitingForCoinPlacement = true
+                    
+                    runOnUiThread {
+                        tvDiceStatus.text = "Undo complete! Place coin at tile $toTile"
+                        tvCoinTimeout.visibility = View.VISIBLE
+                        
+                        appendTestLog("✅ ESP32 undo complete: $playerName → Tile $toTile")
+                        
+                        Toast.makeText(this, "Undo complete - place coin at tile $toTile", Toast.LENGTH_SHORT).show()
+                        
+                        // Start countdown for coin placement at reverted position
+                        uiUpdateManager.startCountdown(
+                            textView = tvCoinTimeout,
+                            totalSeconds = 30,
+                            prefix = "⏱ Coin placement timeout: ",
+                            onComplete = {
+                                esp32ErrorHandler.startCoinPlacementTimeout(toTile)
+                            }
+                        )
                     }
                 }
 
