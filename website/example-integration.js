@@ -9,6 +9,7 @@ import { AudioManager } from './assets/js/core/audio-manager.js';
 import { Scoreboard } from './assets/js/ui/scoreboard.js';
 import { EventLog } from './assets/js/ui/event-log.js';
 import { Overlays } from './assets/js/ui/overlays.js';
+import { SettingsPanel } from './assets/js/ui/settings-panel.js';
 import { TILE_NAMES, PLAYER_COLORS } from './assets/js/utils/constants.js';
 
 // Initialize on page load
@@ -88,7 +89,45 @@ window.addEventListener('load', () => {
     soundManager: audioManager
   });
   
-  // 7. Example: Create players
+  // 7. Create Settings Panel
+  const settingsPanel = new SettingsPanel({
+    panel: document.getElementById('settingsPanel'),
+    backdrop: document.getElementById('settingsBackdrop'),
+    openBtn: document.getElementById('settingsBtn'),
+    closeBtn: document.getElementById('closeSettings'),
+    viewToggle: document.getElementById('viewToggle'),
+    viewStatus: document.getElementById('viewStatus'),
+    zoomRange: document.getElementById('zoomRange'),
+    rotateRange: document.getElementById('rotateRange'),
+    rotateXRange: document.getElementById('rotateXRange'),
+    rotateYRange: document.getElementById('rotateYRange'),
+    audioToggle: document.getElementById('audioToggle'),
+    audioStatus: document.getElementById('audioStatus'),
+    bgMusicVolume: document.getElementById('bgMusicVolume'),
+    diceVolume: document.getElementById('diceVolume'),
+    moveVolume: document.getElementById('moveVolume'),
+    chanceVolume: document.getElementById('chanceVolume'),
+    tileVolume: document.getElementById('tileVolume'),
+    eliminatedVolume: document.getElementById('eliminatedVolume'),
+    winnerVolume: document.getElementById('winnerVolume'),
+    offsetXRange: document.getElementById('offsetXRange'),
+    offsetYRange: document.getElementById('offsetYRange'),
+    offsetXValue: document.getElementById('offsetXValue'),
+    offsetYValue: document.getElementById('offsetYValue'),
+    applyCoinOffset: document.getElementById('applyCoinOffset'),
+    kidToggle: document.getElementById('kidToggle'),
+    kidStatus: document.getElementById('kidStatus'),
+    devToggle: document.getElementById('devToggle'),
+    devStatus: document.getElementById('devStatus'),
+    devControls: document.getElementById('devControls'),
+    demoToggle: document.getElementById('demoToggle'),
+    demoStatus: document.getElementById('demoStatus'),
+    helpBtn: document.getElementById('helpBtn'),
+    boardRenderer: boardRenderer,
+    audioManager: audioManager
+  });
+  
+  // 8. Example: Create players
   const players = [
     { id: 'P1', name: 'Player 1', color: 'red', pos: 1, score: 10 },
     { id: 'P2', name: 'Player 2', color: 'green', pos: 1, score: 10 },
@@ -96,7 +135,7 @@ window.addEventListener('load', () => {
     { id: 'P4', name: 'Player 4', color: 'yellow', pos: 1, score: 10 }
   ];
   
-  // 8. Example: Initialize tokens on board and scoreboard
+  // 9. Example: Initialize tokens on board and scoreboard
   players.forEach((player, index) => {
     boardRenderer.ensureTokenForPlayer(player);
     boardRenderer.positionToken(player.id, player.pos, index);
@@ -105,7 +144,7 @@ window.addEventListener('load', () => {
   // Update scoreboard with initial player data
   scoreboard.updatePlayers(players);
   
-  // 9. Example: Simulate a dice roll and token movement
+  // 10. Example: Simulate a dice roll and token movement
   function simulateRoll(playerId, playerName, diceValue) {
     // Show rolling message
     eventLog.showRolling(playerName, 1);
@@ -158,7 +197,7 @@ window.addEventListener('load', () => {
     });
   }
   
-  // 10. Example: Test button - simulate Player 1 rolling dice
+  // 11. Example: Test button - simulate Player 1 rolling dice
   const testButton = document.createElement('button');
   testButton.textContent = 'Test: Roll Dice for Player 1';
   testButton.className = 'btn-small';
@@ -176,41 +215,7 @@ window.addEventListener('load', () => {
   
   document.body.appendChild(testButton);
   
-  // 11. Example: Audio controls
-  const audioToggle = document.getElementById('audioToggle');
-  const audioStatus = document.getElementById('audioStatus');
-  
-  audioToggle?.addEventListener('click', () => {
-    const isEnabled = audioManager.toggle();
-    if (audioStatus) {
-      audioStatus.textContent = isEnabled ? 'ON' : 'OFF';
-    }
-  });
-  
-  // 12. Example: Volume controls
-  const volumeControls = {
-    diceVolume: 'dice',
-    moveVolume: 'move',
-    chanceVolume: 'chance',
-    tileVolume: 'tile',
-    eliminatedVolume: 'eliminated',
-    winnerVolume: 'winner'
-  };
-  
-  Object.entries(volumeControls).forEach(([elementId, soundType]) => {
-    const element = document.getElementById(elementId);
-    element?.addEventListener('input', (e) => {
-      const value = parseInt(e.target.value, 10) / 100;
-      audioManager.setVolume(soundType, value);
-      
-      const valueDisplay = document.getElementById(`${soundType}Value`);
-      if (valueDisplay) {
-        valueDisplay.textContent = `${e.target.value}%`;
-      }
-    });
-  });
-  
-  // 13. Example: Eliminated player
+  // 12. Example: Eliminated player
   function eliminatePlayer(playerId) {
     boardRenderer.markTokenAsEliminated(playerId);
     
@@ -224,7 +229,7 @@ window.addEventListener('load', () => {
     }
   }
   
-  // 14. Example: Winner announcement
+  // 13. Example: Winner announcement
   function announceWinner(playerId) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -241,7 +246,7 @@ window.addEventListener('load', () => {
     console.log(`${player.name} wins with ${player.score} drops!`);
   }
   
-  // 15. Global access for debugging
+  // 14. Global access for debugging
   window.lastDropModules = {
     audioManager,
     boardRenderer,
@@ -249,6 +254,7 @@ window.addEventListener('load', () => {
     scoreboard,
     eventLog,
     overlays,
+    settingsPanel,
     players,
     simulateRoll,
     eliminatePlayer,
@@ -259,4 +265,5 @@ window.addEventListener('load', () => {
   console.log('Try: lastDropModules.simulateRoll("P1", "Player 1", 4)');
   console.log('Or: lastDropModules.eliminatePlayer("P3")');
   console.log('Or: lastDropModules.overlays.showChanceCard("5", "Lucky bonus!")');
+  console.log('Or: lastDropModules.settingsPanel.toggle()');
 });
