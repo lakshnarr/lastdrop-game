@@ -235,12 +235,40 @@ fetch(API_CONFIG.liveStateUrl);
 
 ### UI Modules
 
-#### scoreboard.js
-**Responsibilities**:
-- Render active players list with ranks
-- Render eliminated players list
-- Update player scores in real-time
-- Sort players by score
+#### scoreboard.js (~200 lines) ✅ COMPLETE
+**Location**: `assets/js/ui/scoreboard.js`
+
+**Exports**:
+- `Scoreboard` class
+
+**Features**:
+- Sort active players by score (drops) with seniority tiebreaker
+- Calculate consecutive ranks (ties get same rank)
+- Render active players list with colored gradients
+- Render eliminated players with grayscale tokens
+- Winner detection (only 1 active player remaining)
+- Track newly eliminated players with callbacks
+- Update eliminated count badge
+
+**Usage**:
+```javascript
+import { Scoreboard } from './assets/js/ui/scoreboard.js';
+
+const scoreboard = new Scoreboard({
+  playersList: document.getElementById('playersList'),
+  eliminatedList: document.getElementById('eliminatedList'),
+  eliminatedCount: document.getElementById('eliminatedCount'),
+  onWinnerDetected: (winner) => {
+    console.log(`${winner.name} wins with ${winner.score} drops!`);
+  },
+  onPlayerEliminated: (playerId) => {
+    audioManager.playEliminated();
+  }
+});
+
+// Update scoreboard with new player data
+scoreboard.updatePlayers(state.players);
+```
 
 #### event-log.js
 **Responsibilities**:
@@ -364,7 +392,7 @@ ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/las
 
 ---
 
-**Status**: Phase 1 Complete! Core modules extracted (4 of 15 total modules)
+**Status**: Phase 2 in progress - UI modules extraction (5 of 15 total modules)
 **Last Updated**: December 5, 2025
-**Lines Extracted**: 1,360 lines (target: ~2,500 total)
-**Next Step**: Extract UI modules (scoreboard, event-log, overlays, settings-panel)
+**Lines Extracted**: 1,560 lines (target: ~2,500 total)
+**Next Step**: Extract event-log, overlays, and settings-panel modules

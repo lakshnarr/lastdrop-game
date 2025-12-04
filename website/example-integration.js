@@ -1,11 +1,12 @@
 /**
  * Example: How to use the modular Last Drop components
- * This file demonstrates integration of DiceAnimator, BoardRenderer, and AudioManager
+ * This file demonstrates integration of DiceAnimator, BoardRenderer, AudioManager, and Scoreboard
  */
 
 import { DiceAnimator } from './assets/js/core/dice-animator.js';
 import { BoardRenderer } from './assets/js/core/board-renderer.js';
 import { AudioManager } from './assets/js/core/audio-manager.js';
+import { Scoreboard } from './assets/js/ui/scoreboard.js';
 import { TILE_NAMES, PLAYER_COLORS } from './assets/js/utils/constants.js';
 
 // Initialize on page load
@@ -42,7 +43,21 @@ window.addEventListener('load', () => {
     soundManager: audioManager
   });
   
-  // 4. Example: Create players
+  // 4. Create Scoreboard
+  const scoreboard = new Scoreboard({
+    playersList: document.getElementById('playersList'),
+    eliminatedList: document.getElementById('eliminatedList'),
+    eliminatedCount: document.getElementById('eliminatedCount'),
+    onWinnerDetected: (winner) => {
+      announceWinner(winner.id);
+    },
+    onPlayerEliminated: (playerId) => {
+      audioManager.playEliminated();
+      console.log(`Player ${playerId} was eliminated!`);
+    }
+  });
+  
+  // 5. Example: Create players
   const players = [
     { id: 'P1', name: 'Player 1', color: 'red', pos: 1, score: 10 },
     { id: 'P2', name: 'Player 2', color: 'green', pos: 1, score: 10 },
@@ -50,13 +65,16 @@ window.addEventListener('load', () => {
     { id: 'P4', name: 'Player 4', color: 'yellow', pos: 1, score: 10 }
   ];
   
-  // 5. Example: Initialize tokens on board
+  // 6. Example: Initialize tokens on board and scoreboard
   players.forEach((player, index) => {
     boardRenderer.ensureTokenForPlayer(player);
     boardRenderer.positionToken(player.id, player.pos, index);
   });
   
-  // 6. Example: Simulate a dice roll and token movement
+  // Update scoreboard with initial player data
+  scoreboard.updatePlayers(players);
+  
+  // 7. Example: Simulate a dice roll and token movement
   function simulateRoll(playerId, playerName, diceValue) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -64,6 +82,15 @@ window.addEventListener('load', () => {
     const oldPos = player.pos;
     const newPos = ((player.pos - 1 + diceValue) % 20) + 1;
     player.pos = newPos;
+    
+    // Update score (simulate tile effect)
+    const scoreChange = Math.floor(Math.random() * 5) - 2; // Random -2 to +2
+    player.score = Math.max(0, player.score + scoreChange);
+    
+    // Check for elimination (score reaches 0)
+    if (player.score === 0 && !player.eliminated) {
+      player.eliminated = true;
+    }
     
     // Link dice animator to board renderer
     boardRenderer.setAnimationFlag(true);
@@ -87,12 +114,15 @@ window.addEventListener('load', () => {
           oldPos // from tile
         );
         
-        console.log(`${playerName} rolled ${diceValue}, moved from tile ${oldPos} to ${newPos}`);
+        // Update scoreboard after movement
+        scoreboard.updatePlayers(players);
+        
+        console.log(`${playerName} rolled ${diceValue}, moved from tile ${oldPos} to ${newPos}, score: ${player.score}`);
       }
     });
   }
   
-  // 7. Example: Test button - simulate Player 1 rolling dice
+  // 8. Example: Test button - simulate Player 1 rolling dice
   const testButton = document.createElement('button');
   testButton.textContent = 'Test: Roll Dice for Player 1';
   testButton.className = 'btn-small';
@@ -110,7 +140,7 @@ window.addEventListener('load', () => {
   
   document.body.appendChild(testButton);
   
-  // 8. Example: Audio controls
+  // 9. Example: Audio controls
   const audioToggle = document.getElementById('audioToggle');
   const audioStatus = document.getElementById('audioStatus');
   
@@ -121,7 +151,7 @@ window.addEventListener('load', () => {
     }
   });
   
-  // 9. Example: Volume controls
+  // 10. Example: Volume controls
   const volumeControls = {
     diceVolume: 'dice',
     moveVolume: 'move',
@@ -144,19 +174,20 @@ window.addEventListener('load', () => {
     });
   });
   
-  // 10. Example: Eliminated player
+  // 11. Example: Eliminated player
   function eliminatePlayer(playerId) {
     boardRenderer.markTokenAsEliminated(playerId);
-    audioManager.playEliminated();
     
     const player = players.find(p => p.id === playerId);
     if (player) {
       player.eliminated = true;
+      player.score = 0;
+      scoreboard.updatePlayers(players);
       console.log(`${player.name} has been eliminated!`);
     }
   }
   
-  // 11. Example: Winner announcement
+  // 12. Example: Winner announcement
   function announceWinner(playerId) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -182,6 +213,7 @@ window.addEventListener('load', () => {
     audioManager,
     boardRenderer,
     diceAnimator,
+    scoreboard,
     players,
     simulateRoll,
     eliminatePlayer,
@@ -190,4 +222,5 @@ window.addEventListener('load', () => {
   
   console.log('✅ Last Drop modules initialized!');
   console.log('Try: lastDropModules.simulateRoll("P1", "Player 1", 4)');
+  console.log('Or: lastDropModules.eliminatePlayer("P3")');
 });
