@@ -391,6 +391,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 Toast.LENGTH_LONG
             ).show()
             resetLocalGame()
+            
+            // Show turn indicator for first player
+            updateTurnIndicatorDisplay()
             return
         }
 
@@ -846,36 +849,74 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     override fun onDiceChargeLevel(diceId: Int, level: Int) {
         runOnUiThread {
             diceBatteryLevels[diceId] = level
+            
+            // Use BatteryMonitor for warnings
+            batteryMonitor.updateBatteryLevel(diceId, level) { message ->
+                appendTestLog(message)
+            }
+            
             updateBatteryUi()
         }
     }
 
-    // Update battery text for 1 or 2 dice
+    // Update battery text for 1 or 2 dice with color-coded warnings
     private fun updateBatteryUi() {
         if (!playWithTwoDice) {
             val level = diceBatteryLevels.values.firstOrNull()
-            tvBattery.text = if (level != null) {
-                "Battery: $level%"
+            if (level != null) {
+                tvBattery.text = "Battery: $level%"
+                // Color-code based on battery level
+                tvBattery.setTextColor(when {
+                    level <= 10 -> android.graphics.Color.parseColor("#F44336") // Red - critical
+                    level <= 20 -> android.graphics.Color.parseColor("#FF9800") // Orange - low
+                    else -> android.graphics.Color.parseColor("#4CAF50") // Green - good
+                })
             } else {
-                "Battery: --"
+                tvBattery.text = "Battery: --"
+                tvBattery.setTextColor(android.graphics.Color.WHITE)
             }
         } else {
             val sorted = diceBatteryLevels.keys.sorted()
             when {
                 sorted.size >= 2 -> {
-                    val l1 = diceBatteryLevels[sorted[0]]
-                    val l2 = diceBatteryLevels[sorted[1]]
-                    tvBattery.text =
-                        "D1: ${l1 ?: "--"}%   D2: ${l2 ?: "--"}%"
+                    val l1 = diceBatteryLevels[sorted[0]] ?: 0
+                    val l2 = diceBatteryLevels[sorted[1]] ?: 0
+                    tvBattery.text = "D1: ${l1}%   D2: ${l2}%"
+                    
+                    // Show red if any dice is critical
+                    tvBattery.setTextColor(when {
+                        l1 <= 10 || l2 <= 10 -> android.graphics.Color.parseColor("#F44336")
+                        l1 <= 20 || l2 <= 20 -> android.graphics.Color.parseColor("#FF9800")
+                        else -> android.graphics.Color.parseColor("#4CAF50")
+                    })
                 }
                 sorted.size == 1 -> {
-                    val l1 = diceBatteryLevels[sorted[0]]
-                    tvBattery.text =
-                        "D1: ${l1 ?: "--"}%   D2: --"
+                    val l1 = diceBatteryLevels[sorted[0]] ?: 0
+                    tvBattery.text = "D1: ${l1}%   D2: --"
+                    tvBattery.setTextColor(when {
+                        l1 <= 10 -> android.graphics.Color.parseColor("#F44336")
+                        l1 <= 20 -> android.graphics.Color.parseColor("#FF9800")
+                        else -> android.graphics.Color.parseColor("#4CAF50")
+                    })
                 }
                 else -> {
                     tvBattery.text = "D1: --   D2: --"
+                    tvBattery.setTextColor(android.graphics.Color.WHITE)
                 }
+            }
+        }
+    }
+    
+    // Update turn indicator with current player
+    private fun updateTurnIndicatorDisplay() {
+        runOnUiThread {
+            if (currentPlayer < playerCount) {
+                val playerName = playerNames[currentPlayer]
+                val playerColor = playerColors[currentPlayer]
+                uiUpdateManager.updateTurnIndicator(tvCurrentTurn, playerName, playerColor)
+                tvCurrentTurn.visibility = View.VISIBLE
+            } else {
+                tvCurrentTurn.visibility = View.GONE
             }
         }
     }
@@ -931,6 +972,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         // advance turn 0..playerCount-1
         currentPlayer = (currentPlayer + 1) % playerCount
+        
+        // Update turn indicator
+        updateTurnIndicatorDisplay()
 
         updateScoreboard()
     }
@@ -971,6 +1015,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
             // Reset to player 1 (index 0)
             currentPlayer = 0
+            
+            // Update turn indicator
+            runOnUiThread {
+                updateTurnIndicatorDisplay()
+            }
 
             val game = GameEntity(
                 startedAt = System.currentTimeMillis(),
@@ -1501,6 +1550,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         // Set current player back to the one who just rolled (so they play again)
         currentPlayer = previousPlayerIndex
+        
+        // Update turn indicator
+        updateTurnIndicatorDisplay()
         
         // Send undo command to ESP32
         sendUndoToESP32(previousPlayerIndex, playerPositions[playerName] ?: 1, previousPosition)
