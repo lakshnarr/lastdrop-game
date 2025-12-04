@@ -387,6 +387,20 @@
         android:text="Test Mode: OFF"
         android:textColor="#FFFFFF" />
 
+    <Button
+        android:id="@+id/btnShowQR"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#9C27B0"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="📱  Show QR Code for Spectators"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
     <!-- Direct Dice Value Buttons (Test Mode) -->
     <LinearLayout
         android:id="@+id/layoutDiceButtons"

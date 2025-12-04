@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
     private lateinit var btnTestMode: Button
+    private lateinit var btnShowQR: Button
     private lateinit var layoutDiceButtons: LinearLayout
     private lateinit var btnDice1: Button
     private lateinit var btnDice2: Button
@@ -420,6 +421,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnResetScore = findViewById(R.id.btnResetScore)
         btnRefreshScoreboard = findViewById(R.id.btnRefreshScoreboard)
         btnTestMode = findViewById(R.id.btnTestMode)
+        btnShowQR = findViewById(R.id.btnShowQR)
         layoutDiceButtons = findViewById(R.id.layoutDiceButtons)
         btnDice1 = findViewById(R.id.btnDice1)
         btnDice2 = findViewById(R.id.btnDice2)
@@ -462,6 +464,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnRefreshScoreboard.setOnClickListener { fetchScoreboard() }
         
         btnTestMode.setOnClickListener { toggleTestMode() }
+        btnShowQR.setOnClickListener { showSpectatorQR() }
         btnDice1.setOnClickListener { simulateDiceRoll(1) }
         btnDice2.setOnClickListener { simulateDiceRoll(2) }
         btnDice3.setOnClickListener { simulateDiceRoll(3) }
@@ -1652,6 +1655,26 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             .show()
         
         Log.d(TAG, "toggleTestMode dialog shown")
+    }
+
+    /**
+     * Show QR code for spectators to scan and view live.html
+     * Displays session ID and board ID (if connected to ESP32)
+     */
+    private fun showSpectatorQR() {
+        val boardId = esp32Gatt?.device?.name
+        
+        LiveQRGenerator.showQRCodeDialog(
+            context = this,
+            sessionId = SESSION_ID,
+            boardId = boardId
+        )
+        
+        Log.d(TAG, "Spectator QR code shown - Session: ${SESSION_ID.substring(0, 8)}..., Board: $boardId")
+        
+        if (testModeEnabled) {
+            appendTestLog("📱 QR code displayed for session ${SESSION_ID.substring(0, 8)}...")
+        }
     }
 
     private fun simulateDiceRoll(diceValue: Int) {
