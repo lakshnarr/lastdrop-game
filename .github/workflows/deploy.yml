@@ -23,4 +23,8 @@ jobs:
         script: |
           cd /home/lastdrop
           git pull origin main
+          sudo cp live.html /var/www/html/
+          sudo cp demo.html /var/www/html/
+          sudo chown root:root /var/www/html/*.html
+          sudo chmod 644 /var/www/html/*.html
           echo "Deployment completed at $(date)"
