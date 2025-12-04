@@ -80,7 +80,7 @@ const diceAnimator = new DiceAnimator({
   scoreboardDice1: document.getElementById('scoreboardDice1'),
   scoreboardDice2: document.getElementById('scoreboardDice2'),
   dicePlayerName: document.getElementById('dicePlayerName'),
-  soundManager: soundManager  // Optional
+  soundManager: audioManager  // Optional
 });
 
 // Show 3D animation
@@ -94,7 +94,77 @@ diceAnimator.show3DDiceRoll({
 });
 ```
 
-### 2. constants.js (130 lines)
+### 2. board-renderer.js (480 lines)
+**Location**: `assets/js/core/board-renderer.js`
+
+**Exports**:
+- `BoardRenderer` class
+
+**Features**:
+- Initialize 20-tile board grid
+- Compute tile center positions
+- Create and manage player tokens
+- Position tokens with multi-player offset support
+- Animate token movement (step-by-step walking)
+- Calculate tile paths for movement
+- 2D/3D view toggle
+- Board zoom and rotation controls
+- Window resize handling
+- Token lifecycle (create, remove, hide, show, eliminate)
+
+**Usage**:
+```javascript
+import { BoardRenderer } from './assets/js/core/board-renderer.js';
+
+const boardRenderer = new BoardRenderer({
+  tilesGrid: document.getElementById('tilesGrid'),
+  tokensLayer: document.getElementById('tokensLayer'),
+  boardWrapper: document.getElementById('boardWrapper'),
+  board3d: document.getElementById('board3d'),
+  soundManager: audioManager  // Optional
+});
+
+// Create token and position on tile 5
+const player = { id: 'P1', name: 'Player 1', color: 'red' };
+boardRenderer.ensureTokenForPlayer(player);
+boardRenderer.positionToken('P1', 5, 0);
+
+// Animate movement from tile 5 to tile 12
+boardRenderer.positionToken('P1', 12, 0, true, 5);
+```
+
+### 3. audio-manager.js (230 lines)
+**Location**: `assets/js/core/audio-manager.js`
+
+**Exports**:
+- `AudioManager` class
+
+**Features**:
+- Enable/disable/toggle audio
+- Per-sound-type volume controls
+- Web Audio API beep generator
+- Sound effect shortcuts (playDice, playMove, etc.)
+- Background music support
+- Audio file loading and preloading
+- Audio context resume for autoplay restrictions
+
+**Usage**:
+```javascript
+import { AudioManager } from './assets/js/core/audio-manager.js';
+
+const audioManager = new AudioManager({ enabled: true });
+
+// Play sounds
+audioManager.playDice();
+audioManager.playMove();
+audioManager.playChance();
+
+// Control volume
+audioManager.setVolume('dice', 0.8);
+audioManager.toggle(); // Enable/disable all audio
+```
+
+### 4. constants.js (130 lines)
 **Location**: `assets/js/utils/constants.js`
 
 **Exports**:
@@ -119,6 +189,22 @@ console.log(TILE_NAMES[0]); // "START"
 console.log(TILE_EFFECTS[7]); // -4 (Oil Spill Bay)
 fetch(API_CONFIG.liveStateUrl);
 ```
+
+### 5. example-integration.js (150 lines)
+**Location**: `example-integration.js`
+
+**Purpose**: Complete working example showing how to use all modules together
+
+**Demonstrates**:
+- Initializing all three core modules
+- Creating players and tokens
+- Simulating dice rolls with animations
+- Moving tokens between tiles
+- Coordinating dice animation → token movement
+- Audio integration
+- Volume controls
+- Eliminating players
+- Winner announcement
 
 ## 📋 Modules To Be Created
 
@@ -193,13 +279,15 @@ fetch(API_CONFIG.liveStateUrl);
 
 ## 🔄 Refactoring Process
 
-### Phase 1: Extract Core (In Progress)
+### Phase 1: Extract Core (Complete ✅)
 - [x] Create folder structure
-- [x] Extract dice-animator.js
-- [x] Extract constants.js
-- [ ] Extract board-renderer.js
-- [ ] Extract game-state.js
-- [ ] Extract audio-manager.js
+- [x] Extract dice-animator.js (370 lines)
+- [x] Extract constants.js (130 lines)
+- [x] Extract board-renderer.js (480 lines)
+- [x] Extract audio-manager.js (230 lines)
+- [x] Create example-integration.js (150 lines)
+
+**Total extracted: 1,360 lines from core modules**
 
 ### Phase 2: Extract UI
 - [ ] Extract scoreboard.js
@@ -276,6 +364,7 @@ ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/las
 
 ---
 
-**Status**: Refactoring in progress (2 of 15 modules complete)
+**Status**: Phase 1 Complete! Core modules extracted (4 of 15 total modules)
 **Last Updated**: December 5, 2025
-**Next Step**: Extract board-renderer.js
+**Lines Extracted**: 1,360 lines (target: ~2,500 total)
+**Next Step**: Extract UI modules (scoreboard, event-log, overlays, settings-panel)
