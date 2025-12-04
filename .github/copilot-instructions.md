@@ -75,8 +75,17 @@ See `TWO_DICE_COLOR_INTEGRATION.md` for per-die rolling status implementation.
 
 ```
 app/src/main/java/com/example/lastdrop/
-  ├── MainActivity.kt          # Main orchestration (1600+ lines)
+  ├── MainActivity.kt          # Main orchestration (~2,050 lines, reduced from 2,189)
   ├── GameEngine.kt            # 20-tile board logic, chance cards
+  ├── BoardScanManager.kt      # Multi-board scanning (NEW - 180 lines)
+  ├── BoardSelectionDialog.kt  # Board selection UI (NEW - 80 lines)
+  ├── ApiManager.kt            # Server API communication (250 lines)
+  ├── ESP32ConnectionManager.kt # ESP32 BLE management (264 lines)
+  ├── ESP32ErrorHandler.kt     # ESP32 error handling (164 lines)
+  ├── ESP32StateValidator.kt   # State validation (148 lines)
+  ├── StateSyncManager.kt      # State synchronization (186 lines)
+  ├── UIUpdateManager.kt       # UI updates (69 lines)
+  ├── BatteryMonitor.kt        # Battery monitoring (72 lines)
   ├── LastDropDatabase.kt      # Room DB (players, games, roll events)
   ├── LastDropDao.kt           # Database queries
   └── *Entity.kt               # Room entities
@@ -85,9 +94,35 @@ godicesdklib/                  # Native GoDice SDK (C + JNI)
   ├── src/main/java/.../GoDiceSDK.java
   └── common/godiceapi.{c,h,m}
 
-sketch_ble.ino                 # ESP32 firmware (BLE version, 612 lines)
+ESP32 Program/
+  ├── sketch_ble.ino           # Production firmware (1655 lines, 85% flash)
+  └── sketch_ble_testmode.ino  # Test mode firmware (1655 lines, identical)
+  
 live.html                      # Web spectator display (3171 lines)
 ```
+
+## Multi-Board Support (NEW)
+
+### Architecture
+- **BoardScanManager.kt**: Scans for all `LASTDROP-*` boards using prefix matching
+- **BoardSelectionDialog.kt**: Shows selection dialog when multiple boards found
+- **Auto-connect**: Single board auto-connects (no dialog)
+- **Multi-board**: Shows selection with board ID + MAC address
+
+### ESP32 Board Identification
+Each board has unique ID in firmware:
+```cpp
+#define BOARD_UNIQUE_ID "LASTDROP-0001"  // Change for each board
+```
+
+Boards advertise as: `LASTDROP-0001`, `LASTDROP-0002`, etc.
+
+### User Flow
+1. Tap "Connect ESP32 Board"
+2. App scans for 10 seconds
+3. **1 board found**: Auto-connects
+4. **Multiple boards**: Shows selection dialog
+5. **0 boards**: Error + rescan option
 
 ## Development Workflows
 

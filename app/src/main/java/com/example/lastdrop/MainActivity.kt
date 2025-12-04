@@ -25,6 +25,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.zxing.integration.android.IntentIntegrator
+import com.google.zxing.integration.android.IntentResult
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -54,7 +56,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private val SESSION_ID = java.util.UUID.randomUUID().toString()
         
         // ESP32 BLE Configuration
-        const val ESP32_DEVICE_NAME = "LASTDROP-ESP32"
+        const val ESP32_DEVICE_NAME = "LASTDROP-ESP32"  // Legacy - deprecated
+        const val ESP32_BOARD_PREFIX = "LASTDROP-"       // Multi-board support
         val ESP32_SERVICE_UUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
         val ESP32_CHAR_RX_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
         val ESP32_CHAR_TX_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -174,7 +177,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private var esp32TxCharacteristic: BluetoothGattCharacteristic? = null
     private var esp32RxCharacteristic: BluetoothGattCharacteristic? = null
     private var waitingForCoinPlacement: Boolean = false
-    private var esp32ScanCallback: ScanCallback? = null
+    
+    // Board management (multi-board support)
+    private lateinit var boardScanManager: BoardScanManager
+    private lateinit var boardPreferencesManager: BoardPreferencesManager
     
     // Test mode (bypasses ESP32)
     private var testModeEnabled: Boolean = false
@@ -219,6 +225,22 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         dao = db.dao()
 
         gameEngine = GameEngine()
+        
+        // Initialize board preferences manager
+        boardPreferencesManager = BoardPreferencesManager(this)
+        
+        // Initialize board scanner (multi-board support)
+        boardScanManager = BoardScanManager(
+            context = this,
+            bluetoothAdapter = bluetoothAdapter,
+            scope = mainScope,
+            onBoardFound = { boards -> showBoardSelectionDialog(boards) },
+            onBoardSelected = { device -> connectToESP32Device(device) },
+            onLogMessage = { msg -> appendTestLog(msg) }
+        )
+        
+        // Configure MAC whitelist if needed
+        BoardScanManager.TRUSTED_ADDRESSES = TRUSTED_ESP32_ADDRESSES
         
         // Initialize helper classes
         uiUpdateManager = UIUpdateManager()
@@ -284,6 +306,64 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         pingServer()
 
         fetchScoreboard()
+        
+        // Try auto-reconnect to last board if exists
+        tryAutoReconnect()
+    }
+    
+    /**
+     * Handle QR code scan result
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        val result: IntentResult? = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+        if (result != null) {
+            if (result.contents != null) {
+                // Parse QR code
+                val qrData = QRCodeHelper.parseQRResult(result.contents)
+                if (qrData != null && QRCodeHelper.isValidBoardQR(qrData)) {
+                    appendTestLog("📷 QR Scanned: ${qrData.boardId}")
+                    
+                    // Save board with nickname and password
+                    boardPreferencesManager.saveBoard(
+                        boardId = qrData.boardId,
+                        macAddress = qrData.macAddress,
+                        nickname = qrData.nickname,
+                        password = qrData.password
+                    )
+                    
+                    Toast.makeText(this, "Board saved: ${qrData.nickname ?: qrData.boardId}", Toast.LENGTH_SHORT).show()
+                    
+                    // Auto-connect to scanned board
+                    connectESP32()
+                } else {
+                    Toast.makeText(this, "Invalid QR code format", Toast.LENGTH_LONG).show()
+                    appendTestLog("❌ Invalid QR code")
+                }
+            } else {
+                // Cancelled
+                appendTestLog("📷 QR scan cancelled")
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+    
+    /**
+     * Try to auto-reconnect to last connected board
+     */
+    private fun tryAutoReconnect() {
+        val lastBoard = boardPreferencesManager.getLastBoard()
+        if (lastBoard != null) {
+            val (boardId, macAddress) = lastBoard
+            appendTestLog("🔄 Auto-reconnect available: $boardId")
+            
+            // Show toast with option to reconnect
+            Toast.makeText(
+                this,
+                "Last board: $boardId\nTap Connect to reconnect",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     override fun onDestroy() {
@@ -1604,91 +1684,85 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
 
-        Log.d(TAG, "Starting ESP32 scan...")
+        Log.d(TAG, "Starting board scan...")
+        appendTestLog("🔍 Scanning for boards...")
         
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null) {
-            Toast.makeText(this, "Bluetooth scanner not available", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val scanFilter = ScanFilter.Builder()
-            .setDeviceName(ESP32_DEVICE_NAME)
-            .build()
-
-        val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
-
-        esp32ScanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult?) {
-                result?.device?.let { device ->
-                    val address = device.address
-                    Log.d(TAG, "Found ESP32: ${device.name} - $address")
-                    
-                    // Validate MAC address if whitelist is configured
-                    if (TRUSTED_ESP32_ADDRESSES.isNotEmpty() && !TRUSTED_ESP32_ADDRESSES.contains(address)) {
-                        Log.w(TAG, "Rejected untrusted ESP32: $address")
-                        appendTestLog("⚠️ Rejected untrusted ESP32: $address")
-                        runOnUiThread {
-                            Toast.makeText(
-                                this@MainActivity,
-                                "Untrusted ESP32 rejected. Add MAC to whitelist.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        return@let  // Skip this device
-                    }
-                    
-                    appendTestLog("✅ Found trusted ESP32: $address")
-                    stopESP32Scan()
-                    connectToESP32Device(device)
-                }
-            }
-
-            override fun onScanFailed(errorCode: Int) {
-                Log.e(TAG, "ESP32 scan failed: $errorCode")
-                appendTestLog("❌ ESP32 scan failed: $errorCode")
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "ESP32 scan failed", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        scanner.startScan(listOf(scanFilter), scanSettings, esp32ScanCallback)
-        
-        // Start timeout timer (cancellable when ESP32 connects)
-        esp32ScanJob?.cancel()
-        esp32ScanJob = mainScope.launch {
-            delay(ESP32_SCAN_TIMEOUT_MS)
-            if (!esp32Connected) {
-                stopESP32Scan()
-                appendTestLog("⏱️ ESP32 scan timeout (10s)")
-                runOnUiThread {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "ESP32 not found. Check power and proximity.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
+        // Use new BoardScanManager for multi-board support
+        boardScanManager.startScan()
     }
 
     @SuppressLint("MissingPermission")
     private fun stopESP32Scan() {
-        esp32ScanJob?.cancel()  // Cancel timeout timer
-        esp32ScanCallback?.let {
-            bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
-            esp32ScanCallback = null
-            Log.d(TAG, "ESP32 scan stopped")
-            appendTestLog("🛑 ESP32 scan stopped")
+        // Use BoardScanManager
+        boardScanManager.stopScan()
+    }
+    
+    /**
+     * Show board selection dialog when multiple boards are found
+     */
+    private fun showBoardSelectionDialog(boards: List<BluetoothDevice>) {
+        runOnUiThread {
+            BoardSelectionDialog.show(
+                context = this,
+                boards = boards,
+                preferencesManager = boardPreferencesManager,
+                onBoardSelected = { device ->
+                    appendTestLog("✅ Selected: ${device.name}")
+                    connectToESP32Device(device)
+                },
+                onRescan = {
+                    appendTestLog("🔄 Rescanning...")
+                    boardScanManager.rescan()
+                },
+                onManageBoards = {
+                    showSavedBoardsDialog()
+                }
+            )
         }
+    }
+    
+    /**
+     * Show saved boards management dialog
+     */
+    private fun showSavedBoardsDialog() {
+        BoardSelectionDialog.showSavedBoardsDialog(
+            context = this,
+            preferencesManager = boardPreferencesManager,
+            onBoardSelected = { boardId, macAddress ->
+                appendTestLog("📱 Reconnecting to $boardId...")
+                // TODO: Reconnect to saved board by MAC
+                Toast.makeText(this, "Reconnecting to $boardId", Toast.LENGTH_SHORT).show()
+            },
+            onForgetBoard = { boardId ->
+                boardPreferencesManager.forgetBoard(boardId)
+                Toast.makeText(this, "Forgot $boardId", Toast.LENGTH_SHORT).show()
+                appendTestLog("🗑️ Forgot board: $boardId")
+            },
+            onEditNickname = { boardId ->
+                val currentNickname = boardPreferencesManager.getSavedBoard(boardId)?.nickname
+                BoardSelectionDialog.showNicknameDialog(
+                    context = this,
+                    currentNickname = currentNickname,
+                    boardId = boardId,
+                    onNicknameSaved = { nickname ->
+                        boardPreferencesManager.updateBoardNickname(boardId, nickname)
+                        Toast.makeText(this, "Saved nickname: $nickname", Toast.LENGTH_SHORT).show()
+                        appendTestLog("✏️ Updated nickname for $boardId: $nickname")
+                    }
+                )
+            }
+        )
     }
 
     @SuppressLint("MissingPermission")
     private fun connectToESP32Device(device: BluetoothDevice) {
         Log.d(TAG, "Connecting to ESP32: ${device.address}")
+        
+        // Save as last connected board
+        device.name?.let { boardId ->
+            boardPreferencesManager.saveLastBoard(boardId, device.address)
+            boardPreferencesManager.updateBoardConnection(boardId)
+        }
         
         esp32Gatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {

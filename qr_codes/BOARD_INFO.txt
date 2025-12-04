@@ -1,0 +1,45 @@
+============================================================
+LAST DROP - BOARD QR CODES
+============================================================
+
+Board: Game Room A
+  ID: LASTDROP-0001
+  MAC: AA:BB:CC:DD:EE:01
+  Password: 654321
+  QR Code: LASTDROP-0001.png
+------------------------------------------------------------
+
+Board: Tournament Table 1
+  ID: LASTDROP-0002
+  MAC: AA:BB:CC:DD:EE:02
+  Password: 123456
+  QR Code: LASTDROP-0002.png
+------------------------------------------------------------
+
+Board: Cafe Board
+  ID: LASTDROP-0003
+  MAC: AA:BB:CC:DD:EE:03
+  Password: 789012
+  QR Code: LASTDROP-0003.png
+------------------------------------------------------------
+
+Board: Home Setup
+  ID: LASTDROP-0004
+  MAC: AA:BB:CC:DD:EE:04
+  Password: 345678
+  QR Code: LASTDROP-0004.png
+------------------------------------------------------------
+
+Board: Demo Unit
+  ID: LASTDROP-0005
+  MAC: AA:BB:CC:DD:EE:05
+  Password: 901234
+  QR Code: LASTDROP-0005.png
+------------------------------------------------------------
+
+USAGE INSTRUCTIONS:
+1. Print the QR code PNG files
+2. Attach to corresponding ESP32 board
+3. In Android app, tap 'Scan QR Code'
+4. Camera will scan and auto-connect
+5. No manual password entry needed!

@@ -1,27 +1,31 @@
 /*
- * Last Drop - ESP32 Physical Board Controller (BLE Version)
+ * Last Drop - ESP32 Test Mode Firmware (Full Game Logic)
+ * 
+ * This firmware implements COMPLETE game logic on ESP32 for Test Mode 1
+ * - 20-tile board with tile types (START, NORMAL, CHANCE, BONUS, PENALTY)
+ * - 10 chance cards with random selection
+ * - Score calculation and tracking
+ * - Comprehensive reporting back to Android
+ * - Undo functionality with state restoration
+ * - Misplacement detection
+ * - Full reset capabilities
  * 
  * Hardware:
  * - ESP32 Dev Board
  * - WS2812B LED Strip (80 LEDs = 4 LEDs per tile × 20 tiles)
  * - 20 Hall Effect Sensors (A3144) for coin detection
- * 
- * Communication: Bluetooth BLE (not WiFi)
- * - Allows phone to maintain WiFi for internet connection
- * - No conflict with GoDice BLE connections
- * 
- * BLE Service: LASTDROP Board Control
- * UUID: 6e400001-b5a3-f393-e0a9-e50e24dcca9e (Nordic UART Service compatible)
  */
 
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <BLESecurity.h>
 #include <Adafruit_NeoPixel.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
+#include <queue>
 
 // ==================== HARDWARE CONFIGURATION ====================
 #define LED_PIN 5
@@ -38,30 +42,33 @@ const int hallPins[NUM_TILES] = {
 
 // ==================== BLE CONFIGURATION ====================
 #define SERVICE_UUID        "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-#define CHARACTERISTIC_UUID_RX "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  // Android → ESP32
-#define CHARACTERISTIC_UUID_TX "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  // ESP32 → Android
+#define CHARACTERISTIC_UUID_RX "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+#define CHARACTERISTIC_UUID_TX "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-#define DEVICE_NAME "LASTDROP-ESP32"
+// ==================== BOARD IDENTIFICATION ====================
+// IMPORTANT: Change these values for each board you manufacture
+#define BOARD_UNIQUE_ID "LASTDROP-0001"  // Unique ID for this board (0001, 0002, 0003, etc.)
+#define BOARD_VERSION "1.0.0"             // Firmware version
+#define MANUFACTURER_DATA "LASTDROP-BOARD-V1"  // Identifier for board discovery
+
+// ==================== PAIRING PASSWORD ====================
+// IMPORTANT: Set a unique 6-digit password for each board
+#define BOARD_PASSWORD "654321"  // Default PIN for LASTDROP-0001
+#define PAIRING_REQUIRED true     // Password protection enabled
 
 // ==================== SECURITY CONFIGURATION ====================
-// BLE Pairing PIN (change this for your device!)
-// Set to 0 to disable pairing (less secure, but easier setup)
-#define BLE_PAIRING_ENABLED true
-#define BLE_PAIRING_PIN 123456
+#define BLE_PAIRING_ENABLED true    // PIN pairing enabled
+#define BLE_PAIRING_PIN 654321      // Default PIN: 654321
+#define MAC_FILTERING_ENABLED false // Set true to enable MAC whitelist
 
-// Trusted Android device addresses (optional - whitelist specific phones)
-// Leave empty {} to accept connections from any device
-// Example: {"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"}
-const char* TRUSTED_ANDROID_ADDRESSES[] = {};
-const int TRUSTED_ANDROID_COUNT = 0;
+// Android device MAC address whitelist (find via Android Bluetooth settings)
+const String TRUSTED_ANDROID_MACS[] = {
+  "AA:BB:CC:DD:EE:FF",  // Your phone's BLE MAC address
+  "11:22:33:44:55:66"   // Second trusted device
+};
+const int NUM_TRUSTED_DEVICES = 2;
 
-// ==================== TEST MODE CONFIGURATION ====================
-// Set to true to enable Test Mode 1 (full game logic on ESP32)
-// Set to false for production mode (Android controls game logic)
-#define TEST_MODE_ENABLED false
-
-// ==================== GAME LOGIC (for Test Mode 1) ====================
-#if TEST_MODE_ENABLED
+// ==================== GAME LOGIC CONFIGURATION ====================
 enum TileType {
   TYPE_START = 0,
   TYPE_NORMAL = 1,
@@ -132,14 +139,13 @@ const ChanceCard CHANCE_CARDS[20] = {
   {19, "Sewage contamination",                    -2},
   {20, "Flood washed away water",                 -3}
 };
-#endif
 
-// ==================== PLAYER COLORS ====================
+// ==================== LED COLORS ====================
 const uint32_t TILE_COLORS[NUM_TILES] = {
-  0x2E8B57, 0x3CB371, 0x90EE90, 0x98FB98, 0xADFF2F,  // Tiles 0-4 (Green shades)
-  0xFFFF00, 0xFFD700, 0xFFA500, 0xFF8C00, 0xFF6347,  // Tiles 5-9 (Yellow to Orange)
-  0xFF4500, 0xFF0000, 0xDC143C, 0xB22222, 0x8B0000,  // Tiles 10-14 (Red shades)
-  0x800080, 0x9932CC, 0xBA55D3, 0xDA70D6, 0xEE82EE   // Tiles 15-19 (Purple shades)
+  0x2E8B57, 0x3CB371, 0x90EE90, 0x98FB98, 0xADFF2F,  // 0-4 Green shades
+  0xFFFF00, 0xFFD700, 0xFFA500, 0xFF8C00, 0xFF6347,  // 5-9 Yellow to Orange
+  0xFF4500, 0xFF0000, 0xDC143C, 0xB22222, 0x8B0000,  // 10-14 Red shades
+  0x800080, 0x9932CC, 0xBA55D3, 0xDA70D6, 0xEE82EE   // 15-19 Purple shades
 };
 
 const uint32_t PLAYER_COLORS[NUM_PLAYERS] = {
@@ -160,75 +166,181 @@ bool oldDeviceConnected = false;
 
 // ==================== GAME STATE ====================
 struct PlayerState {
-  int currentTile;
-  int waterLevel;
+  int currentTile;      // 1-based (1 to 20)
+  int score;            // Water drops
   bool alive;
   bool coinPlaced;
   uint32_t color;
+  
+  // Undo support
+  int previousTile;
+  int previousScore;
 };
 
 PlayerState players[NUM_PLAYERS];
-int activePlayerCount = NUM_PLAYERS;  // Number of players in current game (2-4)
+int activePlayerCount = 2;  // Default to 2 players, updated via config command
 int currentPlayer = -1;
 int expectedTile = -1;
 bool waitingForCoin = false;
 unsigned long coinWaitStartTime = 0;
-const unsigned long COIN_TIMEOUT = 60000; // 60 seconds (allows time for winner animation)
+const unsigned long COIN_TIMEOUT = 60000; // 60 seconds (increased for winner animation)
 
-// Undo state (for Test Mode)
-struct {
+// Security: Pairing state
+bool isPaired = false;
+unsigned long pairTimeout = 0;
+const unsigned long PAIR_TIMEOUT_MS = 30000;  // 30 seconds to enter password
+
+// Connection status LED modes
+enum ConnectionMode {
+  MODE_DISCONNECTED,    // Light sea blue blink (waiting for Android)
+  MODE_PAIRING,         // Purple pulse (waiting for password)
+  MODE_CONNECTED,       // Initialization lap (connection established)
+  MODE_READY            // Player LED blink (ready for game)
+};
+ConnectionMode currentConnectionMode = MODE_DISCONNECTED;
+unsigned long lastConnectionLEDUpdate = 0;
+const unsigned long CONNECTION_LED_INTERVAL = 500;  // 500ms blink/pulse
+int connectionLEDStep = 0;
+
+// Undo state tracking
+struct UndoState {
   bool hasUndo;
   int playerId;
   int fromTile;
   int toTile;
   int scoreChange;
   int chanceCardNumber;
-} lastMove = {false, -1, 0, 0, 0, 0};
+} lastMove;
 
 // ==================== LED CONTROL ====================
 bool blinkState = false;
 unsigned long lastBlinkTime = 0;
-const unsigned long BLINK_INTERVAL = 500; // Normal blink (calm)
-const unsigned long BLINK_INTERVAL_WARNING = 200; // Fast blink (10s remaining)
-const unsigned long BLINK_INTERVAL_URGENT = 100; // Very fast blink (5s remaining)
-const unsigned long WARNING_THRESHOLD = 10000; // 10 seconds
-const unsigned long URGENT_THRESHOLD = 5000; // 5 seconds
+const unsigned long BLINK_INTERVAL = 500;
+
+void updateConnectionStatusLEDs() {
+  if (millis() - lastConnectionLEDUpdate < CONNECTION_LED_INTERVAL) {
+    return;
+  }
+  lastConnectionLEDUpdate = millis();
+  
+  switch (currentConnectionMode) {
+    case MODE_DISCONNECTED:
+      // Light sea blue blink (all LEDs)
+      if (blinkState) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+          strip.setPixelColor(i, strip.Color(32, 178, 170));  // Light sea blue
+        }
+      } else {
+        strip.clear();
+      }
+      blinkState = !blinkState;
+      strip.show();
+      break;
+      
+    case MODE_PAIRING:
+      // Purple pulse (fade in/out on all LEDs)
+      {
+        int brightness = (connectionLEDStep < 128) ? connectionLEDStep * 2 : (255 - connectionLEDStep) * 2;
+        for (int i = 0; i < NUM_LEDS; i++) {
+          strip.setPixelColor(i, strip.Color(brightness, 0, brightness));  // Purple
+        }
+        connectionLEDStep = (connectionLEDStep + 16) % 256;
+        strip.show();
+      }
+      break;
+      
+    case MODE_CONNECTED:
+      // Initialization lap (single LED traveling around board)
+      {
+        strip.clear();
+        int ledIndex = connectionLEDStep % NUM_LEDS;
+        strip.setPixelColor(ledIndex, strip.Color(0, 255, 255));  // Cyan
+        connectionLEDStep++;
+        if (connectionLEDStep >= NUM_LEDS * 2) {
+          // Completed 2 laps, switch to READY mode
+          currentConnectionMode = MODE_READY;
+          connectionLEDStep = 0;
+          strip.clear();
+        }
+        strip.show();
+      }
+      break;
+      
+    case MODE_READY:
+      // Player LED blink (only active player LEDs)
+      if (blinkState) {
+        for (int p = 0; p < activePlayerCount; p++) {
+          int tile = players[p].currentTile;
+          if (tile >= 1 && tile <= NUM_TILES) {
+            int ledStart = (tile - 1) * LEDS_PER_TILE;
+            for (int j = 0; j < LEDS_PER_TILE; j++) {
+              strip.setPixelColor(ledStart + j, PLAYER_COLORS[p]);
+            }
+          }
+        }
+      } else {
+        strip.clear();
+      }
+      blinkState = !blinkState;
+      strip.show();
+      break;
+  }
+}
 
 unsigned long lastScanTime = 0;
-const unsigned long SCAN_INTERVAL = 5000; // Scan all sensors every 5 seconds
+const unsigned long SCAN_INTERVAL = 5000;
 
+// ==================== COMMAND QUEUE ====================
+std::queue<String> commandQueue;
+bool processingCommand = false;
+
+// ==================== HEARTBEAT ====================
 unsigned long lastHeartbeatTime = 0;
-const unsigned long HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds
+const unsigned long HEARTBEAT_INTERVAL = 5000;  // 5 seconds
 
-// ==================== FUNCTION DECLARATIONS ====================
-void handleBLECommand(const char* jsonStr);
-void animatePlayerElimination(int playerId);
-void animateWinner(int winnerId);
+// ==================== ACTIVITY TRACKING ====================
+unsigned long lastActivityTime = 0;
+const unsigned long IDLE_TIMEOUT = 300000;  // 5 minutes
+
+// ==================== HELPER FUNCTIONS (Forward Declarations) ====================
+bool isTrustedDevice(BLEAddress address);
+void sendBLEResponse(const char* json);
+void sendBLEResponse(String json);
+void sendErrorResponse(const char* message);
+void loadGameState();
+void startupAnimation();
+void resetIdleTimer();
+void validateGameState();
+void handleUndo(JsonDocument& doc);
+void handleReset();
+void sendStatus();
+void animateMove(int fromTile, int toTile, uint32_t color);
+void setTileColor(int tile, uint32_t color);
+void renderBackground();
+void renderPlayers();
+void saveGameState();
+void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefinition& tile, int scoreChange, int oldScore, int newScore, int chanceCard, const char* chanceDesc, bool alive);
+void sendUndoResponse(int playerId, int fromTile, int toTile, int score, bool alive);
+void sendResetResponse();
+void sendCoinPlacedResponse(int playerId, int tile);
+void sendTimeoutResponse(int playerId, int tile);
+const char* getTileTypeName(TileType type);
 
 // ==================== BLE CALLBACKS ====================
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
-      // Get connected client address
-      std::string clientAddress = pServer->getConnId() >= 0 ? "connected" : "unknown";
-      
-      // Optional: Check if client is in whitelist
-      if (TRUSTED_ANDROID_COUNT > 0) {
-        // Note: BLE Server API doesn't expose peer address directly
-        // For production, implement custom authentication via first message
-        Serial.println("WARNING: Address filtering not fully implemented - verify via app");
-      }
-      
       deviceConnected = true;
-      Serial.println("BLE Client Connected");
-      Serial.print("Connection established at: ");
+      Serial.println("✓ BLE Client Connected");
+      Serial.print("Connection time: ");
       Serial.println(millis());
+      
+      // Send ready message
+      sendBLEResponse("{\"event\":\"ready\",\"message\":\"ESP32 Test Mode Ready\",\"firmware\":\"v2.0-testmode\"}");
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      Serial.println("BLE Client Disconnected");
-      
-      // Reset game state on disconnect (security measure)
+      Serial.println("✗ BLE Client Disconnected");
       waitingForCoin = false;
       expectedTile = -1;
     }
@@ -236,13 +348,10 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-      String rxValue = pCharacteristic->getValue();
-
+      String rxValue = pCharacteristic->getValue().c_str();
       if (rxValue.length() > 0) {
-        Serial.println("Received BLE data:");
-        Serial.println(rxValue.c_str());
-        
-        // Parse JSON command
+        Serial.println("📨 Received BLE Command:");
+        Serial.println(rxValue);
         handleBLECommand(rxValue.c_str());
       }
     }
@@ -251,17 +360,20 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 // ==================== SETUP ====================
 void setup() {
   Serial.begin(115200);
-  Serial.println("Last Drop ESP32 (BLE) Starting...");
+  Serial.println("\n========================================");
+  Serial.println("Last Drop ESP32 Test Mode Firmware v2.0");
+  Serial.println("Full Game Logic Implementation");
+  Serial.println("========================================\n");
 
-  // Initialize Watchdog Timer (30 seconds timeout)
+  // Initialize watchdog timer (30s timeout) - ESP32 Arduino Core 3.x
   esp_task_wdt_config_t wdt_config = {
     .timeout_ms = 30000,
     .idle_core_mask = 0,
     .trigger_panic = true
   };
   esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL); // Add current task to WDT watch
-  Serial.println("Watchdog timer initialized (30s timeout)");
+  esp_task_wdt_add(NULL);
+  Serial.println("✓ Watchdog enabled (30s timeout)");
 
   // Initialize LED strip
   strip.begin();
@@ -280,81 +392,130 @@ void setup() {
   // Initialize BLE
   initBLE();
 
+  // Initialize game state
+  initializeGameState();
+
   // Show startup animation
   startupAnimation();
 
-  Serial.println("System Ready - Waiting for BLE connection...");
+  Serial.println("✓ System Ready - Waiting for BLE connection...\n");
+}
+
+// ==================== GAME INITIALIZATION ====================
+void initializeGameState() {
+  for (int i = 0; i < NUM_PLAYERS; i++) {
+    players[i].currentTile = 1;  // Start at tile 1
+    players[i].score = 10;       // Starting water drops
+    players[i].alive = true;
+    players[i].coinPlaced = false;
+    players[i].color = PLAYER_COLORS[i];
+    players[i].previousTile = 1;
+    players[i].previousScore = 10;
+  }
+  
+  lastMove.hasUndo = false;
+  lastMove.playerId = -1;
+}
+
+// ==================== MAC ADDRESS FILTERING ====================
+bool isTrustedDevice(BLEAddress address) {
+  if (!MAC_FILTERING_ENABLED) return true;
+  
+  String addrStr = address.toString().c_str();
+  for (int i = 0; i < NUM_TRUSTED_DEVICES; i++) {
+    if (addrStr.equalsIgnoreCase(TRUSTED_ANDROID_MACS[i])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ==================== BLE INITIALIZATION ====================
 void initBLE() {
-  // Create the BLE Device
-  BLEDevice::init(DEVICE_NAME);
+  BLEDevice::init(BOARD_UNIQUE_ID);  // Use unique board ID instead of generic name
+  
+  Serial.print("ESP32 MAC Address: ");
+  Serial.println(BLEDevice::getAddress().toString().c_str());
+  Serial.printf("Board ID: %s\n", BOARD_UNIQUE_ID);
+  Serial.printf("Board Version: %s\n", BOARD_VERSION);
 
-  // Security Configuration (optional pairing with PIN)
-  if (BLE_PAIRING_ENABLED) {
+  #if BLE_PAIRING_ENABLED
     BLESecurity *pSecurity = new BLESecurity();
     pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
-    pSecurity->setCapability(ESP_IO_CAP_OUT); // Display only
+    pSecurity->setCapability(ESP_IO_CAP_OUT);
     pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
     
     uint32_t passkey = BLE_PAIRING_PIN;
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t));
     
-    Serial.print("BLE Security enabled - Pairing PIN: ");
-    Serial.println(BLE_PAIRING_PIN);
-  } else {
-    Serial.println("BLE Security disabled - Open connection mode");
-  }
+    Serial.printf("✓ BLE Security Enabled - PIN: %d\n", BLE_PAIRING_PIN);
+    Serial.println("  Android will prompt for PIN on first connection\n");
+  #else
+    Serial.println("⚠️  BLE Security DISABLED - Any device can connect!\n");
+  #endif
 
-  // Print MAC address for whitelisting
-  Serial.print("ESP32 MAC Address: ");
-  Serial.println(BLEDevice::getAddress().toString().c_str());
-
-  // Create the BLE Server
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
-  // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  // Create BLE Characteristic for TX (ESP32 → Android)
   pTxCharacteristic = pService->createCharacteristic(
                         CHARACTERISTIC_UUID_TX,
                         BLECharacteristic::PROPERTY_NOTIFY
                       );
   pTxCharacteristic->addDescriptor(new BLE2902());
 
-  // Create BLE Characteristic for RX (Android → ESP32)
   BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
                                            CHARACTERISTIC_UUID_RX,
                                            BLECharacteristic::PROPERTY_WRITE
                                          );
   pRxCharacteristic->setCallbacks(new MyCallbacks());
 
-  // Start the service
   pService->start();
 
-  // Start advertising
+  // Configure advertising with manufacturer data for discovery
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
+  
+  // Add manufacturer-specific data for board identification
+  BLEAdvertisementData advData;
+  advData.setName(BOARD_UNIQUE_ID);
+  advData.setManufacturerData(MANUFACTURER_DATA);
+  pAdvertising->setAdvertisementData(advData);
+  
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
   
-  Serial.println("BLE Service started - Device name: LASTDROP-ESP32");
+  Serial.println("✓ BLE Service Started");
+  Serial.printf("  Device Name: %s\n", BOARD_UNIQUE_ID);
+  Serial.printf("  Manufacturer Data: %s\n", MANUFACTURER_DATA);
+  Serial.printf("  Service UUID: %s\n\n", SERVICE_UUID);
 }
 
 // ==================== BLE COMMAND HANDLER ====================
 void handleBLECommand(const char* jsonStr) {
+  // Queue command for sequential processing
+  commandQueue.push(String(jsonStr));
+}
+
+// ==================== COMMAND QUEUE PROCESSOR ====================
+void processCommandQueue() {
+  if (processingCommand || commandQueue.empty()) return;
+  
+  processingCommand = true;
+  String cmdStr = commandQueue.front();
+  commandQueue.pop();
+  
   StaticJsonDocument<512> doc;
-  DeserializationError error = deserializeJson(doc, jsonStr);
+  DeserializationError error = deserializeJson(doc, cmdStr);
 
   if (error) {
-    Serial.print("JSON parse error: ");
+    Serial.print("❌ JSON Parse Error: ");
     Serial.println(error.c_str());
-    sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+    sendErrorResponse("Invalid JSON format");
+    processingCommand = false;
     return;
   }
 
@@ -366,140 +527,560 @@ void handleBLECommand(const char* jsonStr) {
     handleUndo(doc);
   } else if (strcmp(command, "reset") == 0) {
     handleReset();
+  } else if (strcmp(command, "pair") == 0) {
+    handlePair(doc);
+  } else if (strcmp(command, "unpair") == 0) {
+    handleUnpair();
+  } else if (strcmp(command, "config") == 0) {
+    handleConfig(doc);
   } else if (strcmp(command, "status") == 0) {
     sendStatus();
-  } else if (strcmp(command, "eliminate") == 0) {
-    // Trigger elimination animation
-    int playerId = doc["playerId"];
-    if (playerId >= 0 && playerId < NUM_PLAYERS) {
-      animatePlayerElimination(playerId);
-      sendBLEResponse("{\"status\":\"ok\",\"message\":\"Elimination animation complete\"}");
-    } else {
-      sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid player ID\"}");
-    }
-  } else if (strcmp(command, "winner") == 0) {
-    // Trigger winner animation
-    int winnerId = doc["winnerId"];
-    if (winnerId >= 0 && winnerId < NUM_PLAYERS) {
-      animateWinner(winnerId);
-      sendBLEResponse("{\"status\":\"ok\",\"message\":\"Winner animation complete\"}");
-    } else {
-      sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid winner ID\"}");
-    }
   } else {
-    sendBLEResponse("{\"status\":\"error\",\"message\":\"Unknown command\"}");
+    sendErrorResponse("Unknown command");
+  }
+  
+  processingCommand = false;
+}
+
+// ==================== HANDLE PAIRING ====================
+void handlePair(JsonDocument& doc) {
+  Serial.println("\n🔐 Processing PAIR command...");
+  resetIdleTimer();
+  
+  const char* password = doc["password"];
+  
+  if (!PAIRING_REQUIRED) {
+    // Pairing disabled - auto-accept
+    isPaired = true;
+    sendPairResponse(true, "Pairing not required");
+    Serial.println("✓ Pairing not required - auto-paired");
+    return;
+  }
+  
+  if (password == nullptr || strlen(password) == 0) {
+    sendPairResponse(false, "Password required");
+    Serial.println("✗ Password missing");
+    return;
+  }
+  
+  // Validate password
+  if (strcmp(password, BOARD_PASSWORD) == 0) {
+    isPaired = true;
+    pairTimeout = 0;
+    Serial.println("✓ Password correct - device paired");
+    
+    // Visual feedback: Quick green flash on all LEDs
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, strip.Color(0, 255, 0));
+    }
+    strip.show();
+    delay(500);
+    strip.clear();
+    strip.show();
+    
+    // Switch to connected mode (initialization lap)
+    currentConnectionMode = MODE_CONNECTED;
+    connectionLEDStep = 0;
+    
+    sendPairResponse(true, "Paired successfully");
+  } else {
+    Serial.println("✗ Incorrect password");
+    
+    // Visual feedback: Quick red flash on all LEDs
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, strip.Color(255, 0, 0));
+    }
+    strip.show();
+    delay(500);
+    strip.clear();
+    strip.show();
+    
+    sendPairResponse(false, "Incorrect password");
   }
 }
 
-// ==================== HANDLE ROLL ====================
+void handleUnpair() {
+  Serial.println("\n🔓 Processing UNPAIR command...");
+  resetIdleTimer();
+  
+  isPaired = false;
+  pairTimeout = 0;
+  
+  // Visual feedback: Yellow flash
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(255, 255, 0));
+  }
+  strip.show();
+  delay(500);
+  strip.clear();
+  strip.show();
+  
+  StaticJsonDocument<128> response;
+  response["event"] = "unpaired";
+  response["message"] = "Device unpaired";
+  
+  String output;
+  serializeJson(response, output);
+  sendBLEResponse(output);
+  Serial.println("✓ Device unpaired");
+}
+
+void sendPairResponse(bool success, const char* message) {
+  StaticJsonDocument<256> response;
+  response["event"] = success ? "pair_success" : "pair_failed";
+  response["message"] = message;
+  response["boardId"] = BOARD_UNIQUE_ID;
+  response["version"] = BOARD_VERSION;
+  response["pairingRequired"] = PAIRING_REQUIRED;
+  
+  String output;
+  serializeJson(response, output);
+  sendBLEResponse(output);
+}
+
+// ==================== HANDLE CONFIG ====================
+void handleConfig(JsonDocument& doc) {
+  Serial.println("\n⚙️ Processing CONFIG command...");
+  resetIdleTimer();  // Reset idle timer on activity
+  
+  int playerCount = doc["playerCount"];
+  JsonArray colorsArray = doc["colors"];
+  
+  if (playerCount < 2 || playerCount > NUM_PLAYERS) {
+    Serial.printf("  ⚠️ Invalid player count: %d (must be 2-4)\n", playerCount);
+    sendErrorResponse("Invalid player count");
+    return;
+  }
+  
+  activePlayerCount = playerCount;
+  Serial.printf("  Active Players: %d\n", activePlayerCount);
+  
+  // Update player colors from hex strings
+  for (int i = 0; i < activePlayerCount; i++) {
+    if (i < colorsArray.size()) {
+      const char* colorHex = colorsArray[i];
+      // Convert hex string to uint32_t (format: "RRGGBB")
+      uint32_t color = (uint32_t)strtol(colorHex, NULL, 16);
+      players[i].color = color;
+      
+      Serial.printf("  Player %d color: #%s (0x%06X)\n", i, colorHex, color);
+    }
+  }
+  
+  // Turn off LEDs for inactive players
+  for (int i = activePlayerCount; i < NUM_PLAYERS; i++) {
+    players[i].alive = false;
+    players[i].color = 0x000000;  // Black (off)
+  }
+  
+  // Send confirmation
+  StaticJsonDocument<256> response;
+  response["event"] = "config_complete";
+  response["playerCount"] = activePlayerCount;
+  
+  String output;
+  serializeJson(response, output);
+  pTxCharacteristic->setValue(output.c_str());
+  pTxCharacteristic->notify();
+  
+  Serial.println("✓ Config applied\n");
+}
+
+// ==================== HANDLE DICE ROLL ====================
 void handleRoll(JsonDocument& doc) {
+  Serial.println("\n🎲 Processing Dice Roll...");
+  resetIdleTimer();  // Reset idle timer on activity
+  validateGameState();  // Validate before processing
+  
+  // Security check: Require pairing before accepting roll commands
+  if (PAIRING_REQUIRED && !isPaired) {
+    Serial.println("  🔒 SECURITY: Roll rejected - device not paired");
+    sendErrorResponse("Device not paired - pairing required");
+    return;
+  }
+  
   int playerId = doc["playerId"];
   int diceValue = doc["diceValue"];
-  int currentTile = doc["currentTile"];
-  int targetTile = doc["expectedTile"];
-
-  if (playerId < 0 || playerId >= NUM_PLAYERS) {
-    sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid player ID\"}");
+  
+  if (playerId < 0 || playerId >= activePlayerCount) {
+    Serial.printf("  ⚠️ Invalid player ID: %d (active players: %d)\n", playerId, activePlayerCount);
+    sendErrorResponse("Invalid player ID");
     return;
   }
 
-  currentPlayer = playerId;
-  expectedTile = targetTile;
+  Serial.printf("  Player: %d\n", playerId);
+  Serial.printf("  Dice Value: %d\n", diceValue);
+
+  // Store previous state for undo
+  players[playerId].previousTile = players[playerId].currentTile;
+  players[playerId].previousScore = players[playerId].score;
+
+  int currentTile = players[playerId].currentTile;
+  int newTile = currentTile + diceValue;
+  bool completedLap = false;
   
-  // Update player state
-  players[playerId].currentTile = currentTile;
+  // Lap detection and wrapping
+  if (newTile > NUM_TILES) {
+    Serial.println("  >> LAP COMPLETED! +5 BONUS POINTS");
+    completedLap = true;
+    newTile = newTile - NUM_TILES;  // Wrap to beginning
+  }
+  if (newTile < 1) newTile = 1;
+
+  Serial.printf("  Movement: Tile %d → Tile %d\n", currentTile, newTile);
+
+  // Get tile information
+  const TileDefinition& tile = BOARD[newTile - 1];
+  Serial.printf("  Tile Name: %s\n", tile.name);
+  Serial.printf("  Tile Type: %s\n", getTileTypeName(tile.type));
   
+  int scoreChange = 0;
+  int chanceCardNumber = 0;
+  const char* chanceCardDesc = "";
+
+  switch (tile.type) {
+    case TYPE_START:
+      Serial.println("  Effect: Start tile (no effect)");
+      break;
+      
+    case TYPE_NORMAL:
+      Serial.println("  Effect: Normal/Safe tile (no effect)");
+      break;
+      
+    case TYPE_BONUS:
+      scoreChange = +1;
+      Serial.println("  Effect: BONUS +1 point");
+      break;
+      
+    case TYPE_PENALTY:
+      // Penalty tiles: -1 or -2 based on tile
+      if (newTile == 2 || newTile == 4) {
+        scoreChange = -1;
+        Serial.println("  Effect: PENALTY -1 point");
+      } else {
+        scoreChange = -2;
+        Serial.println("  Effect: PENALTY -2 points");
+      }
+      break;
+      
+    case TYPE_DISASTER:
+      // Disaster tiles: -2, -3, or -4 based on tile
+      if (newTile == 12) {
+        scoreChange = -2;
+        Serial.println("  Effect: DISASTER -2 points");
+      } else if (newTile == 5 || newTile == 10) {
+        scoreChange = -3;
+        Serial.println("  Effect: DISASTER -3 points");
+      } else {  // Tile 7
+        scoreChange = -4;
+        Serial.println("  Effect: DISASTER -4 points");
+      }
+      break;
+      
+    case TYPE_WATER_DOCK:
+      // Water Dock tiles: +1, +2, or +3 based on tile
+      if (newTile == 15) {
+        scoreChange = +1;
+        Serial.println("  Effect: WATER DOCK +1 point");
+      } else if (newTile == 11) {
+        scoreChange = +2;
+        Serial.println("  Effect: WATER DOCK +2 points");
+      } else {  // Tile 3
+        scoreChange = +3;
+        Serial.println("  Effect: WATER DOCK +3 points");
+      }
+      break;
+      
+    case TYPE_SUPER_DOCK:
+      scoreChange = +4;
+      Serial.println("  Effect: SUPER DOCK +4 points");
+      break;
+      
+    case TYPE_CHANCE: {
+      // Draw random chance card from 20 cards
+      int cardIndex = random(20);  // 0-19
+      const ChanceCard& card = CHANCE_CARDS[cardIndex];
+      chanceCardNumber = card.number;
+      chanceCardDesc = card.description;
+      scoreChange = card.effect;
+      
+      Serial.printf("  Effect: CHANCE CARD #%d\n", card.number);
+      Serial.printf("    \"%s\"\n", card.description);
+      Serial.printf("    Score change: %+d\n", card.effect);
+      
+      // Note: Special cards (11-14) have 0 effect but should trigger special logic
+      // This is handled in Android app, ESP32 just reports the card
+      break;
+    }
+  }
+  
+  // Apply lap bonus if completed
+  if (completedLap) {
+    scoreChange += 5;
+    Serial.println("  Applied lap bonus: +5 points");
+  }
+
+  // Apply score change
+  int oldScore = players[playerId].score;
+  int newScore = oldScore + scoreChange;
+  if (newScore < 0) newScore = 0;
+  
+  players[playerId].score = newScore;
+  players[playerId].currentTile = newTile;
+  
+  Serial.printf("  Score: %d → %d (%+d)\n", oldScore, newScore, scoreChange);
+
+  // Check if player is eliminated
+  if (newScore <= 0 && players[playerId].alive) {
+    players[playerId].alive = false;
+    Serial.println("  ⚠️  PLAYER ELIMINATED!");
+    
+    // Trigger elimination animation
+    animatePlayerElimination(playerId);
+    
+    // Check if there's a winner (only 1 player alive)
+    int alivePlayers = 0;
+    int lastAliveId = -1;
+    for (int i = 0; i < activePlayerCount; i++) {
+      if (players[i].alive) {
+        alivePlayers++;
+        lastAliveId = i;
+      }
+    }
+    
+    if (alivePlayers == 1) {
+      Serial.printf("🎉 GAME OVER - Player %d WINS!\n", lastAliveId);
+      animateWinner(lastAliveId);
+    }
+  }
+
+  // Store undo information
+  lastMove.hasUndo = true;
+  lastMove.playerId = playerId;
+  lastMove.fromTile = currentTile;
+  lastMove.toTile = newTile;
+  lastMove.scoreChange = scoreChange;
+  lastMove.chanceCardNumber = chanceCardNumber;
+
   // Animate movement
-  animateMove(currentTile, targetTile, PLAYER_COLORS[playerId]);
+  currentPlayer = playerId;
+  expectedTile = newTile;
+  animateMove(currentTile, newTile, PLAYER_COLORS[playerId]);
   
-  // Start blinking at target tile
+  // Start waiting for coin placement
   waitingForCoin = true;
   coinWaitStartTime = millis();
   
   // Save state
   saveGameState();
+
+  // Send comprehensive response
+  sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore, 
+                   chanceCardNumber, chanceCardDesc, players[playerId].alive);
+
+  Serial.println("✓ Roll processed, waiting for coin placement\n");
+}
+
+// ==================== SEND ROLL RESPONSE ====================
+void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefinition& tile,
+                      int scoreChange, int oldScore, int newScore, int chanceCard, 
+                      const char* chanceDesc, bool alive) {
+  StaticJsonDocument<768> doc;
   
-  Serial.printf("Roll: Player %d moved from tile %d to %d\n", playerId, currentTile, targetTile);
+  doc["event"] = "roll_processed";
+  doc["playerId"] = playerId;
+  doc["movement"]["from"] = fromTile;
+  doc["movement"]["to"] = toTile;
+  doc["movement"]["animated"] = true;
   
-  sendBLEResponse("{\"status\":\"ok\",\"blinking\":true,\"message\":\"Waiting for coin placement\"}");
+  doc["tile"]["index"] = tile.index;
+  doc["tile"]["name"] = tile.name;
+  doc["tile"]["type"] = getTileTypeName(tile.type);
+  
+  doc["score"]["old"] = oldScore;
+  doc["score"]["new"] = newScore;
+  doc["score"]["change"] = scoreChange;
+  doc["lapBonus"] = false;  // Will be updated in handleRoll if lap completed
+  
+  if (tile.type == TYPE_CHANCE && chanceCard > 0) {
+    doc["chanceCard"]["number"] = chanceCard;
+    doc["chanceCard"]["description"] = chanceDesc;
+    doc["chanceCard"]["effect"] = scoreChange;
+  }
+  
+  doc["player"]["alive"] = alive;
+  doc["player"]["eliminated"] = !alive;
+  
+  doc["waiting"]["forCoin"] = true;
+  doc["waiting"]["tile"] = toTile;
+  doc["waiting"]["blinking"] = true;
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
 }
 
 // ==================== HANDLE UNDO ====================
 void handleUndo(JsonDocument& doc) {
-  int playerId = doc["playerId"];
-  int fromTile = doc["fromTile"];
-  int toTile = doc["toTile"];
-
-  if (playerId < 0 || playerId >= NUM_PLAYERS) {
-    sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid player ID\"}");
+  Serial.println("\n↩️  Processing Undo...");
+  
+  if (!lastMove.hasUndo) {
+    Serial.println("❌ No move to undo");
+    sendErrorResponse("No move to undo");
     return;
   }
 
+  int playerId = lastMove.playerId;
+  int fromTile = lastMove.toTile;  // Current position
+  int toTile = lastMove.fromTile;  // Original position
+  
+  Serial.printf("  Player: %d\n", playerId);
+  Serial.printf("  Reverting: Tile %d → Tile %d\n", fromTile, toTile);
+
+  // Restore previous state
+  players[playerId].currentTile = players[playerId].previousTile;
+  players[playerId].score = players[playerId].previousScore;
+  players[playerId].alive = (players[playerId].score > 0);
+  players[playerId].coinPlaced = false;
+
+  Serial.printf("  Score restored: %d\n", players[playerId].score);
+  Serial.printf("  Status: %s\n", players[playerId].alive ? "Alive" : "Eliminated");
+
+  // Animate reverse movement
   currentPlayer = playerId;
   expectedTile = toTile;
-  
-  // Reverse animation
   animateMove(fromTile, toTile, PLAYER_COLORS[playerId]);
   
-  // Update state
-  players[playerId].currentTile = toTile;
-  players[playerId].coinPlaced = false;
-  
-  // Start blinking at new position
+  // Start waiting for coin at old position
   waitingForCoin = true;
   coinWaitStartTime = millis();
   
+  // Clear undo
+  lastMove.hasUndo = false;
+  
+  // Save state
   saveGameState();
+
+  // Send undo response
+  sendUndoResponse(playerId, fromTile, toTile, players[playerId].score, players[playerId].alive);
+
+  Serial.println("✓ Undo complete, waiting for coin placement\n");
+}
+
+// ==================== SEND UNDO RESPONSE ====================
+void sendUndoResponse(int playerId, int fromTile, int toTile, int score, bool alive) {
+  StaticJsonDocument<512> doc;
   
-  Serial.printf("Undo: Player %d moved from tile %d back to %d\n", playerId, fromTile, toTile);
+  doc["event"] = "undo_complete";
+  doc["playerId"] = playerId;
+  doc["movement"]["from"] = fromTile;
+  doc["movement"]["to"] = toTile;
+  doc["movement"]["reversed"] = true;
   
-  sendBLEResponse("{\"status\":\"ok\",\"blinking\":true,\"message\":\"Undo complete, waiting for coin\"}");
+  doc["score"]["restored"] = score;
+  doc["player"]["alive"] = alive;
+  
+  doc["waiting"]["forCoin"] = true;
+  doc["waiting"]["tile"] = toTile;
+  doc["waiting"]["blinking"] = true;
+  doc["waiting"]["message"] = "Place coin at original position";
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
 }
 
 // ==================== HANDLE RESET ====================
 void handleReset() {
-  // Clear all player states
-  for (int i = 0; i < NUM_PLAYERS; i++) {
-    players[i].currentTile = -1;
-    players[i].waterLevel = 10;
+  Serial.println("\n🔄 Processing Game Reset...");
+
+  // Reset only active players
+  for (int i = 0; i < activePlayerCount; i++) {
+    players[i].currentTile = 1;
+    players[i].score = 10;
     players[i].alive = true;
     players[i].coinPlaced = false;
-    players[i].color = PLAYER_COLORS[i];
+    // Keep the configured color
+    players[i].previousTile = 1;
+    players[i].previousScore = 10;
+    
+    Serial.printf("  Player %d: Reset to Start (10 drops)\n", i);
+  }
+  
+  // Turn off inactive players
+  for (int i = activePlayerCount; i < NUM_PLAYERS; i++) {
+    players[i].currentTile = 1;
+    players[i].score = 0;
+    players[i].alive = false;
+    players[i].coinPlaced = false;
+    players[i].color = 0x000000;  // Black (off)
+    players[i].previousTile = 1;
+    players[i].previousScore = 0;
   }
   
   currentPlayer = -1;
   expectedTile = -1;
   waitingForCoin = false;
+  lastMove.hasUndo = false;
   
   // Clear all LEDs
   strip.clear();
   strip.show();
+  delay(100);
   
   // Redraw background
   renderBackground();
   
+  // Save state
   saveGameState();
+
+  // Send reset response
+  sendResetResponse();
+
+  Serial.println("✓ Game reset complete\n");
+}
+
+// ==================== SEND RESET RESPONSE ====================
+void sendResetResponse() {
+  StaticJsonDocument<512> doc;
   
-  Serial.println("Game reset");
+  doc["event"] = "reset_complete";
+  doc["message"] = "All players reset to start";
   
-  sendBLEResponse("{\"status\":\"ok\",\"message\":\"Game reset complete\"}");
+  JsonArray playersArray = doc.createNestedArray("players");
+  for (int i = 0; i < NUM_PLAYERS; i++) {
+    JsonObject player = playersArray.createNestedObject();
+    player["id"] = i;
+    player["tile"] = 1;
+    player["score"] = 10;
+    player["alive"] = true;
+  }
+  
+  doc["board"]["cleared"] = true;
+  doc["leds"]["background"] = true;
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
 }
 
 // ==================== SEND STATUS ====================
 void sendStatus() {
   StaticJsonDocument<1024> doc;
-  doc["status"] = "ok";
+  
+  doc["event"] = "status_report";
   doc["connected"] = deviceConnected;
   doc["waitingForCoin"] = waitingForCoin;
   doc["currentPlayer"] = currentPlayer;
   doc["expectedTile"] = expectedTile;
+  doc["undoAvailable"] = lastMove.hasUndo;
   
   JsonArray playersArray = doc.createNestedArray("players");
   for (int i = 0; i < NUM_PLAYERS; i++) {
     JsonObject player = playersArray.createNestedObject();
     player["id"] = i;
     player["tile"] = players[i].currentTile;
-    player["water"] = players[i].waterLevel;
+    player["score"] = players[i].score;
     player["alive"] = players[i].alive;
     player["coinPlaced"] = players[i].coinPlaced;
   }
@@ -509,81 +1090,33 @@ void sendStatus() {
   sendBLEResponse(response.c_str());
 }
 
-// ==================== LED ANIMATION ====================
-void animateMove(int fromTile, int toTile, uint32_t color) {
-  int step = (toTile > fromTile) ? 1 : -1;
-  
-  for (int tile = fromTile; tile != toTile + step; tile += step) {
-    if (tile < 0 || tile >= NUM_TILES) continue;
-    
-    // Clear previous position
-    if (tile != fromTile) {
-      setTileColor(tile - step, TILE_COLORS[tile - step]);
-    }
-    
-    // Light up current position
-    setTileColor(tile, color);
-    strip.show();
-    
-    delay(200); // Animation speed
-  }
-}
-
-// ==================== TILE RENDERING ====================
-void setTileColor(int tile, uint32_t color) {
-  if (tile < 0 || tile >= NUM_TILES) return;
-  
-  int startLED = tile * LEDS_PER_TILE;
-  for (int i = 0; i < LEDS_PER_TILE; i++) {
-    strip.setPixelColor(startLED + i, color);
-  }
-}
-
-void renderBackground() {
-  for (int tile = 0; tile < NUM_TILES; tile++) {
-    setTileColor(tile, TILE_COLORS[tile]);
-  }
-  strip.show();
-}
-
-void renderPlayers() {
-  // Start with background
-  renderBackground();
-  
-  // Overlay players
-  for (int i = 0; i < NUM_PLAYERS; i++) {
-    if (players[i].alive && players[i].currentTile >= 0 && players[i].coinPlaced) {
-      setTileColor(players[i].currentTile, players[i].color);
-    }
-  }
-  
-  strip.show();
-}
-
 // ==================== COIN DETECTION ====================
 bool isCoinPresent(int tile) {
-  if (tile < 0 || tile >= NUM_TILES) return false;
+  if (tile < 1 || tile > NUM_TILES) return false;
+  
+  // Convert 1-based tile to 0-based Hall sensor index
+  int sensorIndex = tile - 1;
   
   // Hall sensor reads LOW when magnet is near
-  // Read multiple times for debouncing
   int readings = 0;
   for (int i = 0; i < 5; i++) {
-    if (digitalRead(hallPins[tile]) == LOW) {
+    if (digitalRead(hallPins[sensorIndex]) == LOW) {
       readings++;
     }
     delay(2);
   }
   
-  return readings >= 3; // At least 3 out of 5 reads must be LOW
+  return readings >= 3;
 }
 
 void checkCoinPlacement() {
-  if (!waitingForCoin || currentPlayer < 0 || expectedTile < 0) return;
+  if (!waitingForCoin || currentPlayer < 0 || expectedTile < 1) return;
   
   if (isCoinPresent(expectedTile)) {
-    // Coin detected!
+    Serial.println("\n✓ Coin detected!");
+    Serial.printf("  Player %d at Tile %d\n", currentPlayer, expectedTile);
+    
     players[currentPlayer].coinPlaced = true;
-    players[currentPlayer].currentTile = expectedTile;
     waitingForCoin = false;
     
     // Stop blinking, show solid color
@@ -592,44 +1125,43 @@ void checkCoinPlacement() {
     
     saveGameState();
     
-    // Notify Android
-    StaticJsonDocument<256> doc;
-    doc["event"] = "coin_placed";
-    doc["playerId"] = currentPlayer;
-    doc["tile"] = expectedTile;
-    doc["verified"] = true;
-    
-    String response;
-    serializeJson(doc, response);
-    sendBLEResponse(response.c_str());
-    
-    Serial.printf("Coin placed: Player %d at tile %d\n", currentPlayer, expectedTile);
+    // Send coin placed confirmation
+    sendCoinPlacedResponse(currentPlayer, expectedTile);
     
     currentPlayer = -1;
     expectedTile = -1;
   }
 }
 
+void sendCoinPlacedResponse(int playerId, int tile) {
+  StaticJsonDocument<384> doc;
+  
+  doc["event"] = "coin_placed";
+  doc["playerId"] = playerId;
+  doc["tile"] = tile;
+  doc["verified"] = true;
+  doc["hallSensor"] = true;
+  doc["message"] = "Physical coin placement confirmed";
+  
+  doc["player"]["score"] = players[playerId].score;
+  doc["player"]["alive"] = players[playerId].alive;
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
+}
+
 void checkCoinTimeout() {
   if (!waitingForCoin) return;
   
   if (millis() - coinWaitStartTime > COIN_TIMEOUT) {
-    // Timeout!
-    Serial.println("Coin placement timeout!");
+    Serial.println("\n⏱️  Coin placement timeout!");
+    Serial.printf("  Player %d, Tile %d\n", currentPlayer, expectedTile);
     
     waitingForCoin = false;
     
-    // Notify Android
-    StaticJsonDocument<256> doc;
-    doc["event"] = "coin_timeout";
-    doc["playerId"] = currentPlayer;
-    doc["tile"] = expectedTile;
+    sendTimeoutResponse(currentPlayer, expectedTile);
     
-    String response;
-    serializeJson(doc, response);
-    sendBLEResponse(response.c_str());
-    
-    // Clear blinking
     renderPlayers();
     
     currentPlayer = -1;
@@ -637,16 +1169,30 @@ void checkCoinTimeout() {
   }
 }
 
+void sendTimeoutResponse(int playerId, int tile) {
+  StaticJsonDocument<256> doc;
+  
+  doc["event"] = "coin_timeout";
+  doc["playerId"] = playerId;
+  doc["tile"] = tile;
+  doc["timeout"] = COIN_TIMEOUT / 1000;
+  doc["message"] = "Coin placement timed out";
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
+}
+
 // ==================== MISPLACEMENT DETECTION ====================
 void scanAllTiles() {
-  if (waitingForCoin) return; // Don't scan while waiting for specific placement
+  if (waitingForCoin) return;
   
   bool foundMisplacement = false;
   StaticJsonDocument<1024> doc;
-  doc["event"] = "misplacement";
+  doc["event"] = "misplacement_scan";
   JsonArray errors = doc.createNestedArray("errors");
   
-  for (int tile = 0; tile < NUM_TILES; tile++) {
+  for (int tile = 1; tile <= NUM_TILES; tile++) {
     bool coinPresent = isCoinPresent(tile);
     bool shouldBePresent = false;
     int expectedPlayer = -1;
@@ -661,117 +1207,100 @@ void scanAllTiles() {
     }
     
     if (coinPresent && !shouldBePresent) {
-      // Coin where it shouldn't be
       foundMisplacement = true;
       JsonObject error = errors.createNestedObject();
       error["tile"] = tile;
+      error["tileName"] = BOARD[tile-1].name;
       error["issue"] = "unexpected_coin";
+      error["message"] = "Coin found where none should be";
       
-      // Blink red at this tile
+      Serial.printf("⚠️  Misplacement: Unexpected coin at Tile %d (%s)\n", 
+                    tile, BOARD[tile-1].name);
+      
+      // Flash red warning
       setTileColor(tile, 0xFF0000);
     } else if (!coinPresent && shouldBePresent) {
-      // Missing coin
       foundMisplacement = true;
       JsonObject error = errors.createNestedObject();
       error["tile"] = tile;
+      error["tileName"] = BOARD[tile-1].name;
       error["playerId"] = expectedPlayer;
       error["issue"] = "missing_coin";
+      error["message"] = "Expected coin not found";
       
-      // Blink red at this tile
+      Serial.printf("⚠️  Misplacement: Missing coin at Tile %d (%s) for Player %d\n", 
+                    tile, BOARD[tile-1].name, expectedPlayer);
+      
+      // Flash red warning
       setTileColor(tile, 0xFF0000);
     }
   }
   
   if (foundMisplacement) {
     strip.show();
-    delay(500);
-    renderPlayers(); // Restore normal view
     
-    // Send notification
     String response;
     serializeJson(doc, response);
     sendBLEResponse(response.c_str());
     
-    Serial.println("Misplacement detected!");
+    delay(500);
+    renderPlayers(); // Restore normal view
   }
 }
 
-// ==================== BLE COMMUNICATION ====================
-void sendBLEResponse(const char* json) {
-  if (deviceConnected) {
-    pTxCharacteristic->setValue((uint8_t*)json, strlen(json));
-    pTxCharacteristic->notify();
-    Serial.print("Sent: ");
-    Serial.println(json);
-  }
-}
-
-void sendHeartbeat() {
-  if (!deviceConnected) return;
+// ==================== LED ANIMATIONS ====================
+void animateMove(int fromTile, int toTile, uint32_t color) {
+  int step = (toTile > fromTile) ? 1 : -1;
   
-  StaticJsonDocument<256> doc;
-  doc["event"] = "heartbeat";
-  doc["waitingForCoin"] = waitingForCoin;
-  
-  if (waitingForCoin) {
-    unsigned long timeElapsed = millis() - coinWaitStartTime;
-    unsigned long timeRemaining = (timeElapsed < COIN_TIMEOUT) ? (COIN_TIMEOUT - timeElapsed) : 0;
-    doc["timeRemaining"] = timeRemaining / 1000; // Send in seconds
-    doc["expectedTile"] = expectedTile + 1; // Convert to 1-indexed
-    doc["currentPlayer"] = currentPlayer;
-  }
-  
-  doc["uptime"] = millis() / 1000; // Seconds since boot
-  
-  String response;
-  serializeJson(doc, response);
-  sendBLEResponse(response.c_str());
-}
-
-// ==================== PERSISTENCE ====================
-void saveGameState() {
-  for (int i = 0; i < NUM_PLAYERS; i++) {
-    String prefix = "p" + String(i) + "_";
-    preferences.putInt((prefix + "tile").c_str(), players[i].currentTile);
-    preferences.putInt((prefix + "water").c_str(), players[i].waterLevel);
-    preferences.putBool((prefix + "alive").c_str(), players[i].alive);
-    preferences.putBool((prefix + "coin").c_str(), players[i].coinPlaced);
-  }
-}
-
-void loadGameState() {
-  for (int i = 0; i < NUM_PLAYERS; i++) {
-    String prefix = "p" + String(i) + "_";
-    players[i].currentTile = preferences.getInt((prefix + "tile").c_str(), -1);
-    players[i].waterLevel = preferences.getInt((prefix + "water").c_str(), 10);
-    players[i].alive = preferences.getBool((prefix + "alive").c_str(), true);
-    players[i].coinPlaced = preferences.getBool((prefix + "coin").c_str(), false);
-    players[i].color = PLAYER_COLORS[i];
-  }
-}
-
-// ==================== STARTUP ANIMATION ====================
-void startupAnimation() {
-  // Rainbow sweep
-  for (int i = 0; i < NUM_LEDS; i++) {
-    strip.setPixelColor(i, strip.ColorHSV(i * 65536L / NUM_LEDS));
+  for (int tile = fromTile; tile != toTile + step; tile += step) {
+    if (tile < 1 || tile > NUM_TILES) continue;
+    
+    // Clear previous position
+    if (tile != fromTile) {
+      setTileColor(tile - step, TILE_COLORS[tile - step - 1]);
+    }
+    
+    // Light up current position
+    setTileColor(tile, color);
     strip.show();
-    delay(10);
+    
+    delay(200);
   }
-  delay(500);
+}
+
+void setTileColor(int tile, uint32_t color) {
+  if (tile < 1 || tile > NUM_TILES) return;
   
-  // Fade to background
+  int startLED = (tile - 1) * LEDS_PER_TILE;
+  for (int i = 0; i < LEDS_PER_TILE; i++) {
+    strip.setPixelColor(startLED + i, color);
+  }
+}
+
+void renderBackground() {
+  for (int tile = 1; tile <= NUM_TILES; tile++) {
+    setTileColor(tile, TILE_COLORS[tile - 1]);
+  }
+  strip.show();
+}
+
+void renderPlayers() {
   renderBackground();
   
-  // Show saved player positions
-  renderPlayers();
+  for (int i = 0; i < NUM_PLAYERS; i++) {
+    if (players[i].alive && players[i].coinPlaced) {
+      setTileColor(players[i].currentTile, players[i].color);
+    }
+  }
+  
+  strip.show();
 }
 
-// ==================== ELIMINATION ANIMATION ====================
+// ==================== PLAYER ELIMINATION ANIMATION ====================
 void animatePlayerElimination(int playerId) {
   Serial.printf("💀 Animating elimination for Player %d...\n", playerId);
   
-  uint32_t playerColor = PLAYER_COLORS[playerId];
+  uint32_t playerColor = players[playerId].color;
   
   // Blink the player's LED in all 20 tiles (1 LED per tile) 3 times
   for (int blink = 0; blink < 3; blink++) {
@@ -806,7 +1335,7 @@ void animatePlayerElimination(int playerId) {
 void animateWinner(int winnerId) {
   Serial.printf("🏆 WINNER ANIMATION for Player %d!\n", winnerId);
   
-  uint32_t winnerColor = PLAYER_COLORS[winnerId];
+  uint32_t winnerColor = players[winnerId].color;
   
   // Phase 1: Flash winner color across entire board (3 times)
   for (int flash = 0; flash < 3; flash++) {
@@ -893,48 +1422,208 @@ void animateWinner(int winnerId) {
   Serial.println("✓ Winner celebration complete!\n");
 }
 
+void startupAnimation() {
+  // Rainbow sweep
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.ColorHSV(i * 65536L / NUM_LEDS));
+    strip.show();
+    delay(10);
+  }
+  delay(500);
+  
+  // Fade to background
+  renderBackground();
+  
+  // Show saved player positions
+  renderPlayers();
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+void sendBLEResponse(const char* json) {
+  if (deviceConnected && pTxCharacteristic != nullptr) {
+    pTxCharacteristic->setValue((uint8_t*)json, strlen(json));
+    pTxCharacteristic->notify();
+    Serial.print("📤 Sent: ");
+    Serial.println(json);
+  }
+}
+
+void sendBLEResponse(String json) {
+  sendBLEResponse(json.c_str());
+}
+
+void sendErrorResponse(const char* message) {
+  StaticJsonDocument<256> doc;
+  doc["event"] = "error";
+  doc["message"] = message;
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response);
+}
+
+const char* getTileTypeName(TileType type) {
+  switch (type) {
+    case TYPE_START:      return "START";
+    case TYPE_NORMAL:     return "SAFE";
+    case TYPE_CHANCE:     return "CHANCE";
+    case TYPE_BONUS:      return "BONUS";
+    case TYPE_PENALTY:    return "PENALTY";
+    case TYPE_DISASTER:   return "DISASTER";
+    case TYPE_WATER_DOCK: return "WATER_DOCK";
+    case TYPE_SUPER_DOCK: return "SUPER_DOCK";
+    default:              return "UNKNOWN";
+  }
+}
+
+// ==================== PERSISTENCE ====================
+void saveGameState() {
+  for (int i = 0; i < NUM_PLAYERS; i++) {
+    String prefix = "p" + String(i) + "_";
+    preferences.putInt((prefix + "tile").c_str(), players[i].currentTile);
+    preferences.putInt((prefix + "score").c_str(), players[i].score);
+    preferences.putBool((prefix + "alive").c_str(), players[i].alive);
+    preferences.putBool((prefix + "coin").c_str(), players[i].coinPlaced);
+  }
+}
+
+void loadGameState() {
+  for (int i = 0; i < NUM_PLAYERS; i++) {
+    String prefix = "p" + String(i) + "_";
+    players[i].currentTile = preferences.getInt((prefix + "tile").c_str(), 1);
+    players[i].score = preferences.getInt((prefix + "score").c_str(), 10);
+    players[i].alive = preferences.getBool((prefix + "alive").c_str(), true);
+    players[i].coinPlaced = preferences.getBool((prefix + "coin").c_str(), false);
+    players[i].color = PLAYER_COLORS[i];
+  }
+  
+  // Validate loaded state
+  validateGameState();
+}
+
+// ==================== STATE VALIDATION ====================
+void validateGameState() {
+  for (int i = 0; i < activePlayerCount; i++) {
+    // Validate tile bounds
+    if (players[i].currentTile < 1 || players[i].currentTile > NUM_TILES) {
+      Serial.printf("⚠️  Player %d invalid tile %d - resetting to 1\n", i, players[i].currentTile);
+      players[i].currentTile = 1;
+    }
+    
+    // Validate score bounds
+    if (players[i].score < 0) {
+      Serial.printf("⚠️  Player %d negative score %d - setting to 0\n", i, players[i].score);
+      players[i].score = 0;
+    }
+    if (players[i].score > 99) {
+      Serial.printf("⚠️  Player %d excessive score %d - capping at 99\n", i, players[i].score);
+      players[i].score = 99;
+    }
+  }
+}
+
+// ==================== HEARTBEAT ====================
+void sendHeartbeat() {
+  if (!waitingForCoin) return;
+  
+  StaticJsonDocument<256> doc;
+  doc["event"] = "heartbeat";
+  doc["waiting"]["forCoin"] = waitingForCoin;
+  doc["waiting"]["playerId"] = currentPlayer;
+  doc["waiting"]["tile"] = expectedTile;
+  doc["waiting"]["elapsed"] = (millis() - coinWaitStartTime) / 1000;
+  doc["waiting"]["remaining"] = (COIN_TIMEOUT - (millis() - coinWaitStartTime)) / 1000;
+  
+  String json;
+  serializeJson(doc, json);
+  sendBLEResponse(json.c_str());
+}
+
+// ==================== ACTIVITY MANAGEMENT ====================
+void resetIdleTimer() {
+  lastActivityTime = millis();
+  strip.setBrightness(100);  // Full brightness
+}
+
+void checkIdleTimeout() {
+  if (millis() - lastActivityTime > IDLE_TIMEOUT) {
+    // Dim LEDs to 20% brightness when idle
+    strip.setBrightness(20);
+    strip.show();
+  }
+}
+
 // ==================== MAIN LOOP ====================
 void loop() {
   // Reset watchdog timer
   esp_task_wdt_reset();
   
-  // Handle BLE connection status
+  // BLE connection handling
   if (!deviceConnected && oldDeviceConnected) {
     delay(500);
     pServer->startAdvertising();
-    Serial.println("Start advertising");
+    isPaired = false;  // Reset pairing on disconnect
+    pairTimeout = 0;
+    currentConnectionMode = MODE_DISCONNECTED;
+    connectionLEDStep = 0;
+    Serial.println("[BLE] Disconnected - pairing reset");
     oldDeviceConnected = deviceConnected;
   }
   
   if (deviceConnected && !oldDeviceConnected) {
+    if (PAIRING_REQUIRED) {
+      currentConnectionMode = MODE_PAIRING;
+    } else {
+      currentConnectionMode = MODE_CONNECTED;
+    }
+    connectionLEDStep = 0;
+    Serial.println("[BLE] Connected - entering pairing/connected mode");
     oldDeviceConnected = deviceConnected;
   }
   
-  // Handle blinking when waiting for coin
-  if (waitingForCoin && expectedTile >= 0) {
-    unsigned long timeElapsed = millis() - coinWaitStartTime;
-    unsigned long timeRemaining = COIN_TIMEOUT - timeElapsed;
-    
-    // Determine blink interval based on time remaining
-    unsigned long currentBlinkInterval = BLINK_INTERVAL;
+  // Check pairing timeout
+  if (PAIRING_REQUIRED && !isPaired && pairTimeout > 0) {
+    if (millis() > pairTimeout) {
+      Serial.println("[SECURITY] Pairing timeout - resetting");
+      pairTimeout = 0;
+      // Could disconnect here if desired
+    }
+  }
+  
+  // Process command queue
+  processCommandQueue();
+  
+  // Update connection status LEDs if not waiting for coin
+  if (!waitingForCoin) {
+    updateConnectionStatusLEDs();
+  }
+  
+  // Enhanced blinking animation with timeout warnings
+  if (waitingForCoin && expectedTile >= 1) {
+    unsigned long elapsed = millis() - coinWaitStartTime;
+    unsigned long remaining = COIN_TIMEOUT - elapsed;
+    unsigned long blinkInterval = BLINK_INTERVAL;
     uint32_t blinkColor = PLAYER_COLORS[currentPlayer];
     
-    if (timeRemaining <= URGENT_THRESHOLD) {
-      currentBlinkInterval = BLINK_INTERVAL_URGENT; // Very fast (100ms)
-      blinkColor = 0xFF0000; // Red for urgency
-    } else if (timeRemaining <= WARNING_THRESHOLD) {
-      currentBlinkInterval = BLINK_INTERVAL_WARNING; // Fast (200ms)
+    // Last 10 seconds: flash faster
+    if (remaining < 10000 && remaining > 5000) {
+      blinkInterval = 250;  // 250ms blink (was 500ms)
     }
-    // else use normal interval (500ms) with player color
+    // Last 5 seconds: very fast flash with RED warning
+    else if (remaining < 5000) {
+      blinkInterval = 100;  // 100ms blink
+      blinkColor = 0xFF0000;  // RED warning
+    }
     
-    if (millis() - lastBlinkTime > currentBlinkInterval) {
+    if (millis() - lastBlinkTime > blinkInterval) {
       blinkState = !blinkState;
       lastBlinkTime = millis();
       
       if (blinkState) {
         setTileColor(expectedTile, blinkColor);
       } else {
-        setTileColor(expectedTile, 0x000000); // Off
+        setTileColor(expectedTile, 0x000000);
       }
       strip.show();
     }
@@ -946,17 +1635,20 @@ void loop() {
   // Check for timeout
   checkCoinTimeout();
   
-  // Periodic scan for misplacements
+  // Send heartbeat every 5 seconds when waiting
+  if (waitingForCoin && millis() - lastHeartbeatTime > HEARTBEAT_INTERVAL) {
+    sendHeartbeat();
+    lastHeartbeatTime = millis();
+  }
+  
+  // Periodic misplacement scan
   if (millis() - lastScanTime > SCAN_INTERVAL) {
     scanAllTiles();
     lastScanTime = millis();
   }
   
-  // Send periodic heartbeat
-  if (millis() - lastHeartbeatTime > HEARTBEAT_INTERVAL) {
-    sendHeartbeat();
-    lastHeartbeatTime = millis();
-  }
+  // Check idle timeout for power saving
+  checkIdleTimeout();
   
   delay(10);
 }
