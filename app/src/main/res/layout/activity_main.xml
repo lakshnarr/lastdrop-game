@@ -377,15 +377,88 @@
         android:text="Test Mode: OFF"
         android:textColor="#FFFFFF" />
 
-    <Button
-        android:id="@+id/btnSimulateRoll"
+    <!-- Direct Dice Value Buttons (Test Mode) -->
+    <LinearLayout
+        android:id="@+id/layoutDiceButtons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:backgroundTint="#4CAF50"
-        android:text="Simulate Dice Roll"
-        android:textColor="#FFFFFF"
-        android:visibility="gone" />
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btnDice1"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚀\n1"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDice2"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚁\n2"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDice3"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚂\n3"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDice4"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚃\n4"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDice5"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚄\n5"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDice6"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:backgroundTint="#FF5722"
+            android:text="⚅\n6"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <!-- Virtual Dice Controls (ESP32 Test Mode) -->
     <LinearLayout

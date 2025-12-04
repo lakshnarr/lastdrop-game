@@ -50,6 +50,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
         
+        // Generate unique session ID for multi-device support
+        private val SESSION_ID = java.util.UUID.randomUUID().toString()
+        
         // ESP32 BLE Configuration
         const val ESP32_DEVICE_NAME = "LASTDROP-ESP32"
         val ESP32_SERVICE_UUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -82,7 +85,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
     private lateinit var btnTestMode: Button
-    private lateinit var btnSimulateRoll: Button
+    private lateinit var layoutDiceButtons: LinearLayout
+    private lateinit var btnDice1: Button
+    private lateinit var btnDice2: Button
+    private lateinit var btnDice3: Button
+    private lateinit var btnDice4: Button
+    private lateinit var btnDice5: Button
+    private lateinit var btnDice6: Button
     private lateinit var tvTestLog: TextView
     private lateinit var tvTestLogTitle: TextView
     private lateinit var scrollTestLog: ScrollView
@@ -254,7 +263,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnResetScore = findViewById(R.id.btnResetScore)
         btnRefreshScoreboard = findViewById(R.id.btnRefreshScoreboard)
         btnTestMode = findViewById(R.id.btnTestMode)
-        btnSimulateRoll = findViewById(R.id.btnSimulateRoll)
+        layoutDiceButtons = findViewById(R.id.layoutDiceButtons)
+        btnDice1 = findViewById(R.id.btnDice1)
+        btnDice2 = findViewById(R.id.btnDice2)
+        btnDice3 = findViewById(R.id.btnDice3)
+        btnDice4 = findViewById(R.id.btnDice4)
+        btnDice5 = findViewById(R.id.btnDice5)
+        btnDice6 = findViewById(R.id.btnDice6)
         tvTestLog = findViewById(R.id.tvTestLog)
         tvTestLogTitle = findViewById(R.id.tvTestLogTitle)
         scrollTestLog = findViewById(R.id.scrollTestLog)
@@ -270,8 +285,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvScoreP1.text = "P1: 10"
         tvScoreP2.text = "P2: 10"
         // Initialize test mode UI
-        btnTestMode.text = "Test Mode: OFF"
-        btnSimulateRoll.isEnabled = false
+        btnTestMode.text = "Production"
+        layoutDiceButtons.visibility = View.GONE
         tvTestLogTitle.visibility = View.GONE
         scrollTestLog.visibility = View.GONE
         btnClearLog.visibility = View.GONE
@@ -290,7 +305,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnRefreshScoreboard.setOnClickListener { fetchScoreboard() }
         
         btnTestMode.setOnClickListener { toggleTestMode() }
-        btnSimulateRoll.setOnClickListener { simulateDiceRoll() }
+        btnDice1.setOnClickListener { simulateDiceRoll(1) }
+        btnDice2.setOnClickListener { simulateDiceRoll(2) }
+        btnDice3.setOnClickListener { simulateDiceRoll(3) }
+        btnDice4.setOnClickListener { simulateDiceRoll(4) }
+        btnDice5.setOnClickListener { simulateDiceRoll(5) }
+        btnDice6.setOnClickListener { simulateDiceRoll(6) }
         btnClearLog.setOnClickListener { 
             tvTestLog.text = "Console cleared..."
             Toast.makeText(this, "Test log cleared", Toast.LENGTH_SHORT).show()
@@ -944,7 +964,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun pushResetStateToServer() {
         mainScope.launch(Dispatchers.IO) {
             try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY")
+                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -1106,7 +1126,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         mainScope.launch(Dispatchers.IO) {
             try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY")
+                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -1253,7 +1273,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // 4) POST to https://lastdrop.earth/api/live_push.php?key=ABC123
         mainScope.launch(Dispatchers.IO) {
             try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY")
+                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -1479,7 +1499,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun pushUndoStateToServer() {
         mainScope.launch(Dispatchers.IO) {
             try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY")
+                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -1607,9 +1627,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         // Show test mode selection dialog
         val options = arrayOf(
-            "Production Mode (GoDice + ESP32 + live.html)",
-            "Test Mode 1: Android Virtual Dice + ESP32",
-            "Test Mode 2: Android + live.html (No ESP32)"
+            "Production",
+            "Test Mode 1",
+            "Test Mode 2"
         )
         
         AlertDialog.Builder(this)
@@ -1620,15 +1640,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         // Production Mode
                         testModeEnabled = false
                         testModeType = 0
-                        btnTestMode.text = "Test Mode: OFF"
+                        btnTestMode.text = "Production"
                         btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
-                        btnSimulateRoll.isEnabled = false
-                        btnSimulateRoll.visibility = View.GONE
+                        layoutDiceButtons.visibility = View.GONE
                         
                         // Hide test console
                         tvTestLogTitle.visibility = View.GONE
                         scrollTestLog.visibility = View.GONE
                         btnClearLog.visibility = View.GONE
+                        
+                        // Clear log
+                        tvTestLog.text = ""
                         
                         appendTestLog("🔴 Production Mode - Using GoDice + ESP32")
                         Toast.makeText(this, "Production Mode: GoDice + ESP32 + live.html", Toast.LENGTH_SHORT).show()
@@ -1643,15 +1665,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         testModeEnabled = true
                         testModeType = 1
                         Log.d(TAG, "Test Mode 1 activated: testModeType=$testModeType, testModeEnabled=$testModeEnabled")
-                        btnTestMode.text = "Test Mode 1: ON"
+                        btnTestMode.text = "Test Mode 1"
                         btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
-                        btnSimulateRoll.isEnabled = true
-                        btnSimulateRoll.visibility = View.VISIBLE
+                        layoutDiceButtons.visibility = View.VISIBLE
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
                         scrollTestLog.visibility = View.VISIBLE
                         btnClearLog.visibility = View.VISIBLE
+                        
+                        // Clear log
+                        tvTestLog.text = ""
                         
                         appendTestLog("🟠 Test Mode 1 - Virtual Dice + ESP32 Board")
                         Toast.makeText(this, "Test Mode 1: Simulated dice with ESP32 board", Toast.LENGTH_LONG).show()
@@ -1666,15 +1690,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         testModeEnabled = true
                         testModeType = 2
                         Log.d(TAG, "Test Mode 2 activated: testModeType=$testModeType, testModeEnabled=$testModeEnabled")
-                        btnTestMode.text = "Test Mode 2: ON"
+                        btnTestMode.text = "Test Mode 2"
                         btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
-                        btnSimulateRoll.isEnabled = true
-                        btnSimulateRoll.visibility = View.VISIBLE
+                        layoutDiceButtons.visibility = View.VISIBLE
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
                         scrollTestLog.visibility = View.VISIBLE
                         btnClearLog.visibility = View.VISIBLE
+                        
+                        // Clear log
+                        tvTestLog.text = ""
                         
                         appendTestLog("🟢 Test Mode 2 - Virtual Dice + live.html (No ESP32)")
                         Toast.makeText(this, "Test Mode 2: Simulated dice, live.html only", Toast.LENGTH_LONG).show()
@@ -1694,44 +1720,35 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         Log.d(TAG, "toggleTestMode dialog shown")
     }
 
-    private fun simulateDiceRoll() {
-        Log.d(TAG, "simulateDiceRoll called, testModeEnabled: $testModeEnabled, testModeType: $testModeType")
+    private fun simulateDiceRoll(diceValue: Int) {
+        Log.d(TAG, "simulateDiceRoll called with value: $diceValue, testModeEnabled: $testModeEnabled, testModeType: $testModeType")
         
         if (!testModeEnabled) {
             Toast.makeText(this, "Enable Test Mode first!", Toast.LENGTH_SHORT).show()
             return
         }
 
+        if (diceValue !in 1..6) {
+            Toast.makeText(this, "Invalid dice value: $diceValue", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         when (testModeType) {
             1 -> {
-                // Test Mode 1: Show dice value picker (manual selection for ESP32 testing)
-                Log.d(TAG, "Showing dice value picker for Test Mode 1")
-                Toast.makeText(this, "Select dice value (1-6) for ESP32 test", Toast.LENGTH_SHORT).show()
-                val diceValues = arrayOf("1", "2", "3", "4", "5", "6")
-                AlertDialog.Builder(this)
-                    .setTitle("Select Dice Value")
-                    .setItems(diceValues) { _, which ->
-                        val selectedValue = which + 1
-                        appendTestLog("🎲 Manual roll selected: $selectedValue")
-                        Log.d(TAG, "User selected dice value: $selectedValue")
-                        
-                        // Simulate dice stable callback with selected value
-                        onDiceStable(0, selectedValue)
-                    }
-                    .setNegativeButton("Cancel") { dialog, _ ->
-                        dialog.dismiss()
-                        appendTestLog("❌ Dice roll cancelled")
-                    }
-                    .show()
+                // Test Mode 1: Manual dice value for ESP32 testing
+                appendTestLog("🎲 Manual roll: $diceValue")
+                Log.d(TAG, "Test Mode 1 - Sending dice value $diceValue to ESP32")
+                
+                // Simulate dice stable callback with selected value
+                onDiceStable(0, diceValue)
             }
             2 -> {
-                // Test Mode 2: Random dice roll (for Android/web testing without ESP32)
-                val randomRoll = Random.nextInt(1, 7)
-                appendTestLog("🎲 Random roll: $randomRoll")
-                Log.d(TAG, "Simulating random dice roll: $randomRoll")
+                // Test Mode 2: Manual dice value for Android/web testing (no ESP32)
+                appendTestLog("🎲 Manual roll: $diceValue")
+                Log.d(TAG, "Test Mode 2 - Simulating dice value: $diceValue")
                 
                 // Simulate dice stable callback
-                onDiceStable(0, randomRoll)
+                onDiceStable(0, diceValue)
             }
             else -> {
                 Toast.makeText(this, "Unknown test mode", Toast.LENGTH_SHORT).show()
