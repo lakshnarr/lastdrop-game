@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Last Drop – Live</title>
+  <title>Last Drop – Demo Mode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
@@ -1160,9 +1160,9 @@
 
   <!-- Header -->
   <header class="header">
-    <h1>LAST DROP – LIVE BOARD</h1>
+    <h1>LAST DROP – DEMO MODE</h1>
     <div class="subtitle">
-      Real-time visualisation of the physical board – <a href="demo.html" style="color: var(--accent); text-decoration: underline;">Try Demo Mode</a>
+      Play the demo version in your browser – <a href="live.html" style="color: var(--accent); text-decoration: underline;">Switch to Live Mode</a>
       <span id="sessionInfo" class="last-updated" style="color: #60a5fa;"></span>
       <span id="lastUpdated" class="last-updated"></span>
     </div>
@@ -3021,16 +3021,21 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       scoreboardDice2 = document.getElementById("scoreboardDice2");
       dicePlayerName = document.getElementById("dicePlayerName");
 
-      // Show disclaimer first on small screens, then connection popup
+      // Auto-start demo mode (skip connection popup)
+      demoMode = true;
+      demoStatus.textContent = "ON";
+      modeStatus.textContent = "DEMO";
+      connStatus.textContent = "OFFLINE";
+      connStatus.classList.remove("badge-green");
+      connStatus.classList.add("badge-red");
+      
+      // Show disclaimer on small screens with modified button
       if (window.innerWidth <= 768) {
         smallScreenDisclaimer.classList.remove("hidden");
         
         dismissDisclaimer?.addEventListener('click', () => {
           smallScreenDisclaimer.classList.add("hidden");
-          showConnectionPopup();
         });
-      } else {
-        showConnectionPopup();
       }
 
       skipConnection?.addEventListener('click', () => {
