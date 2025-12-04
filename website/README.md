@@ -270,11 +270,40 @@ const scoreboard = new Scoreboard({
 scoreboard.updatePlayers(state.players);
 ```
 
-#### event-log.js
-**Responsibilities**:
-- Display event messages
-- Format event text with highlights
-- Handle rolling, undo, reset messages
+#### event-log.js (~170 lines) ✅ COMPLETE
+**Location**: `assets/js/ui/event-log.js`
+
+**Exports**:
+- `EventLog` class
+
+**Features**:
+- Display rolling status messages
+- Show dice roll results with tile and chance card info
+- Format messages with HTML highlights
+- Handle game events (reset, undo, elimination, winner)
+- Connection status messages
+- Custom message support
+
+**Usage**:
+```javascript
+import { EventLog } from './assets/js/ui/event-log.js';
+
+const eventLog = new EventLog({
+  container: document.getElementById('eventLog')
+});
+
+// Show rolling message
+eventLog.showRolling('Player 1', 2); // 2 dice
+
+// Show roll result
+eventLog.showRollResult('Player 1', 4, 6, 12, 'CARD-5');
+
+// Other events
+eventLog.showReset();
+eventLog.showUndo('Player 2');
+eventLog.showElimination('Player 3');
+eventLog.showWinner('Player 1');
+```
 
 #### overlays.js
 **Responsibilities**:
@@ -392,7 +421,7 @@ ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/las
 
 ---
 
-**Status**: Phase 2 in progress - UI modules extraction (5 of 15 total modules)
+**Status**: Phase 2 in progress - UI modules extraction (6 of 15 total modules)
 **Last Updated**: December 5, 2025
-**Lines Extracted**: 1,560 lines (target: ~2,500 total)
-**Next Step**: Extract event-log, overlays, and settings-panel modules
+**Lines Extracted**: 1,730 lines (target: ~2,500 total)
+**Next Step**: Extract overlays and settings-panel modules

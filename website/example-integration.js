@@ -7,6 +7,7 @@ import { DiceAnimator } from './assets/js/core/dice-animator.js';
 import { BoardRenderer } from './assets/js/core/board-renderer.js';
 import { AudioManager } from './assets/js/core/audio-manager.js';
 import { Scoreboard } from './assets/js/ui/scoreboard.js';
+import { EventLog } from './assets/js/ui/event-log.js';
 import { TILE_NAMES, PLAYER_COLORS } from './assets/js/utils/constants.js';
 
 // Initialize on page load
@@ -57,7 +58,15 @@ window.addEventListener('load', () => {
     }
   });
   
-  // 5. Example: Create players
+  // 5. Create Event Log
+  const eventLog = new EventLog({
+    container: document.getElementById('eventLog')
+  });
+  
+  // Show initial message
+  eventLog.showInitial();
+  
+  // 6. Example: Create players
   const players = [
     { id: 'P1', name: 'Player 1', color: 'red', pos: 1, score: 10 },
     { id: 'P2', name: 'Player 2', color: 'green', pos: 1, score: 10 },
@@ -65,7 +74,7 @@ window.addEventListener('load', () => {
     { id: 'P4', name: 'Player 4', color: 'yellow', pos: 1, score: 10 }
   ];
   
-  // 6. Example: Initialize tokens on board and scoreboard
+  // 7. Example: Initialize tokens on board and scoreboard
   players.forEach((player, index) => {
     boardRenderer.ensureTokenForPlayer(player);
     boardRenderer.positionToken(player.id, player.pos, index);
@@ -74,8 +83,10 @@ window.addEventListener('load', () => {
   // Update scoreboard with initial player data
   scoreboard.updatePlayers(players);
   
-  // 7. Example: Simulate a dice roll and token movement
+  // 8. Example: Simulate a dice roll and token movement
   function simulateRoll(playerId, playerName, diceValue) {
+    // Show rolling message
+    eventLog.showRolling(playerName, 1);
     const player = players.find(p => p.id === playerId);
     if (!player) return;
     
@@ -117,12 +128,15 @@ window.addEventListener('load', () => {
         // Update scoreboard after movement
         scoreboard.updatePlayers(players);
         
+        // Update event log with result
+        eventLog.showRollResult(playerName, diceValue, null, newPos, null);
+        
         console.log(`${playerName} rolled ${diceValue}, moved from tile ${oldPos} to ${newPos}, score: ${player.score}`);
       }
     });
   }
   
-  // 8. Example: Test button - simulate Player 1 rolling dice
+  // 9. Example: Test button - simulate Player 1 rolling dice
   const testButton = document.createElement('button');
   testButton.textContent = 'Test: Roll Dice for Player 1';
   testButton.className = 'btn-small';
@@ -140,7 +154,7 @@ window.addEventListener('load', () => {
   
   document.body.appendChild(testButton);
   
-  // 9. Example: Audio controls
+  // 10. Example: Audio controls
   const audioToggle = document.getElementById('audioToggle');
   const audioStatus = document.getElementById('audioStatus');
   
@@ -151,7 +165,7 @@ window.addEventListener('load', () => {
     }
   });
   
-  // 10. Example: Volume controls
+  // 11. Example: Volume controls
   const volumeControls = {
     diceVolume: 'dice',
     moveVolume: 'move',
@@ -174,7 +188,7 @@ window.addEventListener('load', () => {
     });
   });
   
-  // 11. Example: Eliminated player
+  // 12. Example: Eliminated player
   function eliminatePlayer(playerId) {
     boardRenderer.markTokenAsEliminated(playerId);
     
@@ -183,11 +197,12 @@ window.addEventListener('load', () => {
       player.eliminated = true;
       player.score = 0;
       scoreboard.updatePlayers(players);
+      eventLog.showElimination(player.name);
       console.log(`${player.name} has been eliminated!`);
     }
   }
   
-  // 12. Example: Winner announcement
+  // 13. Example: Winner announcement
   function announceWinner(playerId) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -208,12 +223,13 @@ window.addEventListener('load', () => {
     console.log(`${player.name} wins with ${player.score} drops!`);
   }
   
-  // 12. Global access for debugging
+  // 14. Global access for debugging
   window.lastDropModules = {
     audioManager,
     boardRenderer,
     diceAnimator,
     scoreboard,
+    eventLog,
     players,
     simulateRoll,
     eliminatePlayer,
