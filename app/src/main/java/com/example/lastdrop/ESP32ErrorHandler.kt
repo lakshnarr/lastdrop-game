@@ -31,11 +31,21 @@ class ESP32ErrorHandler(
     private var lastHeartbeatReceived = 0L
     private var isHeartbeatActive = false
     
+    // Winner animation state
+    private var winnerAnimationInProgress = false
+    
     /**
      * Start coin placement timeout monitor
      * Shows dialog when timeout expires
+     * Skips timeout if winner animation is in progress
      */
     fun startCoinPlacementTimeout(expectedTile: Int) {
+        // Don't start timeout during winner animation
+        if (winnerAnimationInProgress) {
+            onLogMessage("🏆 Skipping coin timeout - winner animation in progress")
+            return
+        }
+        
         lastCoinPlacementTime = System.currentTimeMillis()
         
         coinTimeoutJob?.cancel()
@@ -166,6 +176,28 @@ class ESP32ErrorHandler(
      */
     fun isHeartbeatHealthy(): Boolean {
         return getTimeSinceLastHeartbeat() < HEARTBEAT_TIMEOUT_MS
+    }
+    
+    /**
+     * Set winner animation state
+     * Disables coin placement timeout during winner celebration
+     */
+    fun setWinnerAnimationInProgress(inProgress: Boolean) {
+        winnerAnimationInProgress = inProgress
+        if (inProgress) {
+            // Cancel any active coin timeout
+            cancelCoinPlacementTimeout()
+            onLogMessage("🏆 Winner animation started - timeouts disabled")
+        } else {
+            onLogMessage("✅ Winner animation complete - timeouts re-enabled")
+        }
+    }
+    
+    /**
+     * Check if winner animation is in progress
+     */
+    fun isWinnerAnimationInProgress(): Boolean {
+        return winnerAnimationInProgress
     }
     
     /**

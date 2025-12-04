@@ -170,6 +170,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32StateValidator: ESP32StateValidator
     private lateinit var stateSyncManager: StateSyncManager
     private lateinit var apiManager: ApiManager
+    private lateinit var animationEventHandler: AnimationEventHandler
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
@@ -278,6 +279,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             apiKey = API_KEY,
             sessionId = SESSION_ID
         )
+        
+        // Initialize animation event handler
+        animationEventHandler = AnimationEventHandler(this)
 
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
@@ -374,6 +378,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         esp32ErrorHandler.cleanup()  // Cleanup error handler
         stateSyncManager.cleanup()  // Cleanup sync manager
         apiManager.cleanup()  // Cleanup API manager
+        animationEventHandler.cleanup()  // Cleanup animation handler
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -2149,6 +2154,66 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     esp32ErrorHandler.updateHeartbeat()
                     val message = json.optString("message", "ESP32 Ready")
                     Log.d(TAG, "ESP32: $message")
+                }
+                
+                "player_eliminated" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    val playerId = json.getInt("playerId")
+                    val playerName = playerNames.getOrNull(playerId) ?: "Player ${playerId + 1}"
+                    
+                    Log.d(TAG, "Player eliminated: $playerId ($playerName)")
+                    
+                    runOnUiThread {
+                        // Show elimination alert
+                        animationEventHandler.showEliminationAlert(
+                            playerId = playerId,
+                            playerName = playerName,
+                            onAnimationComplete = {
+                                // Animation complete - update UI status
+                                animationEventHandler.clearAnimationStatus(tvDiceStatus)
+                                tvDiceStatus.text = "$playerName eliminated!"
+                            }
+                        )
+                        
+                        // Update UI status during animation
+                        animationEventHandler.updateAnimationStatus(tvDiceStatus, "elimination")
+                    }
+                }
+                
+                "winner_declared" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    val winnerId = json.getInt("winnerId")
+                    val winnerName = playerNames.getOrNull(winnerId) ?: "Player ${winnerId + 1}"
+                    val winnerColor = playerColors.getOrNull(winnerId) ?: "red"
+                    
+                    Log.d(TAG, "Winner declared: $winnerId ($winnerName)")
+                    
+                    // Disable coin timeout during winner animation
+                    esp32ErrorHandler.setWinnerAnimationInProgress(true)
+                    
+                    runOnUiThread {
+                        // Show winner celebration
+                        animationEventHandler.showWinnerCelebration(
+                            winnerId = winnerId,
+                            winnerName = winnerName,
+                            winnerColor = winnerColor,
+                            onAnimationComplete = {
+                                // Animation complete - re-enable timeouts
+                                esp32ErrorHandler.setWinnerAnimationInProgress(false)
+                                animationEventHandler.clearAnimationStatus(tvDiceStatus)
+                                tvDiceStatus.text = "🏆 $winnerName wins the game!"
+                                
+                                // Push final state to live.html
+                                pushLiveStateToBoard()
+                            }
+                        )
+                        
+                        // Update UI status during animation
+                        animationEventHandler.updateAnimationStatus(tvDiceStatus, "winner")
+                        
+                        // Push state to live.html to show winner
+                        pushLiveStateToBoard()
+                    }
                 }
 
                 else -> {

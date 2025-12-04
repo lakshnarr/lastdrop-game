@@ -919,6 +919,16 @@ void handleRoll(JsonDocument& doc) {
     players[playerId].alive = false;
     Serial.println("  ⚠️  PLAYER ELIMINATED!");
     
+    // Send elimination event to Android
+    StaticJsonDocument<256> eliminationEvent;
+    eliminationEvent["event"] = "player_eliminated";
+    eliminationEvent["playerId"] = playerId;
+    
+    String eliminationOutput;
+    serializeJson(eliminationEvent, eliminationOutput);
+    pTxCharacteristic->setValue(eliminationOutput.c_str());
+    pTxCharacteristic->notify();
+    
     // Trigger elimination animation
     animatePlayerElimination(playerId);
     
@@ -934,6 +944,18 @@ void handleRoll(JsonDocument& doc) {
     
     if (alivePlayers == 1) {
       Serial.printf("🎉 GAME OVER - Player %d WINS!\n", lastAliveId);
+      
+      // Send winner event to Android
+      StaticJsonDocument<256> winnerEvent;
+      winnerEvent["event"] = "winner_declared";
+      winnerEvent["winnerId"] = lastAliveId;
+      
+      String winnerOutput;
+      serializeJson(winnerEvent, winnerOutput);
+      pTxCharacteristic->setValue(winnerOutput.c_str());
+      pTxCharacteristic->notify();
+      
+      // Trigger winner animation
       animateWinner(lastAliveId);
     }
   }
