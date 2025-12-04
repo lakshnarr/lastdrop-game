@@ -21,6 +21,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
 
 // ==================== HARDWARE CONFIGURATION ====================
 #define LED_PIN 5
@@ -45,7 +46,7 @@ const int hallPins[NUM_TILES] = {
 // ==================== SECURITY CONFIGURATION ====================
 // BLE Pairing PIN (change this for your device!)
 // Set to 0 to disable pairing (less secure, but easier setup)
-#define BLE_PAIRING_ENABLED false
+#define BLE_PAIRING_ENABLED true
 #define BLE_PAIRING_PIN 123456
 
 // Trusted Android device addresses (optional - whitelist specific phones)
@@ -92,15 +93,22 @@ int currentPlayer = -1;
 int expectedTile = -1;
 bool waitingForCoin = false;
 unsigned long coinWaitStartTime = 0;
-const unsigned long COIN_TIMEOUT = 30000; // 30 seconds
+const unsigned long COIN_TIMEOUT = 60000; // 60 seconds (allows time for winner animation)
 
 // ==================== LED CONTROL ====================
 bool blinkState = false;
 unsigned long lastBlinkTime = 0;
-const unsigned long BLINK_INTERVAL = 500;
+const unsigned long BLINK_INTERVAL = 500; // Normal blink (calm)
+const unsigned long BLINK_INTERVAL_WARNING = 200; // Fast blink (10s remaining)
+const unsigned long BLINK_INTERVAL_URGENT = 100; // Very fast blink (5s remaining)
+const unsigned long WARNING_THRESHOLD = 10000; // 10 seconds
+const unsigned long URGENT_THRESHOLD = 5000; // 5 seconds
 
 unsigned long lastScanTime = 0;
 const unsigned long SCAN_INTERVAL = 5000; // Scan all sensors every 5 seconds
+
+unsigned long lastHeartbeatTime = 0;
+const unsigned long HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds
 
 // ==================== BLE CALLBACKS ====================
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -149,6 +157,11 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
   Serial.println("Last Drop ESP32 (BLE) Starting...");
+
+  // Initialize Watchdog Timer (30 seconds timeout)
+  esp_task_wdt_init(30, true); // 30 seconds, panic on timeout
+  esp_task_wdt_add(NULL); // Add current task to WDT watch
+  Serial.println("Watchdog timer initialized (30s timeout)");
 
   // Initialize LED strip
   strip.begin();
@@ -575,6 +588,28 @@ void sendBLEResponse(const char* json) {
   }
 }
 
+void sendHeartbeat() {
+  if (!deviceConnected) return;
+  
+  StaticJsonDocument<256> doc;
+  doc["event"] = "heartbeat";
+  doc["waitingForCoin"] = waitingForCoin;
+  
+  if (waitingForCoin) {
+    unsigned long timeElapsed = millis() - coinWaitStartTime;
+    unsigned long timeRemaining = (timeElapsed < COIN_TIMEOUT) ? (COIN_TIMEOUT - timeElapsed) : 0;
+    doc["timeRemaining"] = timeRemaining / 1000; // Send in seconds
+    doc["expectedTile"] = expectedTile + 1; // Convert to 1-indexed
+    doc["currentPlayer"] = currentPlayer;
+  }
+  
+  doc["uptime"] = millis() / 1000; // Seconds since boot
+  
+  String response;
+  serializeJson(doc, response);
+  sendBLEResponse(response.c_str());
+}
+
 // ==================== PERSISTENCE ====================
 void saveGameState() {
   for (int i = 0; i < NUM_PLAYERS; i++) {
@@ -616,6 +651,9 @@ void startupAnimation() {
 
 // ==================== MAIN LOOP ====================
 void loop() {
+  // Reset watchdog timer
+  esp_task_wdt_reset();
+  
   // Handle BLE connection status
   if (!deviceConnected && oldDeviceConnected) {
     delay(500);
@@ -630,12 +668,27 @@ void loop() {
   
   // Handle blinking when waiting for coin
   if (waitingForCoin && expectedTile >= 0) {
-    if (millis() - lastBlinkTime > BLINK_INTERVAL) {
+    unsigned long timeElapsed = millis() - coinWaitStartTime;
+    unsigned long timeRemaining = COIN_TIMEOUT - timeElapsed;
+    
+    // Determine blink interval based on time remaining
+    unsigned long currentBlinkInterval = BLINK_INTERVAL;
+    uint32_t blinkColor = PLAYER_COLORS[currentPlayer];
+    
+    if (timeRemaining <= URGENT_THRESHOLD) {
+      currentBlinkInterval = BLINK_INTERVAL_URGENT; // Very fast (100ms)
+      blinkColor = 0xFF0000; // Red for urgency
+    } else if (timeRemaining <= WARNING_THRESHOLD) {
+      currentBlinkInterval = BLINK_INTERVAL_WARNING; // Fast (200ms)
+    }
+    // else use normal interval (500ms) with player color
+    
+    if (millis() - lastBlinkTime > currentBlinkInterval) {
       blinkState = !blinkState;
       lastBlinkTime = millis();
       
       if (blinkState) {
-        setTileColor(expectedTile, PLAYER_COLORS[currentPlayer]);
+        setTileColor(expectedTile, blinkColor);
       } else {
         setTileColor(expectedTile, 0x000000); // Off
       }
@@ -653,6 +706,12 @@ void loop() {
   if (millis() - lastScanTime > SCAN_INTERVAL) {
     scanAllTiles();
     lastScanTime = millis();
+  }
+  
+  // Send periodic heartbeat
+  if (millis() - lastHeartbeatTime > HEARTBEAT_INTERVAL) {
+    sendHeartbeat();
+    lastHeartbeatTime = millis();
   }
   
   delay(10);
