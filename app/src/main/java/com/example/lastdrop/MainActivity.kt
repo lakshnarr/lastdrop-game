@@ -1542,7 +1542,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         AlertDialog.Builder(this)
             .setTitle("Select Test Mode")
-            .setSingleChoiceItems(options, if (testModeEnabled) 2 else 0) { dialog, which ->
+            .setSingleChoiceItems(options, testModeType) { dialog, which ->
                 when (which) {
                     0 -> {
                         // Production Mode
