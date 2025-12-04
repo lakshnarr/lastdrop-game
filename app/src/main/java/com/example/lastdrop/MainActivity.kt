@@ -59,6 +59,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val ESP32_CHAR_RX_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
         val ESP32_CHAR_TX_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
         val CCCDUUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+        
+        // MAC Address Whitelist - Add your ESP32's MAC address for security
+        // Leave empty to accept any LASTDROP-ESP32 device
+        // Find MAC in Arduino Serial Monitor when ESP32 starts
+        val TRUSTED_ESP32_ADDRESSES = setOf<String>(
+            // "24:0A:C4:XX:XX:XX"  // Example - Replace with your ESP32's MAC
+            // Add more trusted devices as needed
+        )
     }
 
     // ---------- UI ----------
@@ -1806,7 +1814,24 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         esp32ScanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult?) {
                 result?.device?.let { device ->
-                    Log.d(TAG, "Found ESP32: ${device.name} - ${device.address}")
+                    val address = device.address
+                    Log.d(TAG, "Found ESP32: ${device.name} - $address")
+                    
+                    // Validate MAC address if whitelist is configured
+                    if (TRUSTED_ESP32_ADDRESSES.isNotEmpty() && !TRUSTED_ESP32_ADDRESSES.contains(address)) {
+                        Log.w(TAG, "Rejected untrusted ESP32: $address")
+                        appendTestLog("⚠️ Rejected untrusted ESP32: $address")
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Untrusted ESP32 rejected. Add MAC to whitelist.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        return@let  // Skip this device
+                    }
+                    
+                    appendTestLog("✅ Found trusted ESP32: $address")
                     stopESP32Scan()
                     connectToESP32Device(device)
                 }
@@ -1814,6 +1839,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
             override fun onScanFailed(errorCode: Int) {
                 Log.e(TAG, "ESP32 scan failed: $errorCode")
+                appendTestLog("❌ ESP32 scan failed: $errorCode")
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, "ESP32 scan failed", Toast.LENGTH_SHORT).show()
                 }
@@ -2133,6 +2159,29 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         if (esp32Connected) {
             disconnectESP32()
         }
+    }
+
+    // MAC Address setup guide
+    private fun showESP32SetupGuide() {
+        AlertDialog.Builder(this)
+            .setTitle("ESP32 Security Setup")
+            .setMessage("To restrict connections to trusted ESP32 boards:\n\n" +
+                "1. Upload firmware to ESP32\n" +
+                "2. Open Arduino Serial Monitor (115200 baud)\n" +
+                "3. Find line: 'MAC Address: XX:XX:XX:XX:XX:XX'\n" +
+                "4. Add this MAC to MainActivity.kt (line 60)\n" +
+                "5. Rebuild app\n\n" +
+                "This prevents unauthorized devices from connecting to your game.")
+            .setPositiveButton("OK", null)
+            .setNeutralButton("Show Current Whitelist") { _, _ ->
+                val whitelistText = if (TRUSTED_ESP32_ADDRESSES.isEmpty()) {
+                    "Whitelist is EMPTY - All ESP32 devices accepted"
+                } else {
+                    "Trusted MACs:\n" + TRUSTED_ESP32_ADDRESSES.joinToString("\n")
+                }
+                Toast.makeText(this, whitelistText, Toast.LENGTH_LONG).show()
+            }
+            .show()
     }
 }
 
