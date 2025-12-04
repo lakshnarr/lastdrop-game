@@ -305,7 +305,53 @@ eventLog.showElimination('Player 3');
 eventLog.showWinner('Player 1');
 ```
 
-#### overlays.js
+#### overlays.js (~320 lines) ✅ COMPLETE
+**Location**: `assets/js/ui/overlays.js`
+
+**Exports**:
+- `Overlays` class
+
+**Features**:
+- Winner celebration overlay with confetti animation
+- Chance card popup display (auto-hide after 4.5s)
+- Connection status overlay (waiting for controller)
+- Reconnection overlay with retry counter
+- Welcome screen overlay
+- Loading overlay support
+- Sound integration for winner and chance card events
+
+**Usage**:
+```javascript
+import { Overlays } from './assets/js/ui/overlays.js';
+
+const overlays = new Overlays({
+  winnerOverlay: document.getElementById('winnerOverlay'),
+  winnerName: document.getElementById('winnerName'),
+  winnerDrops: document.getElementById('winnerDrops'),
+  chanceCard: document.getElementById('chanceCard'),
+  chanceImage: document.getElementById('chanceImage'),
+  chanceTitle: document.getElementById('chanceTitle'),
+  chanceText: document.getElementById('chanceText'),
+  connectionOverlay: document.getElementById('connectionOverlay'),
+  reconnectionOverlay: document.getElementById('reconnectionOverlay'),
+  // ... other elements
+  soundManager: audioManager  // Optional
+});
+
+// Show winner
+overlays.showWinner({ name: 'Player 1', drops: 15 });
+
+// Show chance card
+overlays.showChanceCard('5', 'Lucky bonus! +2 drops', 4500);
+
+// Show reconnection
+overlays.showReconnectionOverlay(attempt, delayMs, maxRetries);
+
+// Hide all overlays
+overlays.hideAll();
+```
+
+#### settings-panel.js
 **Responsibilities**:
 - Winner celebration overlay
 - Chance card popups
@@ -421,7 +467,7 @@ ssh lastdrop "cd /home/lastdrop && git pull && sudo cp -r website/* /var/www/las
 
 ---
 
-**Status**: Phase 2 in progress - UI modules extraction (6 of 15 total modules)
+**Status**: Phase 2 in progress - UI modules extraction (7 of 15 total modules)
 **Last Updated**: December 5, 2025
-**Lines Extracted**: 1,730 lines (target: ~2,500 total)
-**Next Step**: Extract overlays and settings-panel modules
+**Lines Extracted**: 2,050 lines (target: ~2,500 total)
+**Next Step**: Extract settings-panel module to complete Phase 2

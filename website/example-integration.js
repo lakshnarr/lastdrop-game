@@ -8,6 +8,7 @@ import { BoardRenderer } from './assets/js/core/board-renderer.js';
 import { AudioManager } from './assets/js/core/audio-manager.js';
 import { Scoreboard } from './assets/js/ui/scoreboard.js';
 import { EventLog } from './assets/js/ui/event-log.js';
+import { Overlays } from './assets/js/ui/overlays.js';
 import { TILE_NAMES, PLAYER_COLORS } from './assets/js/utils/constants.js';
 
 // Initialize on page load
@@ -66,7 +67,28 @@ window.addEventListener('load', () => {
   // Show initial message
   eventLog.showInitial();
   
-  // 6. Example: Create players
+  // 6. Create Overlays
+  const overlays = new Overlays({
+    winnerOverlay: document.getElementById('winnerOverlay'),
+    winnerName: document.getElementById('winnerName'),
+    winnerDrops: document.getElementById('winnerDrops'),
+    chanceCard: document.getElementById('chanceCard'),
+    chanceImage: document.getElementById('chanceImage'),
+    chanceTitle: document.getElementById('chanceTitle'),
+    chanceText: document.getElementById('chanceText'),
+    connectionOverlay: document.getElementById('connectionOverlay'),
+    connectionIndicator: document.getElementById('connectionIndicator'),
+    connectionText: document.getElementById('connectionText'),
+    reconnectionOverlay: document.getElementById('reconnectionOverlay'),
+    reconnectionText: document.getElementById('reconnectionText'),
+    reconnectionInfo: document.getElementById('reconnectionInfo'),
+    retryAttempt: document.getElementById('retryAttempt'),
+    retryDelay: document.getElementById('retryDelay'),
+    welcomeOverlay: document.getElementById('welcomeOverlay'),
+    soundManager: audioManager
+  });
+  
+  // 7. Example: Create players
   const players = [
     { id: 'P1', name: 'Player 1', color: 'red', pos: 1, score: 10 },
     { id: 'P2', name: 'Player 2', color: 'green', pos: 1, score: 10 },
@@ -74,7 +96,7 @@ window.addEventListener('load', () => {
     { id: 'P4', name: 'Player 4', color: 'yellow', pos: 1, score: 10 }
   ];
   
-  // 7. Example: Initialize tokens on board and scoreboard
+  // 8. Example: Initialize tokens on board and scoreboard
   players.forEach((player, index) => {
     boardRenderer.ensureTokenForPlayer(player);
     boardRenderer.positionToken(player.id, player.pos, index);
@@ -83,7 +105,7 @@ window.addEventListener('load', () => {
   // Update scoreboard with initial player data
   scoreboard.updatePlayers(players);
   
-  // 8. Example: Simulate a dice roll and token movement
+  // 9. Example: Simulate a dice roll and token movement
   function simulateRoll(playerId, playerName, diceValue) {
     // Show rolling message
     eventLog.showRolling(playerName, 1);
@@ -136,7 +158,7 @@ window.addEventListener('load', () => {
     });
   }
   
-  // 9. Example: Test button - simulate Player 1 rolling dice
+  // 10. Example: Test button - simulate Player 1 rolling dice
   const testButton = document.createElement('button');
   testButton.textContent = 'Test: Roll Dice for Player 1';
   testButton.className = 'btn-small';
@@ -154,7 +176,7 @@ window.addEventListener('load', () => {
   
   document.body.appendChild(testButton);
   
-  // 10. Example: Audio controls
+  // 11. Example: Audio controls
   const audioToggle = document.getElementById('audioToggle');
   const audioStatus = document.getElementById('audioStatus');
   
@@ -165,7 +187,7 @@ window.addEventListener('load', () => {
     }
   });
   
-  // 11. Example: Volume controls
+  // 12. Example: Volume controls
   const volumeControls = {
     diceVolume: 'dice',
     moveVolume: 'move',
@@ -188,7 +210,7 @@ window.addEventListener('load', () => {
     });
   });
   
-  // 12. Example: Eliminated player
+  // 13. Example: Eliminated player
   function eliminatePlayer(playerId) {
     boardRenderer.markTokenAsEliminated(playerId);
     
@@ -202,34 +224,31 @@ window.addEventListener('load', () => {
     }
   }
   
-  // 13. Example: Winner announcement
+  // 14. Example: Winner announcement
   function announceWinner(playerId) {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
     
-    audioManager.playWinner();
+    // Show winner overlay with confetti
+    overlays.showWinner({
+      name: player.name,
+      drops: player.score
+    });
     
-    // Show winner overlay (assuming it exists in HTML)
-    const winnerOverlay = document.getElementById('winnerOverlay');
-    const winnerName = document.getElementById('winnerName');
-    const winnerDrops = document.getElementById('winnerDrops');
-    
-    if (winnerOverlay && winnerName && winnerDrops) {
-      winnerName.textContent = player.name;
-      winnerDrops.textContent = `💧 ${player.score} drops`;
-      winnerOverlay.classList.remove('hidden');
-    }
+    // Update event log
+    eventLog.showWinner(player.name);
     
     console.log(`${player.name} wins with ${player.score} drops!`);
   }
   
-  // 14. Global access for debugging
+  // 15. Global access for debugging
   window.lastDropModules = {
     audioManager,
     boardRenderer,
     diceAnimator,
     scoreboard,
     eventLog,
+    overlays,
     players,
     simulateRoll,
     eliminatePlayer,
@@ -239,4 +258,5 @@ window.addEventListener('load', () => {
   console.log('✅ Last Drop modules initialized!');
   console.log('Try: lastDropModules.simulateRoll("P1", "Player 1", 4)');
   console.log('Or: lastDropModules.eliminatePlayer("P3")');
+  console.log('Or: lastDropModules.overlays.showChanceCard("5", "Lucky bonus!")');
 });
