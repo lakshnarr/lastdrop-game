@@ -16,6 +16,18 @@ This folder contains old ESP32 firmware versions that have been superseded by th
 - **Status**: Development version, superseded by complete implementation
 - **Note**: Historical reference for BLE development
 
+### sketch_ble/ folder (30,720 bytes, Dec 4, 2025)
+- **Purpose**: Old Arduino IDE auto-generated folder
+- **Features**: Earlier version of production firmware
+- **Status**: Superseded by root-level sketch_ble.ino
+- **Note**: Arduino IDE creates project folders automatically
+
+### sketch_ble_testmode/ folder (51,713 bytes, Dec 3, 2025)
+- **Purpose**: Old Arduino IDE auto-generated folder for test mode
+- **Features**: Earlier test mode implementation
+- **Status**: Superseded by production firmware
+- **Note**: Contains older version of game logic
+
 ## Active Production Firmware
 
 **Current**: `/ESP32 Program/sketch_ble.ino` (56,508 bytes, Dec 4, 2025)
