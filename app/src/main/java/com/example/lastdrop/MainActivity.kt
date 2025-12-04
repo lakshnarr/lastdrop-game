@@ -146,6 +146,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private val MAX_RECONNECT_ATTEMPTS = 3
     private var reconnectJob: Job? = null
     private var gameActive = false  // Track if game is in progress
+    
+    // ---------- ESP32 Connection Timeout ----------
+    private var esp32ScanJob: Job? = null
+    private val ESP32_SCAN_TIMEOUT_MS = 10000L  // 10 seconds
 
     private var diceConnected: Boolean = false
 
@@ -1848,18 +1852,32 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         scanner.startScan(listOf(scanFilter), scanSettings, esp32ScanCallback)
         
-        // Stop scan after 10 seconds
-        handler.postDelayed({
-            stopESP32Scan()
-        }, 10000)
+        // Start timeout timer (cancellable when ESP32 connects)
+        esp32ScanJob?.cancel()
+        esp32ScanJob = mainScope.launch {
+            delay(ESP32_SCAN_TIMEOUT_MS)
+            if (!esp32Connected) {
+                stopESP32Scan()
+                appendTestLog("⏱️ ESP32 scan timeout (10s)")
+                runOnUiThread {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "ESP32 not found. Check power and proximity.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun stopESP32Scan() {
+        esp32ScanJob?.cancel()  // Cancel timeout timer
         esp32ScanCallback?.let {
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
             esp32ScanCallback = null
             Log.d(TAG, "ESP32 scan stopped")
+            appendTestLog("🛑 ESP32 scan stopped")
         }
     }
 
@@ -1872,7 +1890,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         Log.d(TAG, "ESP32 connected, discovering services...")
+                        esp32Connected = true
                         esp32ReconnectAttempts = 0  // Reset counter on successful connection
+                        esp32ScanJob?.cancel()  // Cancel timeout timer
                         gameActive = true
                         appendTestLog("✅ ESP32 Connected")
                         gatt?.discoverServices()
