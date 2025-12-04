@@ -164,6 +164,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var uiUpdateManager: UIUpdateManager
     private lateinit var batteryMonitor: BatteryMonitor
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
+    private lateinit var esp32StateValidator: ESP32StateValidator
+    private lateinit var stateSyncManager: StateSyncManager
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
@@ -237,6 +239,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
         )
+        esp32StateValidator = ESP32StateValidator(
+            onLogMessage = { message -> appendTestLog(message) }
+        )
+        stateSyncManager = StateSyncManager(
+            onLogMessage = { message -> appendTestLog(message) },
+            onSyncFailure = { message ->
+                runOnUiThread {
+                    showSyncFailureDialog(message)
+                }
+            }
+        )
 
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
@@ -273,6 +286,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         mainScope.cancel()
         uiUpdateManager.cleanup()  // Cleanup helper classes
         esp32ErrorHandler.cleanup()  // Cleanup error handler
+        stateSyncManager.cleanup()  // Cleanup sync manager
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -1983,6 +1997,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         // Start heartbeat monitoring
                         esp32ErrorHandler.startHeartbeatMonitoring()
                         
+                        // P4.2: Start state sync monitoring
+                        stateSyncManager.startSyncMonitoring()
+                        
                         appendTestLog("✅ ESP32 Connected")
                         gatt?.discoverServices()
                     }
@@ -1994,6 +2011,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         
                         // Stop heartbeat monitoring
                         esp32ErrorHandler.stopHeartbeatMonitoring()
+                        
+                        // P4.2: Stop state sync monitoring
+                        stateSyncManager.stopSyncMonitoring()
                         
                         appendTestLog("❌ ESP32 Disconnected")
                         runOnUiThread {
@@ -2163,6 +2183,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun handleESP32Event(jsonString: String) {
         try {
+            // P4.1: Validate JSON structure
+            val structureValidation = esp32StateValidator.validateResponseStructure(jsonString)
+            if (!structureValidation.success) {
+                Log.e(TAG, "Invalid ESP32 response: ${structureValidation.message}")
+                return
+            }
+            
             val json = org.json.JSONObject(jsonString)
             val event = json.optString("event", "")
 
@@ -2171,9 +2198,25 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     val playerId = json.getInt("playerId")
                     val tile = json.getInt("tile")
                     val verified = json.optBoolean("verified", true)
+                    
+                    // P4.1: Validate coin placement data
+                    // Note: We'd need to track expected values; for now just log
+                    Log.d(TAG, "Coin placed: Player $playerId at tile $tile, verified=$verified")
+                    
+                    if (!verified) {
+                        Log.w(TAG, "ESP32 reported unverified coin placement")
+                        appendTestLog("⚠️ Unverified coin placement at tile $tile")
+                    }
 
-                    Log.d(TAG, "Coin placed: Player $playerId at tile $tile")
                     waitingForCoinPlacement = false
+                    
+                    // P4.2: Update state sync manager
+                    val playerName = playerNames.getOrNull(playerId)
+                    if (playerName != null) {
+                        val position = playerPositions[playerName] ?: 1
+                        val score = playerScores[playerName] ?: 10
+                        stateSyncManager.updateLocalState(playerId, position, score)
+                    }
                     
                     // Cancel countdown and timeout dialog
                     uiUpdateManager.cancelCountdown()
@@ -2215,19 +2258,22 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     esp32ErrorHandler.updateHeartbeat()
                     
                     val errors = json.getJSONArray("errors")
-                    val errorList = mutableListOf<String>()
+                    val errorList = mutableListOf<MisplacementError>()
 
                     for (i in 0 until errors.length()) {
                         val error = errors.getJSONObject(i)
                         val tile = error.getInt("tile")
                         val issue = error.getString("issue")
-                        errorList.add("Tile $tile: $issue")
+                        errorList.add(MisplacementError(tile, issue))
                     }
+                    
+                    // P4.1: Validate misplacement report
+                    val validation = esp32StateValidator.validateMisplacementReport(errorList)
 
                     runOnUiThread {
                         AlertDialog.Builder(this)
                             .setTitle("Coin Misplacement Detected")
-                            .setMessage("Please fix:\n" + errorList.joinToString("\n"))
+                            .setMessage("Please fix:\n" + errorList.joinToString("\n") { "Tile ${it.tile}: ${it.issue}" })
                             .setPositiveButton("OK", null)
                             .show()
                     }
@@ -2317,6 +2363,28 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         if (esp32Connected) {
             disconnectESP32()
         }
+    }
+    
+    // Sync failure dialog
+    private fun showSyncFailureDialog(message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("⚠️ State Synchronization Issue")
+            .setMessage("$message\n\nThe game state between Android and ESP32 may be inconsistent. What would you like to do?")
+            .setPositiveButton("Use Android State") { _, _ ->
+                val result = stateSyncManager.forceSyncResolution(useLocalState = true)
+                Toast.makeText(this, result, Toast.LENGTH_SHORT).show()
+                updateScoreboard()
+            }
+            .setNegativeButton("Use ESP32 State") { _, _ ->
+                val result = stateSyncManager.forceSyncResolution(useLocalState = false)
+                Toast.makeText(this, result, Toast.LENGTH_SHORT).show()
+                // Would need to request state from ESP32
+            }
+            .setNeutralButton("Ignore") { _, _ ->
+                Toast.makeText(this, "Sync warning dismissed", Toast.LENGTH_SHORT).show()
+            }
+            .setCancelable(false)
+            .show()
     }
 
     // MAC Address setup guide
