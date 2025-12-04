@@ -4,9 +4,630 @@
   <meta charset="UTF-8" />
   <title>Last Drop – Demo Mode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="assets/css/shared.css" />
+</head>
+<body>
+  
+  <!-- Small Screen Disclaimer -->
+  <div id="smallScreenDisclaimer" class="small-screen-disclaimer hidden">
+    <div class="disclaimer-content">
+      <div class="disclaimer-icon">📺</div>
+      <div class="disclaimer-title">Best Viewed on Large Screens</div>
+      <div class="disclaimer-text">
+        This live board is designed for TV and large screens for an immersive gaming experience. 
+        For the best experience, please use a larger display (tablet, laptop, or TV).
+      </div>
+      <button id="dismissDisclaimer" class="btn-small">Continue Anyway</button>
+    </div>
+  </div>
+  
+  <div id="tutorialOverlay" class="tutorial-overlay hidden">
+    <div class="tutorial-card">
+      <div class="tutorial-title">How to Play</div>
+      <ol class="tutorial-steps">
+        <li>Roll the dice.</li>
+        <li>Watch your pawn move.</li>
+        <li>Read the tile effect.</li>
+      </ol>
+      <button id="closeTutorial" class="btn-small">Got it</button>
+    </div>
+  </div>
 
-  <style>
-    :root {
+  <!-- Connection Popup -->
+  <div id="connectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🎮 Connect LastDrop Controller</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator" id="connectionIndicator">
+            <div class="status-dot"></div>
+            <span id="connectionText">Waiting for controller...</span>
+          </div>
+        </div>
+        <div class="connection-instructions">
+          <p>1. Open LastDrop app on your phone</p>
+          <p>2. Start a game session</p>
+          <p>3. Roll dice to connect automatically</p>
+        </div>
+        <div class="connection-actions">
+          <button id="skipConnection" class="btn-small">Skip (Demo Mode)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Reconnection Overlay -->
+  <div id="reconnectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🔄 Reconnecting...</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator">
+            <div class="spinner"></div>
+            <span id="reconnectionText">Attempting to reconnect...</span>
+          </div>
+        </div>
+        <div class="reconnection-info" id="reconnectionInfo">
+          <p>Retry attempt: <strong id="retryAttempt">1</strong>/5</p>
+          <p>Next retry in: <strong id="retryDelay">2</strong>s</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Welcome Screen (Demo Mode) -->
+  <div id="welcomeOverlay" class="connection-overlay">
+    <div class="connection-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+      <div class="connection-title">💧 Welcome to Last Drop Demo!</div>
+      <div class="connection-content" style="text-align: left;">
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎯 Game Objective</h3>
+          <p style="margin: 8px 0; font-size: 0.9rem; line-height: 1.6;">
+            Be the last player standing with water drops! Collect drops by landing on positive tiles, 
+            avoid negative tiles, and survive till the end.
+          </p>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎲 How to Play</h3>
+          <ul style="margin: 8px 0; padding-left: 20px; font-size: 0.85rem; line-height: 1.8;">
+            <li><strong>Roll the dice</strong> - Move forward based on dice value</li>
+            <li><strong>Tile effects</strong> - Gain or lose water drops depending on where you land</li>
+            <li><strong>Chance cards</strong> - Land on special tiles to draw random events</li>
+            <li><strong>Complete laps</strong> - Pass START to earn +5 bonus drops</li>
+            <li><strong>Elimination</strong> - Players with 0 drops are out of the game</li>
+          </ul>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">⚡ Demo Features</h3>
+          <p style="margin: 8px 0; font-size: 0.85rem; line-height: 1.6;">
+            Watch 4 AI players compete automatically. See dice rolls, token movement, 
+            chance cards, and real-time scoring in action!
+          </p>
+        </div>
+        
+        <div style="text-align: center;">
+          <button id="startDemoBtn" class="btn-small" style="font-size: 1rem; padding: 12px 32px; background: linear-gradient(135deg, var(--accent), #60a5fa); border: none; cursor: pointer;">
+            🎮 Start Demo Game
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <h1>LAST DROP – DEMO MODE</h1>
+    <div class="subtitle">
+      Play the demo version in your browser – <a href="live.html" style="color: var(--accent); text-decoration: underline;">Switch to Live Mode</a>
+      <span id="sessionInfo" class="last-updated" style="color: #60a5fa;"></span>
+      <span id="lastUpdated" class="last-updated"></span>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <!-- Board Section -->
+    <section class="board-card">
+      <div class="board-header">
+        <div class="live-label">
+          <span class="live-dot"></span>
+          Live
+        </div>
+        <span class="board-status">
+          Connection: <span id="connStatus" class="badge-red">OFFLINE</span>
+        </span>
+      </div>
+
+      <div class="perspective-wrapper">
+        <div id="boardWrapper" class="board-wrapper">
+          <div id="board3d" class="board3d">
+            <div class="board-surface"></div>
+            <div class="tiles-grid" id="tilesGrid"></div>
+            <div class="tokens-layer" id="tokensLayer"></div>
+            
+            <div id="chanceCard" class="chance-card">
+              <div id="chanceImage" class="chance-image"></div>
+              <div class="chance-body">
+                <div id="chanceTitle" class="chance-title">Chance Card</div>
+                <div id="chanceText" class="chance-text">Awaiting event…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scoreboard Sidebar -->
+    <aside class="side-card">
+      <div class="section-title">
+        Players
+        <span class="pill">Synced from ESP32</span>
+      </div>
+      <div id="playersList" class="players-list"></div>
+
+      <div class="section-title">
+        Last Event
+        <span class="pill">Dice / Tile / Card</span>
+      </div>
+
+      <!-- Dice Display for Scoreboard -->
+      <div id="scoreboardDiceDisplay" class="scoreboard-dice-display">
+        <div id="dicePlayerName" class="dice-player-name">Player 1 rolling dice...</div>
+        <div class="dice-3d-container">
+          <div id="scoreboardDice1" class="dice-3d">
+            <div class="dice-face dice-front" data-value="1">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-back" data-value="6">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-right" data-value="3">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-left" data-value="4">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-top" data-value="5">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-bottom" data-value="2">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+          </div>
+          <div id="scoreboardDice2" class="dice-3d">
+            <div class="dice-face dice-front" data-value="1">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-back" data-value="6">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-right" data-value="3">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-left" data-value="4">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-top" data-value="5">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-bottom" data-value="2">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="eventLog" class="event-log">Waiting for first drop…</div>
+
+      <div class="section-title" style="margin-top: 12px;">
+        Eliminated
+        <span class="pill" id="eliminatedCount">0</span>
+      </div>
+      <div id="eliminatedList" class="eliminated-list"></div>
+
+      <div class="status-row">
+        <span>Connection: <span id="connStatus" class="badge-red">OFFLINE</span></span>
+        <span>Mode: <span id="modeStatus" class="badge-green">DEMO</span></span>
+      </div>
+
+      <div class="footer-note">
+        ESP32 → Android → Server → Live — visual only, rules stay on hardware.
+      </div>
+    </aside>
+  </main>
+
+  <!-- Winner Celebration Overlay -->
+  <div id="winnerOverlay" class="winner-overlay hidden">
+    <div class="winner-card">
+      <div class="winner-trophy">🏆</div>
+      <div class="winner-title">WINNER!</div>
+      <div id="winnerName" class="winner-name">Player 1</div>
+      <div id="winnerDrops" class="winner-drops">💧 15 drops</div>
+      <div class="winner-confetti">
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button id="settingsBtn" class="btn-small" type="button">⚙️ Settings</button>
+  </footer>
+
+  <!-- Settings Backdrop -->
+  <div id="settingsBackdrop" class="settings-backdrop hidden"></div>
+
+  <!-- Settings Panel (Sidebar) -->
+  <div id="settingsPanel" class="settings-panel hidden">
+    <div class="settings-content">
+      <div class="settings-title">
+        <span>⚙️ Settings</span>
+        <button id="closeSettings" class="btn-small" type="button">✕ Close</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="row">
+          <label>View</label>
+          <button id="viewToggle" class="btn-small" type="button">Toggle</button>
+          <span id="viewStatus">Top</span>
+        </div>
+        <div class="row">
+          <label for="zoomRange">Zoom</label>
+          <input id="zoomRange" type="range" min="70" max="130" value="100" />
+        </div>
+        <div class="row">
+          <label for="rotateXRange">Tilt X</label>
+          <input id="rotateXRange" type="range" min="0" max="90" value="55" />
+        </div>
+        <div class="row">
+          <label for="rotateYRange">Tilt Y</label>
+          <input id="rotateYRange" type="range" min="-45" max="45" value="0" />
+        </div>
+        <div class="row">
+          <label for="rotateRange">Rotate</label>
+          <input id="rotateRange" type="range" min="-30" max="30" value="45" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="row">
+          <label>Kid Mode</label>
+          <button id="kidToggle" class="btn-small" type="button">Toggle</button>
+          <span id="kidStatus">OFF</span>
+        </div>
+        <div class="row">
+          <label>Dev Mode</label>
+          <button id="devToggle" class="btn-small" type="button">Toggle</button>
+          <span id="devStatus">ON</span>
+        </div>
+      </div>
+
+      <div class="settings-section" id="devControls" class="dev-controls">
+        <div class="row">
+          <label for="offsetXRange">Coin X</label>
+          <input id="offsetXRange" type="number" min="-50" max="50" value="-12" style="width:60px" />
+          <span id="offsetXValue">-12</span>
+        </div>
+        <div class="row">
+          <label for="offsetYRange">Coin Y</label>
+          <input id="offsetYRange" type="number" min="-50" max="50" value="0" style="width:60px" />
+          <span id="offsetYValue">0</span>
+        </div>
+        <div class="row">
+          <button id="applyCoinOffset" class="btn-small" type="button">Apply Offset</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="row">
+          <label>Demo Mode</label>
+          <button id="demoToggle" class="btn-small" type="button">Toggle</button>
+          <span id="demoStatus">OFF</span>
+        </div>
+        <div class="row">
+          <button id="helpBtn" class="btn-small" type="button">Show Tutorial</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-subsection-title">🔊 Audio Controls</div>
+        <div class="row">
+          <label>Master Audio</label>
+          <button id="audioToggle" class="btn-small" type="button">Toggle</button>
+          <span id="audioStatus">ON</span>
+        </div>
+        <div class="row">
+          <label for="bgMusicVolume">Background Music</label>
+          <input id="bgMusicVolume" type="range" min="0" max="100" value="30" />
+          <span id="bgMusicValue">30%</span>
+        </div>
+        <div class="row">
+          <label for="diceVolume">Dice Roll</label>
+          <input id="diceVolume" type="range" min="0" max="100" value="50" />
+          <span id="diceValue">50%</span>
+        </div>
+        <div class="row">
+          <label for="moveVolume">Coin Movement</label>
+          <input id="moveVolume" type="range" min="0" max="100" value="40" />
+          <span id="moveValue">40%</span>
+        </div>
+        <div class="row">
+          <label for="chanceVolume">Chance Card</label>
+          <input id="chanceVolume" type="range" min="0" max="100" value="50" />
+          <span id="chanceValue">50%</span>
+        </div>
+        <div class="row">
+          <label for="tileVolume">Tile Landing</label>
+          <input id="tileVolume" type="range" min="0" max="100" value="40" />
+          <span id="tileValue">40%</span>
+        </div>
+        <div class="row">
+          <label for="eliminatedVolume">Elimination</label>
+          <input id="eliminatedVolume" type="range" min="0" max="100" value="60" />
+          <span id="eliminatedValue">60%</span>
+        </div>
+        <div class="row">
+          <label for="winnerVolume">Winner</label>
+          <input id="winnerVolume" type="range" min="0" max="100" value="70" />
+          <span id="winnerValue">70%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Parse URL parameters for session-specific viewing
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionParam = urlParams.get('session');  // Format: "LASTDROP-0001_uuid"
+    const boardIdParam = urlParams.get('board');     // Alternative: just board ID
+    
+    // Extract boardId and sessionId from URL
+    let activeBoardId = null;
+    let activeSessionId = null;
+    
+    if (sessionParam) {
+      const parts = sessionParam.split('_');
+      activeBoardId = parts[0];
+      activeSessionId = parts.length > 1 ? parts[1] : null;
+    } else if (boardIdParam) {
+      activeBoardId = boardIdParam;
+    }
+    
+    // Build API URL with session parameters
+    let LIVE_STATE_URL = "/api/live_state.php?key=ABC123";
+    if (activeBoardId) {
+      LIVE_STATE_URL += `&boardId=${encodeURIComponent(activeBoardId)}`;
+    }
+    if (activeSessionId) {
+      LIVE_STATE_URL += `&sessionId=${encodeURIComponent(activeSessionId)}`;
+    }
+    
+    console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
+    console.log('[live] API URL:', LIVE_STATE_URL);
+    
+    const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
+    let demoMode = false;
+
+    // Audio System
+    const audioEnabled = { value: true };
+    const audioVolumes = {
+      bgMusic: 0.3,
+      dice: 0.5,
+      move: 0.4,
+      chance: 0.5,
+      tile: 0.4,
+      eliminated: 0.6,
+      winner: 0.7
+    };
+
+    // Audio players (using Web Audio API compatible approach)
+    const audioPlayers = {};
+    
+    function playSound(type) {
+      if (!audioEnabled.value) return;
+      
+      // For now, we'll use a simple beep generator as placeholder
+      // In production, you'd load actual audio files
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      // Different frequencies for different sounds
+      const frequencies = {
+        dice: 440,
+        move: 523,
+        chance: 659,
+        tile: 392,
+        eliminated: 293,
+        winner: 880
+      };
+      
+      oscillator.frequency.value = frequencies[type] || 440;
+      oscillator.type = 'sine';
+      
+      const volume = audioVolumes[type] || 0.5;
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.2);
+    }
+
+    // Background music loop
+    let bgMusicInterval;
+    function startBackgroundMusic() {
+      if (bgMusicInterval) return;
+      if (!audioEnabled.value) return;
+      // Placeholder - in production, use actual audio file
+      // bgMusicInterval = setInterval(() => {}, 30000);
+    }
+
+    function stopBackgroundMusic() {
+      if (bgMusicInterval) {
+        clearInterval(bgMusicInterval);
+        bgMusicInterval = null;
+      }
+    }
+
+    const boardWrapper = document.getElementById("boardWrapper");
+    const board3d = document.getElementById("board3d");
+    const tokensLayer = document.getElementById("tokensLayer");
+    const tilesGrid = document.getElementById("tilesGrid");
+    const zoomRange = document.getElementById("zoomRange");
+    const rotateRange = document.getElementById("rotateRange");
+    const rotateXRange = document.getElementById("rotateXRange");
+    const rotateYRange = document.getElementById("rotateYRange");
+    const playersList = document.getElementById("playersList");
+    const eliminatedList = document.getElementById("eliminatedList");
+    const eliminatedCount = document.getElementById("eliminatedCount");
+    const winnerOverlay = document.getElementById("winnerOverlay");
+    const winnerName = document.getElementById("winnerName");
+    const winnerDrops = document.getElementById("winnerDrops");
+    const sessionInfoEl = document.getElementById("sessionInfo");
+    
+    // Display session info in header if present
+    if (activeBoardId || activeSessionId) {
+      let sessionText = "Viewing: ";
+      if (activeBoardId) {
+        sessionText += `Board ${activeBoardId}`;
+      }
+      if (activeSessionId) {
+        const shortSession = activeSessionId.substring(0, 8);
+        sessionText += ` (Session: ${shortSession}...)`;
+      }
+      sessionInfoEl.textContent = sessionText;
+      console.log('[live] Session info displayed:', sessionText);
+    }
+    
+    // Track previously eliminated players to detect new eliminations
+    let previouslyEliminatedIds = new Set();
+    
+    // Track last event to detect new dice rolls
+    let lastProcessedEvent = null;
+    let currentDiceColor = "#60a5fa"; // Default blue, updated from API
+    // Guard to prevent token moves while dice animation plays
+    let isDiceAnimationPlaying = false;
+    // Store the latest polled state while animation is playing (only keep newest)
+    let queuedLiveState = null;
+    // Timer to delay token movement after receiving dice roll from API
+    let tokenMoveTimer = null;
+    
+    const eventLog = document.getElementById("eventLog");
+    const connStatus = document.getElementById("connStatus");
+    const modeStatus = document.getElementById("modeStatus");
+    const demoToggle = document.getElementById("demoToggle");
+    const viewToggle = document.getElementById("viewToggle");
+    const offsetXRange = document.getElementById("offsetXRange");
+    const offsetYRange = document.getElementById("offsetYRange");
+    const viewStatus = document.getElementById("viewStatus");
+    let is3DView = false;
+    const demoStatus = document.getElementById("demoStatus");
+    const chanceCard = document.getElementById("chanceCard");
+    const chanceImage = document.getElementById("chanceImage");
+    const chanceTitle = document.getElementById("chanceTitle");
+    const chanceText = document.getElementById("chanceText");
+
+    // Connection popup elements - moved inside load event to ensure DOM is ready
+    let connectionOverlay, connectionIndicator, connectionText, skipConnection;
+    let reconnectionOverlay, reconnectionText, retryAttemptEl, retryDelayEl, reconnectionInfo;
+    let loadingOverlay;
+    let firstFetchComplete = false;
+    let lastUpdatedEl;
+
+    // Dice elements
+    let diceDisplay, dice1El, dice2El;
+    let scoreboardDiceDisplay, scoreboardDice1, scoreboardDice2, dicePlayerName;
+
+    const tileCenters = {};
+    const tokensByPlayerId = {};
+    let lastChanceTimeout = null;
+    let connectionEstablished = false;
+
+    function initTiles() {
       --bg-color: #050711;
       --accent: #40e0d0;
       --accent-soft: rgba(64, 224, 208, 0.3);
@@ -3116,266 +3737,11 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       });
     });
   </script>
-</body>
+
+
+  </body>
 </html>
 </script>
-<style>
-  body.kid-mode .btn-small { font-size: 0.9rem; padding: 6px 10px; }
-  body.kid-mode .board-controls input[type=range] { display: none; }
-  .dev-controls { display: block; }
-  body:not(.dev-mode) .dev-controls { display: none; }
-
-  .toast-container { position: fixed; right: 12px; top: 12px; z-index: 3000; display: flex; flex-direction: column; gap: 8px; }
-  .toast { background: rgba(15,23,42,0.95); border: 1px solid rgba(148,163,184,0.4); color: #eef2ff; padding: 8px 12px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); animation: toastIn .2s ease-out; }
-  @keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-
-  .tutorial-overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.75); display: flex; align-items: center; justify-content: center; z-index: 2500; }
-  .tutorial-overlay.hidden { display: none; }
-  .tutorial-card { background: linear-gradient(135deg,#0f172a,#020617); border: 1px solid rgba(148,163,184,0.4); border-radius: 12px; padding: 16px; width: min(420px, 90vw); color: #eef2ff; }
-  .tutorial-title { font-weight: 600; margin-bottom: 8px; }
-  .tutorial-steps { margin: 0 0 12px 18px; }
-
-  /* Connection Popup */
-  .connection-overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.9); display: flex; align-items: center; justify-content: center; z-index: 2600; }
-  .connection-overlay.hidden { display: none; }
-  .connection-card { background: linear-gradient(135deg,#0f172a,#020617); border: 2px solid var(--accent); border-radius: 16px; padding: 24px; width: min(480px, 90vw); color: #eef2ff; box-shadow: 0 20px 60px rgba(0,0,0,0.8); }
-  .connection-title { font-size: 1.3rem; font-weight: 700; text-align: center; margin-bottom: 20px; color: var(--accent); }
-  .connection-content { display: flex; flex-direction: column; gap: 20px; }
-  .connection-status { text-align: center; }
-  .status-indicator { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: rgba(15,23,42,0.5); border-radius: 12px; border: 1px solid rgba(148,163,184,0.3); }
-  .status-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 12px rgba(249,115,115,0.6); animation: pulse 2s infinite; }
-  .status-dot.connected { background: var(--success); box-shadow: 0 0 12px rgba(74,222,128,0.8); animation: none; }
-  .connection-instructions { background: rgba(15,23,42,0.3); padding: 16px; border-radius: 8px; border-left: 4px solid var(--accent); }
-  .connection-instructions p { margin: 8px 0; font-size: 0.9rem; }
-  .connection-actions { text-align: center; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-  
-  /* Spinner for reconnection */
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(64, 224, 208, 0.3);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .reconnection-info {
-    background: rgba(15,23,42,0.3);
-    padding: 16px;
-    border-radius: 8px;
-    border-left: 4px solid var(--accent);
-  }
-  
-  .reconnection-info p {
-    margin: 8px 0;
-    font-size: 0.9rem;
-  }
-
-  /* Dice Display */
-  .dice-display {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1000;
-    pointer-events: none;
-  }
-  .dice-display.hidden { display: none; }
-  .dice-container {
-    display: flex;
-    gap: 20px;
-    animation: diceAppear 0.3s ease-out;
-  }
-  .dice {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, #ffffff, #e0e7ff);
-    border: 3px solid var(--accent);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #1e293b;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    animation: diceRoll 0.6s ease-in-out;
-  }
-  .dice.single {
-    width: 100px;
-    height: 100px;
-    font-size: 3rem;
-  }
-  @keyframes diceAppear {
-    from { opacity: 0; transform: scale(0.5); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  @keyframes diceRoll {
-    0% { transform: rotateX(0deg) rotateY(0deg); }
-    25% { transform: rotateX(180deg) rotateY(90deg); }
-    50% { transform: rotateX(360deg) rotateY(180deg); }
-    75% { transform: rotateX(540deg) rotateY(270deg); }
-    100% { transform: rotateX(720deg) rotateY(360deg); }
-  }
-  @keyframes diceFadeOut {
-    from { opacity: 1; transform: scale(1); }
-    to { opacity: 0; transform: scale(0.8); }
-  }
-
-  /* 3D Dice for Scoreboard */
-  .scoreboard-dice-display {
-    margin: 8px 0;
-    padding: 8px;
-    background: rgba(15, 23, 42, 0.3);
-    border-radius: 6px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-  }
-  
-  .dice-player-name {
-    text-align: center;
-    font-size: 0.75rem;
-    color: var(--accent);
-    margin-bottom: 6px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-  }
-  
-  .dice-3d-container {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    align-items: center;
-    perspective: 800px;
-  }
-  
-  .dice-3d {
-    width: 35px;
-    height: 35px;
-    position: relative;
-    transform-style: preserve-3d;
-    animation: rollDice3D 2s ease-out;
-  }
-  
-  .dice-3d.single {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .dice-face {
-    position: absolute;
-    width: 35px;
-    height: 35px;
-    background: linear-gradient(135deg, #ffffff, #e0e7ff);
-    border: 2px solid var(--accent);
-    border-radius: 6px;
-    display: grid;
-    grid-template-areas: 
-      "a . c"
-      "e g f"
-      "d . b";
-    padding: 4px;
-    gap: 1px;
-    box-shadow: inset 0 2px 8px rgba(0,0,0,0.1);
-  }
-  
-  .dice-3d.single .dice-face {
-    width: 40px;
-    height: 40px;
-    padding: 5px;
-  }
-  
-  /* Dice dots */
-  .dice-dot {
-    width: 6px;
-    height: 6px;
-    background: #1e293b;
-    border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-  
-  .dice-3d.single .dice-dot {
-    width: 7px;
-    height: 7px;
-  }
-  
-  .dice-dot:nth-child(1) { grid-area: a; }
-  .dice-dot:nth-child(2) { grid-area: b; }
-  .dice-dot:nth-child(3) { grid-area: c; }
-  .dice-dot:nth-child(4) { grid-area: d; }
-  .dice-dot:nth-child(5) { grid-area: e; }
-  .dice-dot:nth-child(6) { grid-area: f; }
-  .dice-dot:nth-child(7) { grid-area: g; }
-  
-  /* Dice value patterns */
-  .dice-face[data-value="1"] .dice-dot:nth-child(7) { display: block; }
-  .dice-face[data-value="1"] .dice-dot:not(:nth-child(7)) { display: none; }
-  
-  .dice-face[data-value="2"] .dice-dot:nth-child(1),
-  .dice-face[data-value="2"] .dice-dot:nth-child(2) { display: block; }
-  .dice-face[data-value="2"] .dice-dot:not(:nth-child(1)):not(:nth-child(2)) { display: none; }
-  
-  .dice-face[data-value="3"] .dice-dot:nth-child(1),
-  .dice-face[data-value="3"] .dice-dot:nth-child(7),
-  .dice-face[data-value="3"] .dice-dot:nth-child(2) { display: block; }
-  .dice-face[data-value="3"] .dice-dot:not(:nth-child(1)):not(:nth-child(7)):not(:nth-child(2)) { display: none; }
-  
-  .dice-face[data-value="4"] .dice-dot:nth-child(1),
-  .dice-face[data-value="4"] .dice-dot:nth-child(2),
-  .dice-face[data-value="4"] .dice-dot:nth-child(3),
-  .dice-face[data-value="4"] .dice-dot:nth-child(4) { display: block; }
-  .dice-face[data-value="4"] .dice-dot:nth-child(n+5) { display: none; }
-  
-  .dice-face[data-value="5"] .dice-dot:nth-child(1),
-  .dice-face[data-value="5"] .dice-dot:nth-child(2),
-  .dice-face[data-value="5"] .dice-dot:nth-child(3),
-  .dice-face[data-value="5"] .dice-dot:nth-child(4),
-  .dice-face[data-value="5"] .dice-dot:nth-child(7) { display: block; }
-  .dice-face[data-value="5"] .dice-dot:nth-child(5),
-  .dice-face[data-value="5"] .dice-dot:nth-child(6) { display: none; }
-  
-  .dice-face[data-value="6"] .dice-dot:nth-child(1),
-  .dice-face[data-value="6"] .dice-dot:nth-child(2),
-  .dice-face[data-value="6"] .dice-dot:nth-child(3),
-  .dice-face[data-value="6"] .dice-dot:nth-child(4),
-  .dice-face[data-value="6"] .dice-dot:nth-child(5),
-  .dice-face[data-value="6"] .dice-dot:nth-child(6) { display: block; }
-  .dice-face[data-value="6"] .dice-dot:nth-child(7) { display: none; }
-  
-  /* Position each face of the cube */
-  .dice-front  { transform: rotateY(0deg) translateZ(17.5px); }
-  .dice-back   { transform: rotateY(180deg) translateZ(17.5px); }
-  .dice-right  { transform: rotateY(90deg) translateZ(17.5px); }
-  .dice-left   { transform: rotateY(-90deg) translateZ(17.5px); }
-  .dice-top    { transform: rotateX(90deg) translateZ(17.5px); }
-  .dice-bottom { transform: rotateX(-90deg) translateZ(17.5px); }
-  
-  .dice-3d.single .dice-front  { transform: rotateY(0deg) translateZ(20px); }
-  .dice-3d.single .dice-back   { transform: rotateY(180deg) translateZ(20px); }
-  .dice-3d.single .dice-right  { transform: rotateY(90deg) translateZ(20px); }
-  .dice-3d.single .dice-left   { transform: rotateY(-90deg) translateZ(20px); }
-  .dice-3d.single .dice-top    { transform: rotateX(90deg) translateZ(20px); }
-  .dice-3d.single .dice-bottom { transform: rotateX(-90deg) translateZ(20px); }
-  
-  @keyframes rollDice3D {
-    0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
-    25% { transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg); }
-    50% { transform: rotateX(720deg) rotateY(360deg) rotateZ(180deg); }
-    75% { transform: rotateX(1080deg) rotateY(540deg) rotateZ(270deg); }
-    100% { transform: rotateX(1440deg) rotateY(720deg) rotateZ(360deg); }
-  }
-
-  .player-token.token-moving { animation: settle .25s ease-out; }
-  @keyframes settle { 0% { transform: translate(-50%, -50%) scale(1.06); } 100% { transform: translate(-50%, -50%) scale(1.0); } }
-</style>
 <script>
   // Mode toggles and helpers
   const kidToggle = document.getElementById('kidToggle');
@@ -3429,24 +3795,6 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
     };
   }
 </script>
-<style>
-  .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: min(340px, 86vw); background: rgba(2,6,23,0.96); border-left: 1px solid rgba(148,163,184,0.35); box-shadow: -10px 0 30px rgba(0,0,0,0.5); z-index: 2800; backdrop-filter: blur(6px); }
-  .settings-panel.hidden { display: none; }
-  .settings-content { padding: 12px; color: #eef2ff; }
-  .settings-title { font-weight: 600; margin-bottom: 8px; }
-  #settingsBtn { margin-left: auto; }
-  .settings-section { margin-bottom: 10px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
-
-  /* Full-screen board layout */
-  .layout { height: calc(100vh - 60px); display: grid; grid-template-columns: 1fr auto; gap: 0; margin: 0; }
-  .board-card, .perspective-wrapper { height: 100%; }
-  .board-card { margin: 0; border-radius: 0; }
-
-  /* Compact score panel */
-  .side-card { width: 280px; border-left: 1px solid rgba(148,163,184,0.25); background: rgba(2,6,23,0.6); }
-  body.kid-mode .side-card { width: 300px; }
-</style>
 <script>
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsPanel = document.getElementById('settingsPanel');
