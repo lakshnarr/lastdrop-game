@@ -166,6 +166,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
     private lateinit var esp32StateValidator: ESP32StateValidator
     private lateinit var stateSyncManager: StateSyncManager
+    private lateinit var apiManager: ApiManager
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
@@ -250,6 +251,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
         )
+        apiManager = ApiManager(
+            apiBaseUrl = API_BASE_URL,
+            apiKey = API_KEY,
+            sessionId = SESSION_ID
+        )
 
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
@@ -287,6 +293,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         uiUpdateManager.cleanup()  // Cleanup helper classes
         esp32ErrorHandler.cleanup()  // Cleanup error handler
         stateSyncManager.cleanup()  // Cleanup sync manager
+        apiManager.cleanup()  // Cleanup API manager
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -1017,24 +1024,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ------------------------------------------------------------------------
 
     private fun pingServer() {
-        Thread {
-            try {
-                val urlString = "$API_BASE_URL/ping.php?key=$API_KEY"
-                val url = URL(urlString)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                }
-                val code = conn.responseCode
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-
-                Log.d(TAG, "Ping response code: $code, body: $body")
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pinging server", e)
-            }
-        }.start()
+        apiManager.pingServer()
     }
 
     private fun resetLocalGame() {
@@ -1076,65 +1066,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun pushResetStateToServer() {
-        mainScope.launch(Dispatchers.IO) {
-            try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                }
-
-                // Build players array with reset values
-                val playersJson = org.json.JSONArray().apply {
-                    playerNames.take(playerCount).forEachIndexed { index, name ->
-                        val color = playerColors[index]
-                        val obj = org.json.JSONObject().apply {
-                            put("id", "p${index + 1}")
-                            put("name", name)
-                            put("pos", 1)  // Start position is tile 1
-                            put("score", 10)
-                            put("eliminated", false)
-                            put("color", color)
-                        }
-                        put(obj)
-                    }
-                }
-
-                // Clear last event (no dice roll yet)
-                val lastEventJson = org.json.JSONObject().apply {
-                    put("playerId", "")
-                    put("playerName", "")
-                    put("dice1", org.json.JSONObject.NULL)
-                    put("dice2", org.json.JSONObject.NULL)
-                    put("avg", org.json.JSONObject.NULL)
-                    put("tileIndex", 1)  // Start position is tile 1
-                    put("tileName", "")
-                    put("tileType", "")
-                    put("chanceCardId", org.json.JSONObject.NULL)
-                    put("chanceCardText", "")
-                    put("rolling", false)
-                    put("reset", true) // Flag indicating this is a reset
-                }
-
-                val root = org.json.JSONObject().apply {
-                    put("players", playersJson)
-                    put("lastEvent", lastEventJson)
-                }
-
-                conn.outputStream.use { os ->
-                    os.write(root.toString().toByteArray(Charsets.UTF_8))
-                }
-
-                val code = conn.responseCode
-                Log.d(TAG, "Reset state pushed, response code: $code")
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pushing reset state", e)
-            }
-        }
+        apiManager.pushResetState(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerCount = playerCount
+        )
     }
 
     private fun sendLastRollToServer() {
@@ -1190,224 +1126,48 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         d2: Int?,
         avg: Int
     ): Boolean {
-        return try {
-            val encodedPlayer = URLEncoder.encode(playerName, "UTF-8")
-            val base = "$API_BASE_URL/register_drop.php"
-            val sb = StringBuilder()
-            sb.append("$base?key=$API_KEY")
-            sb.append("&player=$encodedPlayer")
-            sb.append("&mode=" + if (modeTwoDice) "2" else "1")
-            sb.append("&avg=$avg")
-            if (d1 != null) sb.append("&dice1=$d1")
-            if (d2 != null) sb.append("&dice2=$d2")
-
-            val url = URL(sb.toString())
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 3000
-                readTimeout = 3000
-            }
-            val code = conn.responseCode
-            conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            code in 200..299
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending roll to cloud", e)
-            false
-        }
+        return apiManager.sendRollToCloud(playerName, modeTwoDice, d1, d2, avg)
     }
 
     /**
      * Send rolling status while dice is tumbling
      */
     private fun pushRollingStatusToApi() {
-        val playerIndex = currentPlayer.coerceIn(0, playerCount - 1)
-        val playerName = playerNames[playerIndex]
-        val playerId = "p${playerIndex + 1}"
-
-        // Get dice colors (for 2-dice mode, get both individual colors)
-        val diceColor1: String
-        val diceColor2: String?
-
-        if (playWithTwoDice && diceColorMap.size >= 2) {
-            val sortedDiceIds = diceColorMap.keys.sorted()
-            diceColor1 = diceColorMap[sortedDiceIds[0]] ?: playerColors[playerIndex]
-            diceColor2 = diceColorMap[sortedDiceIds.getOrNull(1)] ?: playerColors[playerIndex]
-        } else {
-            diceColor1 = diceColorMap.values.firstOrNull() ?: playerColors[playerIndex]
-            diceColor2 = null
-        }
-
-        mainScope.launch(Dispatchers.IO) {
-            try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                }
-
-                // Check which specific dice are rolling
-                val rollingDice = diceRollingStatus.filter { it.value }.keys.sorted()
-
-                // Build players array with CURRENT positions (before dice lands)
-                val playersJson = org.json.JSONArray().apply {
-                    playerNames.take(playerCount).forEachIndexed { index, name ->
-                        val pos = playerPositions[name] ?: 1
-                        val score = playerScores[name] ?: 10
-                        val color = playerColors[index]
-                        val obj = org.json.JSONObject().apply {
-                            put("id", "p${index + 1}")
-                            put("name", name)
-                            put("pos", pos)
-                            put("score", score)
-                            put("eliminated", score <= 0)
-                            put("color", color)
-                        }
-                        put(obj)
-                    }
-                }
-
-                val payload = org.json.JSONObject().apply {
-                    put("players", playersJson)
-                    put("lastEvent", org.json.JSONObject().apply {
-                        put("playerId", playerId)
-                        put("playerName", playerName)
-                        put("rolling", true)
-                        put("diceColor1", diceColor1)
-                        if (diceColor2 != null) {
-                            put("diceColor2", diceColor2)
-                        }
-                        // NEW: send current dice values (may be partial in 2-dice mode)
-                        if (lastDice1 != null) {
-                            put("dice1", lastDice1)
-                        } else {
-                            put("dice1", org.json.JSONObject.NULL)
-                        }
-                        if (lastDice2 != null) {
-                            put("dice2", lastDice2)
-                        } else {
-                            put("dice2", org.json.JSONObject.NULL)
-                        }
-                        if (lastAvg != null) {
-                            put("avg", lastAvg)
-                        } else {
-                            put("avg", org.json.JSONObject.NULL)
-                        }
-                        // Include which dice are rolling (useful for debugging)
-                        put("rollingDiceCount", rollingDice.size)
-                        if (playWithTwoDice) {
-                            put("dice1Rolling", diceRollingStatus[rollingDice.getOrNull(0)] ?: false)
-                            put("dice2Rolling", diceRollingStatus[rollingDice.getOrNull(1)] ?: false)
-                        }
-                    })
-                }
-
-                conn.outputStream.use { os ->
-                    os.write(payload.toString().toByteArray(Charsets.UTF_8))
-                }
-
-                val code = conn.responseCode
-                Log.d(TAG, "Rolling status sent, response code: $code")
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pushing rolling status", e)
-            }
-        }
+        apiManager.pushRollingStatus(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerPositions = playerPositions,
+            playerScores = playerScores,
+            playerCount = playerCount,
+            currentPlayer = currentPlayer,
+            playWithTwoDice = playWithTwoDice,
+            diceColorMap = diceColorMap,
+            diceRollingStatus = diceRollingStatus,
+            lastDice1 = lastDice1,
+            lastDice2 = lastDice2,
+            lastAvg = lastAvg
+        )
     }
 
     private fun pushLiveStateToBoard(rolling: Boolean = false) {
-        val lastAvgLocal = lastAvg ?: return  // nothing to send yet
-
-        // Player who just played (currentPlayer has already advanced)
-        val playerIndex = (currentPlayer - 1 + playerCount) % playerCount
-        val playerName = playerNames[playerIndex]
-        val playerId = "p${playerIndex + 1}"
-
-        // Get dice colors (for 2-dice mode, get both individual colors)
-        val diceColor1: String
-        val diceColor2: String?
-
-        if (playWithTwoDice && diceColorMap.size >= 2) {
-            // 2-dice mode: get individual colors for each die
-            val sortedDiceIds = diceColorMap.keys.sorted()
-            diceColor1 = diceColorMap[sortedDiceIds[0]] ?: playerColors[playerIndex]
-            diceColor2 = diceColorMap[sortedDiceIds.getOrNull(1)] ?: playerColors[playerIndex]
-        } else {
-            // 1-die mode or fallback: use first available color
-            diceColor1 = diceColorMap.values.firstOrNull() ?: playerColors[playerIndex]
-            diceColor2 = null
-        }
-
-        // 1) Build players array
-        val playersJson = org.json.JSONArray().apply {
-            playerNames.take(playerCount).forEachIndexed { index, name ->
-                val pos = playerPositions[name] ?: 0
-                val score = playerScores[name] ?: 0
-                val color = playerColors[index]
-                val obj = org.json.JSONObject().apply {
-                    put("id", "p${index + 1}")
-                    put("name", name)
-                    put("pos", pos)
-                    put("score", score)
-                    put("eliminated", score <= 0)
-                    put("color", color)
-                }
-                put(obj)
-            }
-        }
-
-        // 2) Build lastEvent object
-        val lastEventJson = org.json.JSONObject().apply {
-            put("playerId", playerId)
-            put("playerName", playerName)
-            put("dice1", lastDice1)
-            put("dice2", lastDice2)
-            put("avg", lastAvgLocal)
-            put("tileIndex", playerPositions[playerName] ?: 0)
-            put("tileName", lastTile?.name ?: "")
-            put("tileType", lastTile?.type ?: "")
-            put("chanceCardId", lastChanceCard?.number ?: org.json.JSONObject.NULL)
-            put("chanceCardText", lastChanceCard?.description ?: "")
-            put("rolling", rolling)
-            put("diceColor1", diceColor1)
-            if (diceColor2 != null) {
-                put("diceColor2", diceColor2)
-            }
-        }
-
-        // 3) Wrap into root JSON
-        val root = org.json.JSONObject().apply {
-            put("players", playersJson)
-            put("lastEvent", lastEventJson)
-        }
-
-        // 4) POST to https://lastdrop.earth/api/live_push.php?key=ABC123
-        mainScope.launch(Dispatchers.IO) {
-            try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                }
-
-                conn.outputStream.use { os ->
-                    os.write(root.toString().toByteArray(Charsets.UTF_8))
-                }
-
-                val code = conn.responseCode
-                Log.d(TAG, "Live push response code: $code")
-                conn.inputStream.bufferedReader().use { it.readText() }
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pushing live state", e)
-            }
-        }
+        apiManager.pushLiveState(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerPositions = playerPositions,
+            playerScores = playerScores,
+            playerCount = playerCount,
+            currentPlayer = currentPlayer,
+            playWithTwoDice = playWithTwoDice,
+            diceColorMap = diceColorMap,
+            lastDice1 = lastDice1,
+            lastDice2 = lastDice2,
+            lastAvg = lastAvg,
+            lastTileName = lastTile?.name,
+            lastTileType = lastTile?.type?.name,
+            lastChanceCardNumber = lastChanceCard?.number,
+            lastChanceCardText = lastChanceCard?.description,
+            rolling = rolling
+        )
     }
 
     private fun fetchScoreboard() {
@@ -1614,67 +1374,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun pushUndoStateToServer() {
-        mainScope.launch(Dispatchers.IO) {
-            try {
-                val url = URL("$API_BASE_URL/live_push.php?key=$API_KEY&session=$SESSION_ID")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                }
-
-                // Build players array with current (undone) state
-                val playersJson = org.json.JSONArray().apply {
-                    playerNames.take(playerCount).forEachIndexed { index, name ->
-                        val pos = playerPositions[name] ?: 0
-                        val score = playerScores[name] ?: 10
-                        val color = playerColors[index]
-                        val obj = org.json.JSONObject().apply {
-                            put("id", "p${index + 1}")
-                            put("name", name)
-                            put("pos", pos)
-                            put("score", score)
-                            put("eliminated", score <= 0)
-                            put("color", color)
-                        }
-                        put(obj)
-                    }
-                }
-
-                // Clear last event and mark as undo
-                val lastEventJson = org.json.JSONObject().apply {
-                    put("playerId", "p${previousPlayerIndex + 1}")
-                    put("playerName", playerNames[previousPlayerIndex])
-                    put("dice1", org.json.JSONObject.NULL)
-                    put("dice2", org.json.JSONObject.NULL)
-                    put("avg", org.json.JSONObject.NULL)
-                    put("tileIndex", previousPosition)
-                    put("tileName", "")
-                    put("tileType", "")
-                    put("chanceCardId", org.json.JSONObject.NULL)
-                    put("chanceCardText", "")
-                    put("rolling", false)
-                    put("undo", true) // Flag indicating this is an undo
-                }
-
-                val root = org.json.JSONObject().apply {
-                    put("players", playersJson)
-                    put("lastEvent", lastEventJson)
-                }
-
-                conn.outputStream.use { os ->
-                    os.write(root.toString().toByteArray(Charsets.UTF_8))
-                }
-
-                val code = conn.responseCode
-                Log.d(TAG, "Undo state pushed, response code: $code")
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pushing undo state", e)
-            }
-        }
+        apiManager.pushUndoState(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerPositions = playerPositions,
+            playerScores = playerScores,
+            playerCount = playerCount
+        )
     }
 
     // ------------------------------------------------------------------------
