@@ -133,6 +133,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private val diceIds = LinkedList<String>() // index = diceId used for GoDiceSDK callbacks
     private val diceColorMap = HashMap<Int, String>() // diceId -> color name
 
+    // ---------- ESP32 Auto-Reconnection ----------
+    private var esp32ReconnectAttempts = 0
+    private val MAX_RECONNECT_ATTEMPTS = 3
+    private var reconnectJob: Job? = null
+    private var gameActive = false  // Track if game is in progress
+
     private var diceConnected: Boolean = false
 
     // dice mode
@@ -1840,13 +1846,35 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         Log.d(TAG, "ESP32 connected, discovering services...")
+                        esp32ReconnectAttempts = 0  // Reset counter on successful connection
+                        gameActive = true
+                        appendTestLog("✅ ESP32 Connected")
                         gatt?.discoverServices()
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.d(TAG, "ESP32 disconnected")
                         esp32Connected = false
+                        esp32Gatt?.close()
+                        esp32Gatt = null
+                        
+                        appendTestLog("❌ ESP32 Disconnected")
                         runOnUiThread {
                             Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
+                        }
+                        
+                        // Auto-reconnect if game is active
+                        if (gameActive && esp32ReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                            esp32ReconnectAttempts++
+                            appendTestLog("🔄 Attempting reconnect (${esp32ReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...")
+                            
+                            reconnectJob?.cancel()
+                            reconnectJob = mainScope.launch {
+                                delay(2000)  // Wait 2 seconds before retry
+                                connectESP32()
+                            }
+                        } else if (esp32ReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                            appendTestLog("⚠️ Max reconnect attempts reached")
+                            showReconnectDialog()
                         }
                     }
                 }
@@ -2053,6 +2081,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     @SuppressLint("MissingPermission")
     private fun disconnectESP32() {
+        reconnectJob?.cancel()  // Cancel any pending reconnect attempts
         esp32Gatt?.disconnect()
         esp32Gatt?.close()
         esp32Gatt = null
@@ -2060,7 +2089,50 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         esp32TxCharacteristic = null
         esp32RxCharacteristic = null
         waitingForCoinPlacement = false
+        gameActive = false  // Mark game as inactive
         Log.d(TAG, "ESP32 disconnected and cleaned up")
+    }
+
+    // Auto-reconnection dialog
+    private fun showReconnectDialog() {
+        runOnUiThread {
+            AlertDialog.Builder(this)
+                .setTitle("ESP32 Connection Lost")
+                .setMessage("Unable to reconnect to physical board. Please:\n\n" +
+                    "1. Check ESP32 power\n" +
+                    "2. Retry connection\n" +
+                    "3. Or continue in Test Mode 2 (Android only)")
+                .setPositiveButton("Retry Now") { _, _ ->
+                    esp32ReconnectAttempts = 0
+                    connectESP32()
+                }
+                .setNegativeButton("Test Mode 2") { _, _ ->
+                    enableTestMode2()
+                }
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    // Helper to switch to Test Mode 2
+    private fun enableTestMode2() {
+        testModeEnabled = true
+        testModeType = 2
+        btnTestMode.text = "Test Mode 2: ON"
+        btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
+        layoutDiceButtons.visibility = View.VISIBLE
+        
+        tvTestLogTitle.visibility = View.VISIBLE
+        scrollTestLog.visibility = View.VISIBLE
+        btnClearLog.visibility = View.VISIBLE
+        
+        appendTestLog("🟢 Switched to Test Mode 2 - Android + live.html (No ESP32)")
+        Toast.makeText(this, "Test Mode 2: Continuing without ESP32", Toast.LENGTH_LONG).show()
+        
+        // Disconnect ESP32 if still attempting
+        if (esp32Connected) {
+            disconnectESP32()
+        }
     }
 }
 
