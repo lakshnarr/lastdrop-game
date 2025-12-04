@@ -55,7 +55,86 @@ const int hallPins[NUM_TILES] = {
 const char* TRUSTED_ANDROID_ADDRESSES[] = {};
 const int TRUSTED_ANDROID_COUNT = 0;
 
-// ==================== LED COLORS ====================
+// ==================== TEST MODE CONFIGURATION ====================
+// Set to true to enable Test Mode 1 (full game logic on ESP32)
+// Set to false for production mode (Android controls game logic)
+#define TEST_MODE_ENABLED false
+
+// ==================== GAME LOGIC (for Test Mode 1) ====================
+#if TEST_MODE_ENABLED
+enum TileType {
+  TYPE_START = 0,
+  TYPE_NORMAL = 1,
+  TYPE_CHANCE = 2,
+  TYPE_BONUS = 3,
+  TYPE_PENALTY = 4,
+  TYPE_DISASTER = 5,
+  TYPE_WATER_DOCK = 6,
+  TYPE_SUPER_DOCK = 7
+};
+
+struct TileDefinition {
+  int index;           // 1-based (1 to 20)
+  const char* name;
+  TileType type;
+};
+
+// 20-Tile Board Definition (matching RULEBOOK.md)
+const TileDefinition BOARD[NUM_TILES] = {
+  {1,  "Start Point",          TYPE_START},
+  {2,  "Sunny Patch",          TYPE_PENALTY},
+  {3,  "Rain Dock",            TYPE_WATER_DOCK},
+  {4,  "Leak Lane",            TYPE_PENALTY},
+  {5,  "Storm Zone",           TYPE_DISASTER},
+  {6,  "Cloud Hill",           TYPE_BONUS},
+  {7,  "Oil Spill Bay",        TYPE_DISASTER},
+  {8,  "Riverbank Road",       TYPE_NORMAL},
+  {9,  "Marsh Land",           TYPE_CHANCE},
+  {10, "Drought Desert",       TYPE_DISASTER},
+  {11, "Clean Well",           TYPE_WATER_DOCK},
+  {12, "Waste Dump",           TYPE_DISASTER},
+  {13, "Sanctuary Stop",       TYPE_CHANCE},
+  {14, "Sewage Drain Street",  TYPE_PENALTY},
+  {15, "Filter Plant",         TYPE_WATER_DOCK},
+  {16, "Mangrove Mile",        TYPE_CHANCE},
+  {17, "Heatwave Road",        TYPE_PENALTY},
+  {18, "Spring Fountain",      TYPE_SUPER_DOCK},
+  {19, "Eco Garden",           TYPE_NORMAL},
+  {20, "Great Reservoir",      TYPE_NORMAL}
+};
+
+struct ChanceCard {
+  int number;
+  const char* description;
+  int effect;  // Positive or negative score change
+};
+
+// 20 Chance Cards (matching RULEBOOK.md Elimination Mode)
+const ChanceCard CHANCE_CARDS[20] = {
+  {1,  "You fixed a tap leak",                    +2},
+  {2,  "Rainwater harvested",                     +2},
+  {3,  "You planted two trees",                   +1},
+  {4,  "Cool clouds formed",                      +1},
+  {5,  "You cleaned a riverbank",                 +1},
+  {6,  "Discovered a tiny spring",                +3},
+  {7,  "You saved a wetland animal",              +1},
+  {8,  "You reused RO water",                     +1},
+  {9,  "Used bucket instead of shower",           +2},
+  {10, "Drip irrigation success",                 +2},
+  {11, "Skip next penalty",                        0},  // Special
+  {12, "Move forward 2 tiles",                     0},  // Special
+  {13, "Swap positions with next player",          0},  // Special
+  {14, "Water Shield (next damage=0)",             0},  // Special
+  {15, "You left tap running",                    -1},
+  {16, "Your bottle spilled",                     -1},
+  {17, "Pipe burst nearby",                       -3},
+  {18, "Heat wave dries water",                   -2},
+  {19, "Sewage contamination",                    -2},
+  {20, "Flood washed away water",                 -3}
+};
+#endif
+
+// ==================== PLAYER COLORS ====================
 const uint32_t TILE_COLORS[NUM_TILES] = {
   0x2E8B57, 0x3CB371, 0x90EE90, 0x98FB98, 0xADFF2F,  // Tiles 0-4 (Green shades)
   0xFFFF00, 0xFFD700, 0xFFA500, 0xFF8C00, 0xFF6347,  // Tiles 5-9 (Yellow to Orange)
@@ -89,11 +168,22 @@ struct PlayerState {
 };
 
 PlayerState players[NUM_PLAYERS];
+int activePlayerCount = NUM_PLAYERS;  // Number of players in current game (2-4)
 int currentPlayer = -1;
 int expectedTile = -1;
 bool waitingForCoin = false;
 unsigned long coinWaitStartTime = 0;
 const unsigned long COIN_TIMEOUT = 60000; // 60 seconds (allows time for winner animation)
+
+// Undo state (for Test Mode)
+struct {
+  bool hasUndo;
+  int playerId;
+  int fromTile;
+  int toTile;
+  int scoreChange;
+  int chanceCardNumber;
+} lastMove = {false, -1, 0, 0, 0, 0};
 
 // ==================== LED CONTROL ====================
 bool blinkState = false;
@@ -112,6 +202,8 @@ const unsigned long HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds
 
 // ==================== FUNCTION DECLARATIONS ====================
 void handleBLECommand(const char* jsonStr);
+void animatePlayerElimination(int playerId);
+void animateWinner(int winnerId);
 
 // ==================== BLE CALLBACKS ====================
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -276,6 +368,24 @@ void handleBLECommand(const char* jsonStr) {
     handleReset();
   } else if (strcmp(command, "status") == 0) {
     sendStatus();
+  } else if (strcmp(command, "eliminate") == 0) {
+    // Trigger elimination animation
+    int playerId = doc["playerId"];
+    if (playerId >= 0 && playerId < NUM_PLAYERS) {
+      animatePlayerElimination(playerId);
+      sendBLEResponse("{\"status\":\"ok\",\"message\":\"Elimination animation complete\"}");
+    } else {
+      sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid player ID\"}");
+    }
+  } else if (strcmp(command, "winner") == 0) {
+    // Trigger winner animation
+    int winnerId = doc["winnerId"];
+    if (winnerId >= 0 && winnerId < NUM_PLAYERS) {
+      animateWinner(winnerId);
+      sendBLEResponse("{\"status\":\"ok\",\"message\":\"Winner animation complete\"}");
+    } else {
+      sendBLEResponse("{\"status\":\"error\",\"message\":\"Invalid winner ID\"}");
+    }
   } else {
     sendBLEResponse("{\"status\":\"error\",\"message\":\"Unknown command\"}");
   }
@@ -655,6 +765,132 @@ void startupAnimation() {
   
   // Show saved player positions
   renderPlayers();
+}
+
+// ==================== ELIMINATION ANIMATION ====================
+void animatePlayerElimination(int playerId) {
+  Serial.printf("💀 Animating elimination for Player %d...\n", playerId);
+  
+  uint32_t playerColor = PLAYER_COLORS[playerId];
+  
+  // Blink the player's LED in all 20 tiles (1 LED per tile) 3 times
+  for (int blink = 0; blink < 3; blink++) {
+    // Turn ON all player LEDs across board
+    for (int tile = 0; tile < NUM_TILES; tile++) {
+      int ledIndex = tile * LEDS_PER_TILE + playerId;  // Each player has their own LED slot (0-3)
+      strip.setPixelColor(ledIndex, playerColor);
+    }
+    strip.show();
+    delay(300);
+    
+    // Turn OFF all player LEDs
+    for (int tile = 0; tile < NUM_TILES; tile++) {
+      int ledIndex = tile * LEDS_PER_TILE + playerId;
+      strip.setPixelColor(ledIndex, 0);  // Black (off)
+    }
+    strip.show();
+    delay(300);
+  }
+  
+  // Final state: All player LEDs OFF permanently
+  for (int tile = 0; tile < NUM_TILES; tile++) {
+    int ledIndex = tile * LEDS_PER_TILE + playerId;
+    strip.setPixelColor(ledIndex, 0);
+  }
+  strip.show();
+  
+  Serial.println("✓ Elimination animation complete - player LEDs turned off\n");
+}
+
+// ==================== WINNER CELEBRATION ANIMATION ====================
+void animateWinner(int winnerId) {
+  Serial.printf("🏆 WINNER ANIMATION for Player %d!\n", winnerId);
+  
+  uint32_t winnerColor = PLAYER_COLORS[winnerId];
+  
+  // Phase 1: Flash winner color across entire board (3 times)
+  for (int flash = 0; flash < 3; flash++) {
+    // All LEDs in winner color
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, winnerColor);
+    }
+    strip.show();
+    delay(400);
+    
+    // All LEDs off
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, 0);
+    }
+    strip.show();
+    delay(200);
+  }
+  
+  // Phase 2: Disco effect with winner color + white strobes
+  for (int disco = 0; disco < 20; disco++) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      // Alternate between winner color and white with some randomness
+      if (random(100) > 50) {
+        strip.setPixelColor(i, winnerColor);
+      } else {
+        strip.setPixelColor(i, 0xFFFFFF);  // White
+      }
+    }
+    strip.show();
+    delay(100);
+  }
+  
+  // Phase 3: Chase pattern with winner color
+  for (int chase = 0; chase < 3; chase++) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, winnerColor);
+      if (i > 0) strip.setPixelColor(i - 1, 0);
+      strip.show();
+      delay(20);
+    }
+  }
+  
+  // Phase 4: Final celebration - all tiles pulsing in winner color
+  for (int pulse = 0; pulse < 5; pulse++) {
+    // Fade in
+    for (int brightness = 0; brightness <= 255; brightness += 5) {
+      uint32_t fadeColor = strip.Color(
+        (uint8_t)((winnerColor >> 16) * brightness / 255),
+        (uint8_t)(((winnerColor >> 8) & 0xFF) * brightness / 255),
+        (uint8_t)((winnerColor & 0xFF) * brightness / 255)
+      );
+      for (int i = 0; i < NUM_LEDS; i++) {
+        strip.setPixelColor(i, fadeColor);
+      }
+      strip.show();
+      delay(10);
+    }
+    
+    // Fade out
+    for (int brightness = 255; brightness >= 0; brightness -= 5) {
+      uint32_t fadeColor = strip.Color(
+        (uint8_t)((winnerColor >> 16) * brightness / 255),
+        (uint8_t)(((winnerColor >> 8) & 0xFF) * brightness / 255),
+        (uint8_t)((winnerColor & 0xFF) * brightness / 255)
+      );
+      for (int i = 0; i < NUM_LEDS; i++) {
+        strip.setPixelColor(i, fadeColor);
+      }
+      strip.show();
+      delay(10);
+    }
+  }
+  
+  // Final state: Winner color solidly lit for 3 seconds
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, winnerColor);
+  }
+  strip.show();
+  delay(3000);
+  
+  // Return to normal background
+  renderBackground();
+  
+  Serial.println("✓ Winner celebration complete!\n");
 }
 
 // ==================== MAIN LOOP ====================
