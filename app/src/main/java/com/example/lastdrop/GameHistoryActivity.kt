@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
@@ -49,6 +50,37 @@ class GameHistoryActivity : AppCompatActivity() {
 
         setupFilters()
         loadGames()
+        
+        // Export CSV button
+        findViewById<Button>(R.id.btnExportCSV).setOnClickListener {
+            exportAllGames()
+        }
+    }
+
+    private fun exportAllGames() {
+        if (allGames.isEmpty()) {
+            Toast.makeText(this, "No games to export", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        lifecycleScope.launch(Dispatchers.IO) {
+            val records = allGames.map { it.record }
+            val playerName = allGames.firstOrNull()?.profile?.name ?: "AllPlayers"
+            
+            val fileUri = GameShareHelper.exportGameHistory(this@GameHistoryActivity, records, playerName)
+            
+            withContext(Dispatchers.Main) {
+                if (fileUri != null) {
+                    GameShareHelper.shareWithAttachment(
+                        this@GameHistoryActivity,
+                        "Last Drop game history exported (${records.size} games)",
+                        fileUri
+                    )
+                } else {
+                    Toast.makeText(this@GameHistoryActivity, "Export failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun setupFilters() {
@@ -163,6 +195,7 @@ class GameHistoryActivity : AppCompatActivity() {
             val droughtHits: TextView = view.findViewById(R.id.droughtHits)
             val colorDots: LinearLayout = view.findViewById(R.id.colorDots)
             val achievementsUnlocked: TextView = view.findViewById(R.id.achievementsUnlocked)
+            val btnShare: Button = view.findViewById(R.id.btnShare)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -229,6 +262,17 @@ class GameHistoryActivity : AppCompatActivity() {
 
             // Achievements (would need to check if any were unlocked in this game)
             holder.achievementsUnlocked.visibility = View.GONE
+
+            // Share button
+            holder.btnShare.setOnClickListener {
+                GameShareHelper.shareGameResult(
+                    context = holder.itemView.context,
+                    playerName = profile.name,
+                    placement = record.placement,
+                    score = record.finalScore,
+                    totalPlayers = playerCount
+                )
+            }
         }
 
         override fun getItemCount() = games.size
