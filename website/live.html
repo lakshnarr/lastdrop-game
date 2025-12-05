@@ -2,8 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Last Drop â€“ Live</title>
+  <title>Last Drop — Live Spectating</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Watch Last Drop game live! Educational water conservation board game with real-time spectating." />
+  <meta name="keywords" content="Last Drop, board game, water conservation, live game, spectate, GoDice" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://lastdrop.earth/live.html" />
+  <meta property="og:title" content="Watch Last Drop Live! " />
+  <meta property="og:description" content="Join me watching this live Last Drop game! Educational water conservation board game." />
+  <meta property="og:image" content="https://lastdrop.earth/assets/images/og-preview.jpg" />
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="https://lastdrop.earth/live.html" />
+  <meta property="twitter:title" content="Watch Last Drop Live! " />
+  <meta property="twitter:description" content="Join me watching this live Last Drop game! Educational water conservation board game." />
+  <meta property="twitter:image" content="https://lastdrop.earth/assets/images/og-preview.jpg" />
+  
   <link rel="stylesheet" href="assets/css/shared.css" />
 </head>
 <body>
@@ -871,6 +890,118 @@
       border-radius: 4px;
     }
 
+    /* Share Modal Styles */
+    .btn-share {
+      background: linear-gradient(135deg, var(--accent), #60a5fa) !important;
+      color: var(--bg-color) !important;
+      font-weight: 600 !important;
+      border: none !important;
+    }
+
+    .btn-share:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(64, 224, 208, 0.4);
+    }
+
+    .share-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(11, 16, 32, 0.98);
+      border: 1px solid var(--accent);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      z-index: 10001;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+    }
+
+    .share-modal.hidden {
+      display: none;
+    }
+
+    .share-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .share-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .share-option {
+      padding: 12px 16px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .share-option:hover {
+      border-color: var(--accent);
+      background: rgba(64, 224, 208, 0.1);
+      transform: translateX(4px);
+    }
+
+    .share-icon {
+      font-size: 1.5rem;
+    }
+
+    .share-link-box {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--tile-border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .share-link-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .share-link-input {
+      width: 100%;
+      background: rgba(5, 7, 17, 0.9);
+      border: 1px solid var(--tile-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--accent);
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .close-share {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 8px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .close-share:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
     .board-status {
       font-size: 0.75rem;
       display: flex;
@@ -1374,7 +1505,7 @@
   <!-- Footer -->
   <footer class="footer">
     <button id="settingsBtn" class="btn-small" type="button">âš™ï¸ Settings</button>
-  </footer>
+  <button id="shareBtn" class="btn-small btn-share" type="button"> Share</button></footer>
 
   <!-- Settings Backdrop -->
   <div id="settingsBackdrop" class="settings-backdrop hidden"></div>
@@ -1498,6 +1629,131 @@
   </div>
 
 
-  <script src="assets/js/live-main.js"></script>
+  <script src="assets/js/live-main.js">
+
+    // ======================
+    // SHARE FUNCTIONALITY
+    // ======================
+    
+    const shareBtn = document.getElementById('shareBtn');
+    const shareModal = document.getElementById('shareModal');
+    const closeShare = document.getElementById('closeShare');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const copyLinkBtn = document.getElementById('copyLink');
+    const shareWhatsApp = document.getElementById('shareWhatsApp');
+    const shareTwitter = document.getElementById('shareTwitter');
+    const shareNative = document.getElementById('shareNative');
+    
+    // Get current page URL (with session parameter if present)
+    function getShareURL() {
+      return window.location.href;
+    }
+    
+    // Get share text
+    function getShareText() {
+      return 'Watch me play Last Drop!  Educational water conservation game.';
+    }
+    
+    // Open share modal
+    shareBtn.addEventListener('click', () => {
+      const shareURL = getShareURL();
+      const shareText = getShareText();
+      
+      // Set link input
+      shareLinkInput.value = shareURL;
+      
+      // Set WhatsApp share link
+      const whatsappURL = https://wa.me/?text=;
+      shareWhatsApp.href = whatsappURL;
+      
+      // Set Twitter share link
+      const twitterURL = https://twitter.com/intent/tweet?text=&url=;
+      shareTwitter.href = twitterURL;
+      
+      // Show native share if supported
+      if (navigator.share) {
+        shareNative.style.display = 'flex';
+      }
+      
+      // Show modal
+      shareModal.classList.remove('hidden');
+    });
+    
+    // Close share modal
+    closeShare.addEventListener('click', () => {
+      shareModal.classList.add('hidden');
+    });
+    
+    // Copy link to clipboard
+    copyLinkBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(shareLinkInput.value);
+        
+        // Visual feedback
+        const originalText = copyLinkBtn.innerHTML;
+        copyLinkBtn.innerHTML = '<span class="share-icon"></span><span>Link Copied!</span>';
+        copyLinkBtn.style.borderColor = 'var(--success)';
+        copyLinkBtn.style.background = 'rgba(74, 222, 128, 0.1)';
+        
+        setTimeout(() => {
+          copyLinkBtn.innerHTML = originalText;
+          copyLinkBtn.style.borderColor = '';
+          copyLinkBtn.style.background = '';
+        }, 2000);
+        
+        // Log share event
+        console.log('Share: Link copied');
+        
+      } catch (err) {
+        console.error('Failed to copy link:', err);
+        alert('Failed to copy link. Please copy manually.');
+      }
+    });
+    
+    // Native share
+    shareNative.addEventListener('click', async () => {
+      try {
+        await navigator.share({
+          title: 'Last Drop Live Game',
+          text: getShareText(),
+          url: getShareURL()
+        });
+        
+        console.log('Share: Native share used');
+        shareModal.classList.add('hidden');
+        
+      } catch (err) {
+        // User cancelled or error occurred
+        if (err.name !== 'AbortError') {
+          console.error('Native share failed:', err);
+        }
+      }
+    });
+    
+    // Close modal on backdrop click
+    shareModal.addEventListener('click', (e) => {
+      if (e.target === shareModal) {
+        shareModal.classList.add('hidden');
+      }
+    });
+    
+    // Track share analytics (optional - uncomment if you have analytics)
+    /*
+    shareWhatsApp.addEventListener('click', () => {
+      console.log('Share: WhatsApp');
+      // gtag('event', 'share', { method: 'whatsapp' });
+    });
+    
+    shareTwitter.addEventListener('click', () => {
+      console.log('Share: Twitter');
+      // gtag('event', 'share', { method: 'twitter' });
+    });
+    */
+    </script>
+
+
+
+
+
 
 
