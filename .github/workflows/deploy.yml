@@ -23,8 +23,22 @@ jobs:
         script: |
           cd /home/lastdrop
           git pull origin main
+          
+          # Deploy live.html and demo.html
           sudo cp live.html /var/www/lastdrop.earth/public/
           sudo cp demo.html /var/www/lastdrop.earth/public/
-          sudo chown www-data:www-data /var/www/lastdrop.earth/public/*.html
+          
+          # Deploy website folder (all HTML, PHP, and assets)
+          sudo mkdir -p /var/www/lastdrop.earth/public/website
+          sudo cp -r website/* /var/www/lastdrop.earth/public/website/
+          
+          # Set proper permissions
+          sudo chown -R www-data:www-data /var/www/lastdrop.earth/public/
+          sudo chmod -R 755 /var/www/lastdrop.earth/public/
           sudo chmod 644 /var/www/lastdrop.earth/public/*.html
+          sudo chmod 644 /var/www/lastdrop.earth/public/website/*.html
+          sudo chmod 644 /var/www/lastdrop.earth/public/website/api/*.php
+          
           echo "Deployment completed at $(date)"
+          echo "Deployed files:"
+          ls -la /var/www/lastdrop.earth/public/website/ | head -20
