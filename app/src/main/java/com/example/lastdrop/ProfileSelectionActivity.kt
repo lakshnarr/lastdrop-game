@@ -1,6 +1,7 @@
 package com.example.lastdrop
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -209,7 +210,9 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
     
     private fun showProfileStats(profile: PlayerProfile) {
-        ProfileDialogs.showProfileDetailsDialog(this, profile)
+        val intent = Intent(this, ProfileStatsActivity::class.java)
+        intent.putExtra("PLAYER_ID", profile.playerId)
+        startActivity(intent)
     }
     
     private fun showRenameProfileDialog(profile: PlayerProfile) {
@@ -318,13 +321,16 @@ class ProfileSelectionActivity : AppCompatActivity() {
                 .setMessage(message)
                 .setPositiveButton("Let's Play!") { _, _ ->
                     // Pass profiles with assigned colors to MainActivity
-                    val colorMap = profileManager.assignGameColors(profiles.size)
-                    // TODO: Start MainActivity with profiles and colors
-                    Toast.makeText(
-                        this@ProfileSelectionActivity, 
-                        "Starting game with ${profiles.size} players", 
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    val colorMap = profiles.indices.map { index ->
+                        ProfileManager.GAME_COLORS.getOrNull(index) ?: "FF0000"
+                    }
+                    
+                    val resultIntent = Intent().apply {
+                        putStringArrayListExtra("selected_profiles", ArrayList(selectedProfiles))
+                        putStringArrayListExtra("assigned_colors", ArrayList(colorMap))
+                    }
+                    
+                    setResult(RESULT_OK, resultIntent)
                     finish()
                 }
                 .setNegativeButton("Cancel", null)

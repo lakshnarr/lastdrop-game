@@ -25,6 +25,7 @@ local.properties
 # Security: API keys and secrets (NEVER commit these)
 secrets.properties
 api_keys.txt
+.dev-config
 
 # Security: Keystore files (NEVER commit these)
 *.jks

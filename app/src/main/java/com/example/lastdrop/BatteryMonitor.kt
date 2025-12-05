@@ -4,7 +4,7 @@ import android.widget.Toast
 import android.content.Context
 
 /**
- * Monitors battery levels for GoDice and shows warnings
+ * Monitors battery levels for BLDice and shows warnings
  */
 class BatteryMonitor(private val context: Context) {
     companion object {

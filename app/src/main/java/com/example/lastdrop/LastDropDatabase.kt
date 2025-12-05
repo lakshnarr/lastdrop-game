@@ -8,14 +8,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [PlayerEntity::class, GameEntity::class, RollEventEntity::class, PlayerProfile::class, GameRecord::class],
-    version = 4,
+    entities = [PlayerEntity::class, GameEntity::class, RollEventEntity::class, PlayerProfile::class, GameRecord::class, Achievement::class, RivalryRecord::class],
+    version = 6,
     exportSchema = false
 )
 abstract class LastDropDatabase : RoomDatabase() {
     abstract fun dao(): LastDropDao
     abstract fun playerProfileDao(): PlayerProfileDao
     abstract fun gameRecordDao(): GameRecordDao
+    abstract fun achievementDao(): AchievementDao
+    abstract fun rivalryDao(): RivalryDao
 
     companion object {
         @Volatile private var INSTANCE: LastDropDatabase? = null
@@ -140,6 +142,52 @@ abstract class LastDropDatabase : RoomDatabase() {
                 """.trimIndent())
             }
         }
+        
+        // Migration from version 4 to 5 (adding achievements table)
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE achievements (
+                        achievementId TEXT PRIMARY KEY NOT NULL,
+                        playerId TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        unlockedAt INTEGER NOT NULL,
+                        notificationShown INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(playerId) REFERENCES player_profiles(playerId) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                
+                // Create index for faster queries
+                database.execSQL("CREATE INDEX index_achievements_playerId ON achievements(playerId)")
+                database.execSQL("CREATE INDEX index_achievements_type ON achievements(type)")
+            }
+        }
+        
+        // Migration from version 5 to 6 (adding rivalry_records table)
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE rivalry_records (
+                        recordId TEXT PRIMARY KEY NOT NULL,
+                        player1Id TEXT NOT NULL,
+                        player2Id TEXT NOT NULL,
+                        player1Wins INTEGER NOT NULL DEFAULT 0,
+                        player2Wins INTEGER NOT NULL DEFAULT 0,
+                        totalGames INTEGER NOT NULL DEFAULT 0,
+                        lastGameTimestamp INTEGER NOT NULL DEFAULT 0,
+                        player1LargestMargin INTEGER NOT NULL DEFAULT 0,
+                        player2LargestMargin INTEGER NOT NULL DEFAULT 0,
+                        closestGame INTEGER NOT NULL DEFAULT 2147483647,
+                        FOREIGN KEY(player1Id) REFERENCES player_profiles(playerId) ON DELETE CASCADE,
+                        FOREIGN KEY(player2Id) REFERENCES player_profiles(playerId) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                
+                // Create indexes for faster queries
+                database.execSQL("CREATE INDEX index_rivalry_player1 ON rivalry_records(player1Id)")
+                database.execSQL("CREATE INDEX index_rivalry_player2 ON rivalry_records(player2Id)")
+            }
+        }
 
         fun getInstance(context: Context): LastDropDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -149,7 +197,7 @@ abstract class LastDropDatabase : RoomDatabase() {
                     "lastdrop.db"
                 )
                 .fallbackToDestructiveMigration() // For fresh installs, create from scratch
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { INSTANCE = it }
             }
         }

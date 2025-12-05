@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_BASE_URL = "https://lastdrop.earth/api"
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
+        private const val REQUEST_CODE_PROFILES = 1001
         
         // Generate unique session ID for multi-device support
         private val SESSION_ID = java.util.UUID.randomUUID().toString()
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvTileP4: TextView
 
     private lateinit var btnConnectDice: Button
+    private lateinit var btnConnectBoard: Button
     private lateinit var btnUndo: Button
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
@@ -114,6 +116,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ---------- Game / players ----------
     private var lastRoll: Int? = null
     private var previousRoll: Int? = null
+    private val currentGameProfileIds = mutableListOf<String>() // Track profiles in current game
 
     // Last event details for API
     private var lastDice1: Int? = null
@@ -137,7 +140,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private var undoTimer: Job? = null
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // ---------- BLE / GoDice ----------
+    // ---------- BLE / BLDice ----------
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var isScanning = false
     private var scanCallback: ScanCallback? = null
@@ -172,6 +175,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var stateSyncManager: StateSyncManager
     private lateinit var apiManager: ApiManager
     private lateinit var animationEventHandler: AnimationEventHandler
+    private lateinit var profileManager: ProfileManager
+    private lateinit var achievementEngine: AchievementEngine
+    private lateinit var rivalryManager: RivalryManager
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
@@ -227,6 +233,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         dao = db.dao()
 
         gameEngine = GameEngine()
+        profileManager = ProfileManager(this)
+        achievementEngine = AchievementEngine(this)
+        rivalryManager = RivalryManager(this)
         
         // Initialize board preferences manager
         boardPreferencesManager = BoardPreferencesManager(this)
@@ -304,8 +313,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }, 2000) // Wait 2 seconds after startup
         }
 
-        // Ask user how many players and their names (2–4)
-        configurePlayers()
+        // Show profile selection screen
+        showProfileSelection()
 
         // ping global server on startup
         pingServer()
@@ -317,9 +326,56 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
     
     /**
-     * Handle QR code scan result
+     * Handle activity results (Profile Selection and QR code scan)
      */
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        // Handle profile selection result
+        if (requestCode == REQUEST_CODE_PROFILES) {
+            if (resultCode == RESULT_OK && data != null) {
+                val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
+                val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+                
+                if (profileIds.isNotEmpty()) {
+                    mainScope.launch {
+                        // Load profile data
+                        val profiles = profileIds.mapNotNull { id ->
+                            profileManager.getProfile(id)
+                        }
+                        
+                        if (profiles.isNotEmpty()) {
+                            // Map profiles to game state
+                            playerCount = profiles.size
+                            profiles.forEachIndexed { index, profile ->
+                                playerNames[index] = profile.nickname // Use nickname for AI
+                                playerColors[index] = assignedColors.getOrNull(index) ?: ProfileManager.GAME_COLORS[index]
+                            }
+                            
+                            // Store profile IDs for game end recording
+                            currentGameProfileIds.clear()
+                            currentGameProfileIds.addAll(profileIds)
+                            
+                            Log.d(TAG, "Game starting with profiles: ${profiles.map { it.nickname }}")
+                            
+                            // Initialize game
+                            resetLocalGame()
+                            updateTurnIndicatorDisplay()
+                            
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Welcome ${profiles.joinToString { it.nickname }}!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@launch
+                        }
+                    }
+                }
+            }
+            // If no profiles selected or error, use fallback
+            configurePlayers()
+            return
+        }
+        
+        // Handle QR code scan result
         val result: IntentResult? = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null) {
             if (result.contents != null) {
@@ -417,6 +473,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvTileP4 = findViewById(R.id.tvTileP4)
 
         btnConnectDice = findViewById(R.id.btnConnectDice)
+        btnConnectBoard = findViewById(R.id.btnConnectBoard)
         btnUndo = findViewById(R.id.btnUndo)
         btnResetScore = findViewById(R.id.btnResetScore)
         btnRefreshScoreboard = findViewById(R.id.btnRefreshScoreboard)
@@ -434,7 +491,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         scrollTestLog = findViewById(R.id.scrollTestLog)
         btnClearLog = findViewById(R.id.btnClearLog)
 
-        tvTitle.text = "Last Drop – GoDice Controller"
+        tvTitle.text = "Last Drop Earth: AI Board Game Controller"
         tvDiceStatus.text = "Not connected"
         tvBattery.text = "Battery: --"
         tvLastEvent.text = "No events yet."
@@ -453,6 +510,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun setupUiListeners() {
         btnConnectDice.setOnClickListener { onConnectButtonClicked() }
+        btnConnectBoard.setOnClickListener { onConnectBoardClicked() }
         btnUndo.setOnClickListener {
             if (btnUndo.text.toString().startsWith("Confirm")) {
                 confirmUndo()
@@ -487,10 +545,49 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
     }
 
+    private fun onConnectBoardClicked() {
+        if (!esp32Connected) {
+            // Not connected → start scanning for boards
+            btnConnectBoard.text = "🎮  Scanning..."
+            btnConnectBoard.isEnabled = false
+            
+            boardScanManager.startScan()
+            
+            // Re-enable button after scan timeout
+            mainScope.launch {
+                delay(10000)  // 10 second scan timeout
+                if (!esp32Connected) {
+                    runOnUiThread {
+                        btnConnectBoard.text = "🎮  Connect Board"
+                        btnConnectBoard.isEnabled = true
+                    }
+                }
+            }
+        } else {
+            // Already connected → disconnect
+            disconnectESP32()
+            runOnUiThread {
+                btnConnectBoard.text = "🎮  Connect Board"
+                Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // ------------------------------------------------------------------------
     //  Player configuration (2–4 players + names)
     // ------------------------------------------------------------------------
 
+    /**
+     * Show profile selection screen
+     */
+    private fun showProfileSelection() {
+        val intent = Intent(this, ProfileSelectionActivity::class.java)
+        startActivityForResult(intent, REQUEST_CODE_PROFILES)
+    }
+
+    /**
+     * Fallback: Old player configuration flow (kept for backward compatibility)
+     */
     private fun configurePlayers() {
         val options = arrayOf("2 players", "3 players", "4 players")
 
@@ -651,9 +748,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         tvDiceStatus.text = if (playWithTwoDice) {
-            "Scanning for 2 GoDice…"
+            "Scanning for 2 BLDice…"
         } else {
-            "Scanning for GoDice…"
+            "Scanning for BLDice…"
         }
 
         startScan()
@@ -707,7 +804,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         handler.postDelayed({
             if (isScanning) {
                 stopScan()
-                tvDiceStatus.text = "Scan timeout. No GoDice found."
+                tvDiceStatus.text = "Scan timeout. No BLDice found."
             }
         }, 15_000)
     }
@@ -799,8 +896,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     runOnUiThread {
                         diceConnected = true
                         btnConnectDice.text = "Disconnect Dice"
-                        tvDiceStatus.text = "Connected to ${dice.getDieName() ?: "GoDice"}"
-                        Log.d(TAG, "GoDice connected (id=$diceId)")
+                        tvDiceStatus.text = "Connected to ${dice.getDieName() ?: "BLDice"}"
+                        Log.d(TAG, "BLDice connected (id=$diceId)")
                     }
                     dice.onConnected()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -1159,6 +1256,138 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             playerColors = playerColors,
             playerCount = playerCount
         )
+    }
+
+    /**
+     * Record game results to player profiles
+     */
+    private fun recordGameResults(winnerIndex: Int) {
+        if (currentGameProfileIds.isEmpty()) {
+            Log.d(TAG, "No profiles to record (using old player flow)")
+            return
+        }
+        
+        mainScope.launch(Dispatchers.IO) {
+            try {
+                // Record rivalry results (head-to-head)
+                if (currentGameProfileIds.size >= 2) {
+                    val scores = (0 until playerCount).map { i ->
+                        Pair(currentGameProfileIds.getOrNull(i), playerScores[playerNames[i]] ?: 0)
+                    }.filter { it.first != null }
+                    
+                    // Record each rivalry pairing
+                    for (i in scores.indices) {
+                        for (j in (i + 1) until scores.size) {
+                            val (p1Id, p1Score) = scores[i]
+                            val (p2Id, p2Score) = scores[j]
+                            
+                            if (p1Score > p2Score) {
+                                rivalryManager.recordGameResult(p1Id!!, p2Id!!, p1Score, p2Score)
+                            } else if (p2Score > p1Score) {
+                                rivalryManager.recordGameResult(p2Id!!, p1Id!!, p2Score, p1Score)
+                            }
+                        }
+                    }
+                }
+                
+                for (i in 0 until playerCount) {
+                    val profileId = currentGameProfileIds.getOrNull(i) ?: continue
+                    val won = (i == winnerIndex)
+                    val score = playerScores[playerNames[i]] ?: 0
+                    val position = playerPositions[playerNames[i]] ?: 1
+                    val color = playerColors.getOrNull(i) ?: "FF0000"
+                    
+                    // Calculate placement (1st, 2nd, 3rd, 4th)
+                    val allScores = (0 until playerCount).mapNotNull { idx ->
+                        playerScores[playerNames[idx]]
+                    }.sortedDescending()
+                    val placement = allScores.indexOf(score) + 1
+                    
+                    // Create game result
+                    val gameResult = GameResult(
+                        name = playerNames[i],
+                        color = color,
+                        score = score,
+                        finalTile = position,
+                        placement = placement,
+                        dropsEarned = score,
+                        gameTimeMinutes = 0, // TODO: Track actual game time
+                        chanceCardsDrawn = 0, // TODO: Track from game
+                        droughtTileHits = 0,
+                        bonusTileHits = 0,
+                        waterDockHits = 0,
+                        maxComebackPoints = 0,
+                        wasEliminated = false,
+                        eliminatedOpponents = emptyList(),
+                        hadPerfectStart = false,
+                        usedUndo = false
+                    )
+                    
+                    // Record to profile
+                    profileManager.recordGameResult(
+                        playerId = profileId,
+                        won = won,
+                        score = score,
+                        dropsEarned = score,
+                        playTimeMinutes = 0 // TODO: Track actual game time
+                    )
+                    
+                    // Get updated profile for achievement checking
+                    val updatedProfile = profileManager.getProfile(profileId)
+                    
+                    if (updatedProfile != null) {
+                        // Check for unlocked achievements
+                        val newAchievements = achievementEngine.checkGameEndAchievements(
+                            playerId = profileId,
+                            won = won,
+                            score = score,
+                            placement = placement,
+                            totalPlayers = playerCount,
+                            gameResult = gameResult,
+                            profile = updatedProfile
+                        )
+                        
+                        // Show achievement notifications
+                        if (newAchievements.isNotEmpty()) {
+                            withContext(Dispatchers.Main) {
+                                showAchievementUnlocked(newAchievements)
+                            }
+                        }
+                    }
+                    
+                    Log.d(TAG, "Recorded game result for ${playerNames[i]}: ${if (won) "WIN" else "LOSS"}")
+                }
+                
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Game stats saved to profiles!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error recording game results: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Show achievement unlock notification
+     */
+    private fun showAchievementUnlocked(achievements: List<Achievement>) {
+        achievements.forEach { achievement ->
+            val definition = AchievementDefinitions.getById(achievement.type)
+            if (definition != null) {
+                val message = "${definition.icon} ${definition.name}\n${definition.description}"
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                Log.d(TAG, "🏆 Achievement Unlocked: ${definition.name}")
+                
+                // Mark as shown
+                mainScope.launch {
+                    achievementEngine.markAsShown(achievement.achievementId)
+                }
+            }
+        }
     }
 
     private fun sendLastRollToServer() {
@@ -1548,7 +1777,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             } else {
                 Toast.makeText(
                     this,
-                    "Bluetooth permissions are required to connect to GoDice",
+                    "Bluetooth permissions are required to connect to BLDice",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1589,8 +1818,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         // Clear log
                         tvTestLog.text = ""
                         
-                        appendTestLog("🔴 Production Mode - Using GoDice + ESP32")
-                        Toast.makeText(this, "Production Mode: GoDice + ESP32 + live.html", Toast.LENGTH_SHORT).show()
+                        appendTestLog("🔴 Production Mode - Using BLDice + ESP32")
+                        Toast.makeText(this, "Production Mode: BLDice + ESP32 + live.html", Toast.LENGTH_SHORT).show()
                         
                         // Try to connect ESP32
                         if (!esp32Connected) {
@@ -1863,6 +2092,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         stateSyncManager.startSyncMonitoring()
                         
                         appendTestLog("✅ ESP32 Connected")
+                        
+                        // Update Connect Board button
+                        runOnUiThread {
+                            btnConnectBoard.text = "🎮  Disconnect Board"
+                            btnConnectBoard.isEnabled = true
+                        }
+                        
                         gatt?.discoverServices()
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
@@ -1880,6 +2116,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         appendTestLog("❌ ESP32 Disconnected")
                         runOnUiThread {
                             Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
+                            btnConnectBoard.text = "🎮  Connect Board"
+                            btnConnectBoard.isEnabled = true
                         }
                         
                         // Auto-reconnect if game is active
@@ -2384,6 +2622,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     
                     Log.d(TAG, "Winner declared: $winnerId ($winnerName)")
                     
+                    // Record game results to player profiles
+                    recordGameResults(winnerId)
+                    
                     // Disable coin timeout during winner animation
                     esp32ErrorHandler.setWinnerAnimationInProgress(true)
                     
@@ -2531,7 +2772,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 }
 
 // ============================================================================
-//  Dice helper class – adapted from GoDice demo app
+//  Dice helper class – adapted from BLDice demo app
 // ============================================================================
 
 @SuppressLint("MissingPermission")
@@ -2592,7 +2833,7 @@ class Dice(private val id: Int, val device: BluetoothDevice) {
     }
 
     companion object {
-        // GoDice BLE UUIDs (Nordic UART Service)
+        // BLDice BLE UUIDs (Nordic UART Service)
         val serviceUUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
         val writeCharUUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
         val readCharUUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
