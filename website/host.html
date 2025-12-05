@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host a Game - Last Drop</title>
+  <meta name="description" content="Host a Last Drop game session. Generate QR code for spectators or download the Android app.">
+  <link rel="stylesheet" href="assets/css/shared.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #050711;
+      --accent: #40e0d0;
+      --accent-soft: rgba(64, 224, 208, 0.3);
+      --card-bg: #0b1020;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --success: #4ade80;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg-color) 55%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      padding: 40px 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Welcome Screen */
+    .welcome-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 24px;
+      color: var(--text-main);
+    }
+
+    .welcome-question {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      font-size: 1.1rem;
+    }
+
+    .choice-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .choice-btn {
+      padding: 20px 24px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      color: var(--text-main);
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .choice-btn:hover {
+      background: rgba(64, 224, 208, 0.1);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.3);
+    }
+
+    .choice-icon {
+      font-size: 1.5rem;
+    }
+
+    /* Session QR Screen */
+    .qr-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 24px;
+      color: var(--accent);
+    }
+
+    .qr-container {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 0 auto 24px;
+      width: fit-content;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    #sessionQR {
+      display: block;
+    }
+
+    .session-info {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .info-value {
+      color: var(--text-main);
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-waiting {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fbbf24;
+    }
+
+    .status-connected {
+      background: rgba(74, 222, 128, 0.2);
+      color: var(--success);
+    }
+
+    .instructions {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .instructions strong {
+      color: var(--accent);
+    }
+
+    /* Download Screen */
+    .download-qr-container {
+      text-align: center;
+    }
+
+    .download-description {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .features-list {
+      text-align: left;
+      margin: 24px 0;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+    }
+
+    .features-list h3 {
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+
+    .features-list ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .features-list li {
+      padding: 8px 0;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .features-list li::before {
+      content: '✅';
+      font-size: 1.2rem;
+    }
+
+    .download-link {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 12px 32px;
+      background: var(--accent);
+      color: var(--bg-color);
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .download-link:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.5);
+    }
+
+    .back-btn {
+      display: block;
+      margin-top: 24px;
+      padding: 12px 24px;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .back-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .home-link {
+      display: block;
+      text-align: center;
+      margin-top: 24px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .home-link:hover {
+      color: var(--accent);
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .card {
+        padding: 32px 24px;
+      }
+
+      .qr-container {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏠 Host a Game</h1>
+      <p>Generate session or download the app</p>
+    </div>
+
+    <div class="card">
+      <!-- Welcome Screen -->
+      <div id="welcomeScreen" class="screen active">
+        <h2 class="welcome-title">Do you have the Last Drop app?</h2>
+        <p class="welcome-question">Choose your option below</p>
+        
+        <div class="choice-buttons">
+          <button class="choice-btn" onclick="showSessionQR()">
+            <span class="choice-icon">✅</span>
+            <span>Yes, I have the app</span>
+          </button>
+          
+          <button class="choice-btn" onclick="showDownloadQR()">
+            <span class="choice-icon">📱</span>
+            <span>No, download it now</span>
+          </button>
+        </div>
+
+        <a href="index.html" class="home-link">← Back to Home</a>
+      </div>
+
+      <!-- Session QR Screen -->
+      <div id="sessionScreen" class="screen">
+        <h2 class="qr-title">Scan this QR code in the app</h2>
+        
+        <div class="qr-container">
+          <div id="sessionQR"></div>
+        </div>
+
+        <div class="session-info">
+          <div class="info-row">
+            <span class="info-label">Session ID:</span>
+            <span class="info-value" id="sessionId">Generating...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Board ID:</span>
+            <span class="info-value" id="boardId">Waiting...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Status:</span>
+            <span class="status-badge status-waiting" id="connectionStatus">Waiting for host</span>
+          </div>
+        </div>
+
+        <div class="instructions">
+          <strong>Instructions:</strong><br>
+          1. Open Last Drop app on your phone<br>
+          2. Tap "Join Session" or "Host Game"<br>
+          3. Scan this QR code<br>
+          4. Connect your ESP32 board and start playing!
+        </div>
+
+        <button class="back-btn" onclick="showWelcome()">← Back</button>
+      </div>
+
+      <!-- Download QR Screen -->
+      <div id="downloadScreen" class="screen">
+        <div class="download-qr-container">
+          <h2 class="qr-title">Download Last Drop App</h2>
+          
+          <div class="qr-container">
+            <div id="downloadQR"></div>
+          </div>
+
+          <p class="download-description">
+            Scan this QR code to download the app from Google Play
+          </p>
+
+          <div class="features-list">
+            <h3>What you'll need:</h3>
+            <ul>
+              <li>Android phone (6.0+)</li>
+              <li>GoDice (or use demo mode)</li>
+              <li>ESP32 board (optional for testing)</li>
+            </ul>
+          </div>
+
+          <a href="https://play.google.com/store" class="download-link" target="_blank">
+            Visit Google Play Store
+          </a>
+
+          <button class="back-btn" onclick="showWelcome()">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Generate UUID for session
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    // Show welcome screen
+    function showWelcome() {
+      hideAllScreens();
+      document.getElementById('welcomeScreen').classList.add('active');
+    }
+
+    // Show session QR screen
+    function showSessionQR() {
+      hideAllScreens();
+      document.getElementById('sessionScreen').classList.add('active');
+      
+      // Generate session ID
+      const sessionId = generateUUID();
+      const shortSessionId = sessionId.substring(0, 8);
+      document.getElementById('sessionId').textContent = shortSessionId + '...';
+      
+      // Generate session URL for QR code
+      const sessionUrl = `${window.location.origin}/live.html?session=${sessionId}`;
+      
+      // Clear previous QR code
+      document.getElementById('sessionQR').innerHTML = '';
+      
+      // Generate QR code
+      new QRCode(document.getElementById('sessionQR'), {
+        text: sessionUrl,
+        width: 200,
+        height: 200,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      // Simulate connection check (in production, this would poll the server)
+      setTimeout(() => {
+        // This is just a demo - in real implementation, check API for connection
+        console.log('Session created:', sessionId);
+        console.log('Session URL:', sessionUrl);
+      }, 1000);
+    }
+
+    // Show download QR screen
+    function showDownloadQR() {
+      hideAllScreens();
+      document.getElementById('downloadScreen').classList.add('active');
+      
+      // Play Store URL (replace with actual app URL when published)
+      const playStoreUrl = 'https://play.google.com/store/apps/details?id=earth.lastdrop.app';
+      
+      // Clear previous QR code
+      document.getElementById('downloadQR').innerHTML = '';
+      
+      // Generate QR code
+      new QRCode(document.getElementById('downloadQR'), {
+        text: playStoreUrl,
+        width: 200,
+        height: 200,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    }
+
+    // Hide all screens
+    function hideAllScreens() {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+    }
+  </script>
+</body>
+</html>
