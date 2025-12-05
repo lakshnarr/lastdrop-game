@@ -3,6 +3,9 @@
 -- Created: December 5, 2025
 
 -- Drop existing tables if they exist (for clean reinstall)
+DROP TABLE IF EXISTS tournament_matches;
+DROP TABLE IF EXISTS tournament_participants;
+DROP TABLE IF EXISTS tournaments;
 DROP TABLE IF EXISTS player_stats;
 DROP TABLE IF EXISTS leaderboard_entries;
 DROP TABLE IF EXISTS game_replays;
@@ -152,6 +155,163 @@ CREATE TABLE leaderboard_entries (
     INDEX idx_rank (rank),
     INDEX idx_player (playerName),
     INDEX idx_elo (eloRating)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: tournaments (Phase 5.4: Tournament Mode)
+-- Purpose: Manage tournament events and brackets
+-- ============================================
+
+CREATE TABLE tournaments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tournamentName VARCHAR(200) NOT NULL,
+    
+    -- Tournament configuration
+    format ENUM('single_elimination', 'double_elimination', 'round_robin', 'swiss') NOT NULL DEFAULT 'single_elimination',
+    maxParticipants INT NOT NULL DEFAULT 8,
+    minParticipants INT DEFAULT 2,
+    currentParticipants INT DEFAULT 0,
+    
+    -- Status tracking
+    status ENUM('registration', 'ready', 'in_progress', 'completed', 'cancelled') DEFAULT 'registration',
+    
+    -- Bracket configuration
+    bracketData JSON DEFAULT NULL,  -- Dynamic bracket structure
+    currentRound INT DEFAULT 0,
+    totalRounds INT DEFAULT NULL,
+    
+    -- Prize pool
+    prizePool INT DEFAULT 0,
+    prizeDistribution JSON DEFAULT NULL,  -- {"1st": 50, "2nd": 30, "3rd": 20}
+    
+    -- Entry requirements
+    entryFee INT DEFAULT 0,
+    minEloRating INT DEFAULT 0,
+    inviteOnly BOOLEAN DEFAULT FALSE,
+    
+    -- Timing
+    registrationStart DATETIME NOT NULL,
+    registrationEnd DATETIME NOT NULL,
+    startTime DATETIME DEFAULT NULL,
+    endTime DATETIME DEFAULT NULL,
+    
+    -- Organizer
+    organizerName VARCHAR(100) DEFAULT NULL,
+    description TEXT DEFAULT NULL,
+    rules TEXT DEFAULT NULL,
+    
+    -- Metadata
+    createdAt DATETIME NOT NULL,
+    updatedAt DATETIME NOT NULL,
+    
+    -- Indexes
+    INDEX idx_status (status),
+    INDEX idx_format (format),
+    INDEX idx_reg_end (registrationEnd),
+    INDEX idx_start_time (startTime),
+    INDEX idx_created (createdAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: tournament_participants (Phase 5.4: Tournament Mode)
+-- Purpose: Track players registered for tournaments
+-- ============================================
+
+CREATE TABLE tournament_participants (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tournamentId INT NOT NULL,
+    playerName VARCHAR(100) NOT NULL,
+    
+    -- Seeding
+    seedPosition INT DEFAULT NULL,
+    eloAtEntry INT DEFAULT 1000,
+    
+    -- Status
+    status ENUM('registered', 'checked_in', 'active', 'eliminated', 'withdrawn') DEFAULT 'registered',
+    currentRound INT DEFAULT 0,
+    
+    -- Performance
+    matchesPlayed INT DEFAULT 0,
+    matchesWon INT DEFAULT 0,
+    matchesLost INT DEFAULT 0,
+    totalScore INT DEFAULT 0,
+    
+    -- Placement
+    finalPosition INT DEFAULT NULL,
+    prizeWon INT DEFAULT 0,
+    
+    -- Metadata
+    registeredAt DATETIME NOT NULL,
+    checkedInAt DATETIME DEFAULT NULL,
+    eliminatedAt DATETIME DEFAULT NULL,
+    
+    -- Unique constraint
+    UNIQUE KEY unique_tournament_player (tournamentId, playerName),
+    
+    -- Foreign key
+    FOREIGN KEY (tournamentId) REFERENCES tournaments(id) ON DELETE CASCADE,
+    
+    -- Indexes
+    INDEX idx_tournament (tournamentId),
+    INDEX idx_player (playerName),
+    INDEX idx_status (status),
+    INDEX idx_seed (seedPosition),
+    INDEX idx_position (finalPosition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: tournament_matches (Phase 5.4: Tournament Mode)
+-- Purpose: Track individual tournament matches
+-- ============================================
+
+CREATE TABLE tournament_matches (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    tournamentId INT NOT NULL,
+    
+    -- Match identification
+    roundNumber INT NOT NULL,
+    matchNumber INT NOT NULL,
+    bracketPosition VARCHAR(50) DEFAULT NULL,  -- e.g., "Winners-R1-M1", "Finals"
+    
+    -- Participants (support 2-4 players)
+    player1Name VARCHAR(100) DEFAULT NULL,
+    player2Name VARCHAR(100) DEFAULT NULL,
+    player3Name VARCHAR(100) DEFAULT NULL,
+    player4Name VARCHAR(100) DEFAULT NULL,
+    
+    -- Results
+    winnerName VARCHAR(100) DEFAULT NULL,
+    finalScores JSON DEFAULT NULL,  -- {"player1": 25, "player2": 18, ...}
+    
+    -- Session link
+    sessionId VARCHAR(64) DEFAULT NULL,
+    replayId INT DEFAULT NULL,
+    
+    -- Status
+    status ENUM('pending', 'ready', 'in_progress', 'completed', 'forfeit') DEFAULT 'pending',
+    
+    -- Timing
+    scheduledTime DATETIME DEFAULT NULL,
+    startTime DATETIME DEFAULT NULL,
+    endTime DATETIME DEFAULT NULL,
+    
+    -- Next match routing (for elimination brackets)
+    winnerNextMatchId INT DEFAULT NULL,
+    loserNextMatchId INT DEFAULT NULL,
+    
+    -- Metadata
+    createdAt DATETIME NOT NULL,
+    
+    -- Foreign keys
+    FOREIGN KEY (tournamentId) REFERENCES tournaments(id) ON DELETE CASCADE,
+    FOREIGN KEY (replayId) REFERENCES game_replays(id) ON DELETE SET NULL,
+    
+    -- Indexes
+    INDEX idx_tournament (tournamentId),
+    INDEX idx_round (tournamentId, roundNumber),
+    INDEX idx_status (status),
+    INDEX idx_players (player1Name, player2Name),
+    INDEX idx_session (sessionId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
