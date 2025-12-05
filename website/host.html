@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Host a Game - Last Drop</title>
-  <meta name="description" content="Host a Last Drop game session. Generate QR code for spectators or download the Android app.">
+  <title>Join a Game - Last Drop</title>
+  <meta name="description" content="Join a Last Drop game session. Generate QR code for spectators or download the Android app.">
   <link rel="stylesheet" href="assets/css/shared.css">
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
@@ -320,7 +320,7 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>🏠 Host a Game</h1>
+      <h1>🌍 Join a Game</h1>
       <p>Generate session or download the app</p>
     </div>
 
@@ -459,6 +459,36 @@
         console.log('Session created:', sessionId);
         console.log('Session URL:', sessionUrl);
       }, 1000);
+
+      // Poll server to check if app has connected
+      let pollAttempts = 0;
+      const maxPollAttempts = 60; // Poll for 60 seconds
+      const pollInterval = setInterval(async () => {
+        pollAttempts++;
+        
+        try {
+          // Check session status via API
+          const response = await fetch(`/api/check_session.php?session=${sessionId}&key=ABC123`);
+          const data = await response.json();
+          
+          console.log('Poll attempt', pollAttempts, 'Status:', data);
+          
+          if (data.connected === true || data.hostConnected === 1) {
+            // App has connected! Redirect to live view
+            clearInterval(pollInterval);
+            console.log('App connected! Redirecting to live view...');
+            window.location.href = `/live.html?session=${sessionId}`;
+          } else if (pollAttempts >= maxPollAttempts) {
+            // Timeout after 60 seconds
+            clearInterval(pollInterval);
+            console.log('Connection timeout - no app connected');
+            document.querySelector('.qr-description').innerHTML = 
+              '<span style="color: #f59e0b;">⏱ Waiting for connection... Keep the app open and scan the QR code.</span>';
+          }
+        } catch (error) {
+          console.error('Error checking session status:', error);
+        }
+      }, 1000); // Check every second
     }
 
     // Show download QR screen

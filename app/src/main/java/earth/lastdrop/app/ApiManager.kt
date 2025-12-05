@@ -15,7 +15,7 @@ import java.net.URLEncoder
 class ApiManager(
     private val apiBaseUrl: String,
     private val apiKey: String,
-    private val sessionId: String
+    private var sessionId: String
 ) {
     companion object {
         private const val TAG = "ApiManager"
@@ -23,6 +23,65 @@ class ApiManager(
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var heartbeatJob: Job? = null
+
+    /**
+     * Update session ID (e.g., when connecting to scanned QR code session)
+     */
+    fun setSessionId(newSessionId: String) {
+        Log.d(TAG, "Session ID updated from $sessionId to $newSessionId")
+        sessionId = newSessionId
+    }
+
+    /**
+     * Start periodic heartbeat to keep session alive on server
+     * Server counts active games based on recent heartbeat activity
+     */
+    fun startHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            while (isActive) {
+                try {
+                    // Send heartbeat every 30 seconds
+                    delay(30_000)
+                    sendHeartbeat()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Heartbeat error", e)
+                }
+            }
+        }
+        Log.d(TAG, "Heartbeat started for session: $sessionId")
+    }
+
+    /**
+     * Stop heartbeat when game ends
+     */
+    fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        Log.d(TAG, "Heartbeat stopped for session: $sessionId")
+    }
+
+    /**
+     * Send heartbeat ping to server
+     */
+    private suspend fun sendHeartbeat() {
+        try {
+            val url = URL("$apiBaseUrl/heartbeat.php?key=$apiKey&session=$sessionId")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = DEFAULT_TIMEOUT_MS
+                readTimeout = DEFAULT_TIMEOUT_MS
+            }
+            val code = conn.responseCode
+            if (code == 200) {
+                Log.d(TAG, "Heartbeat sent successfully")
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            Log.e(TAG, "Heartbeat failed", e)
+        }
+    }
 
     /**
      * Simple ping to check server connectivity
@@ -458,6 +517,7 @@ class ApiManager(
      * Cleanup coroutine scope when done
      */
     fun cleanup() {
+        stopHeartbeat()
         scope.cancel()
     }
 }

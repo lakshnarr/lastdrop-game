@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
         private const val REQUEST_CODE_PROFILES = 1001
+        private const val REQUEST_CAMERA_PERMISSION = 1002
         
         // Generate unique session ID for multi-device support
         private val SESSION_ID = java.util.UUID.randomUUID().toString()
@@ -96,6 +97,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private lateinit var btnConnectDice: Button
     private lateinit var btnConnectBoard: Button
+    private lateinit var btnConnectServer: Button
     private lateinit var btnUndo: Button
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
@@ -372,12 +374,24 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                                 Toast.LENGTH_LONG
                             ).show()
                             return@launch
+                        } else {
+                            // No valid profiles loaded
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Failed to load player profiles. Please try again.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
+                } else {
+                    // No profiles selected
+                    Toast.makeText(
+                        this@MainActivity,
+                        "No players selected. Please select profiles to start.",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
-            // If no profiles selected or error, use fallback
-            configurePlayers()
             return
         }
         
@@ -385,8 +399,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val result: IntentResult? = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null) {
             if (result.contents != null) {
-                // Parse QR code
-                val qrData = QRCodeHelper.parseQRResult(result.contents)
+                val scannedContent = result.contents
+                
+                // Check if it's a session URL (e.g., https://lastdrop.earth/live.html?session=abc123)
+                val sessionId = extractSessionIdFromUrl(scannedContent)
+                if (sessionId != null) {
+                    connectToLiveServer(sessionId)
+                    return
+                }
+                
+                // Otherwise, parse as board QR code
+                val qrData = QRCodeHelper.parseQRResult(scannedContent)
                 if (qrData != null && QRCodeHelper.isValidBoardQR(qrData)) {
                     appendTestLog("📷 QR Scanned: ${qrData.boardId}")
                     
@@ -480,6 +503,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         btnConnectDice = findViewById(R.id.btnConnectDice)
         btnConnectBoard = findViewById(R.id.btnConnectBoard)
+        btnConnectServer = findViewById(R.id.btnConnectServer)
         btnUndo = findViewById(R.id.btnUndo)
         undoProgressBar = findViewById(R.id.undoProgressBar)
         btnResetScore = findViewById(R.id.btnResetScore)
@@ -518,6 +542,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun setupUiListeners() {
         btnConnectDice.setOnClickListener { onConnectButtonClicked() }
         btnConnectBoard.setOnClickListener { onConnectBoardClicked() }
+        btnConnectServer.setOnClickListener { onConnectServerClicked() }
         
         // Menu buttons
         findViewById<Button>(R.id.btnGameHistory)?.setOnClickListener {
@@ -588,6 +613,109 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             runOnUiThread {
                 btnConnectBoard.text = "🎮  Connect Board"
                 Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun onConnectServerClicked() {
+        Log.d(TAG, "onConnectServerClicked called")
+        // Show instructions dialog
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🌍 Connect to Large Screen")
+            .setMessage(
+                "To experience the game on a large screen:\n\n" +
+                "1. Visit https://lastdrop.earth/ on your computer or TV\n\n" +
+                "2. Click 'Join a Live Game'\n\n" +
+                "3. A QR code will appear\n\n" +
+                "4. Click 'Scan QR Code' below to connect\n\n" +
+                "Your game will be displayed live on the big screen!"
+            )
+            .setPositiveButton("Scan QR Code") { _, _ ->
+                Log.d(TAG, "Scan QR Code button clicked in dialog")
+                // Check camera permission when user clicks Scan
+                checkCameraPermissionAndScan()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun checkCameraPermissionAndScan() {
+        val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        Log.d(TAG, "checkCameraPermissionAndScan: hasPermission=$hasPermission")
+        
+        if (hasPermission) {
+            // Permission granted - launch QR scanner
+            launchQRScanner()
+        } else {
+            // Request camera permission
+            Log.d(TAG, "Requesting camera permission")
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.CAMERA),
+                REQUEST_CAMERA_PERMISSION
+            )
+        }
+    }
+
+    private fun launchQRScanner() {
+        val integrator = IntentIntegrator(this)
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+        integrator.setPrompt("Scan QR code from lastdrop.earth")
+        integrator.setOrientationLocked(true)
+        integrator.setBeepEnabled(true)
+        integrator.setCaptureActivity(CaptureActivityPortrait::class.java)
+        integrator.initiateScan()
+    }
+
+    private fun extractSessionIdFromUrl(url: String): String? {
+        return try {
+            val uri = android.net.Uri.parse(url)
+            uri.getQueryParameter("session")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun connectToLiveServer(sessionId: String) {
+        btnConnectServer.isEnabled = false
+        btnConnectServer.text = "🌐  Connecting..."
+        
+        mainScope.launch {
+            try {
+                // Update ApiManager with scanned session ID
+                apiManager.setSessionId(sessionId)
+                
+                // Start heartbeat with scanned session ID
+                apiManager.startHeartbeat()
+                
+                // Push current game state to server with session ID
+                pushResetStateToServer()
+                
+                delay(1000) // Small delay for user feedback
+                
+                withContext(Dispatchers.Main) {
+                    btnConnectServer.text = "🌐  Connected ✓"
+                    btnConnectServer.setBackgroundColor(0xFF4CAF50.toInt())
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Connected to session: ${sessionId.take(8)}...",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    
+                    // Re-enable after 2 seconds
+                    delay(2000)
+                    btnConnectServer.isEnabled = true
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    btnConnectServer.text = "🌐  Connect to Live Server"
+                    btnConnectServer.isEnabled = true
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Connection failed: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
     }
@@ -1334,6 +1462,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
             // Push reset state to server
             pushResetStateToServer()
+            
+            // Start heartbeat to keep session alive
+            apiManager.startHeartbeat()
 
             withContext(Dispatchers.Main) {
                 updateScoreboard()
@@ -1709,12 +1840,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ------------------------------------------------------------------------
 
     private fun getColorEmoji(color: String): String {
-        return when (color.lowercase()) {
-            "red" -> "🔴"
-            "green" -> "🟢"
-            "blue" -> "🔵"
-            "yellow" -> "🟡"
-            else -> "⚪"
+        return when (color.uppercase()) {
+            "FF0000", "RED" -> "🔴"
+            "00FF00", "GREEN" -> "🟢"
+            "0000FF", "BLUE" -> "🔵"
+            "FFFF00", "YELLOW" -> "🟡"
+            else -> when (color.lowercase()) {
+                "red" -> "🔴"
+                "green" -> "🟢"
+                "blue" -> "🔵"
+                "yellow" -> "🟡"
+                else -> "⚪"
+            }
         }
     }
 
@@ -1885,6 +2022,22 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 Toast.makeText(
                     this,
                     "Bluetooth permissions are required to connect to BLDice",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } else if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            Log.d(TAG, "onRequestPermissionsResult: CAMERA - grantResults size=${grantResults.size}, result=${if (grantResults.isNotEmpty()) grantResults[0] else "empty"}")
+            
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Camera permission granted - launch QR scanner
+                Log.d(TAG, "Camera permission granted, launching scanner")
+                launchQRScanner()
+            } else {
+                // Permission denied
+                Log.d(TAG, "Camera permission denied")
+                Toast.makeText(
+                    this,
+                    "Camera permission is required to scan QR codes",
                     Toast.LENGTH_LONG
                 ).show()
             }
