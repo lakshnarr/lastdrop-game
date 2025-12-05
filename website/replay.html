@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Last Drop — Game Replay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Watch Last Drop game replay! Educational water conservation board game." />
+  <meta name="keywords" content="Last Drop, board game, water conservation, replay, game replay" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://lastdrop.earth/replay.html" />
+  <meta property="og:title" content="Watch this Last Drop Game Replay! 🎮" />
+  <meta property="og:description" content="See how this exciting Last Drop game played out! Educational water conservation board game." />
+  <meta property="og:image" content="https://lastdrop.earth/assets/images/og-preview.jpg" />
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="https://lastdrop.earth/replay.html" />
+  <meta property="twitter:title" content="Watch this Last Drop Game Replay! 🎮" />
+  <meta property="twitter:description" content="See how this exciting Last Drop game played out! Educational water conservation board game." />
+  <meta property="twitter:image" content="https://lastdrop.earth/assets/images/og-preview.jpg" />
+  
+  <link rel="stylesheet" href="assets/css/shared.css" />
+  
+  <style>
+    .replay-controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--card-bg);
+      padding: 20px 30px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      z-index: 100;
+    }
+    
+    .replay-btn {
+      padding: 10px 20px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    
+    .replay-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px var(--accent-soft);
+    }
+    
+    .replay-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .replay-timeline {
+      flex: 1;
+      height: 8px;
+      background: var(--tile-bg);
+      border-radius: 4px;
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .replay-progress {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.1s;
+    }
+    
+    .replay-info {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      min-width: 250px;
+    }
+    
+    .replay-info h3 {
+      color: var(--accent);
+      margin: 0 0 15px 0;
+      font-size: 18px;
+    }
+    
+    .replay-stat {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      color: var(--text-main);
+    }
+    
+    .replay-stat-label {
+      color: var(--text-muted);
+    }
+    
+    .loading-replay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: var(--text-main);
+      z-index: 200;
+    }
+    
+    .loading-replay h2 {
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    
+    .speed-control {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    
+    .speed-btn {
+      padding: 6px 12px;
+      background: var(--tile-bg);
+      color: var(--text-main);
+      border: 1px solid var(--tile-border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .speed-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Indicator -->
+  <div id="loadingReplay" class="loading-replay">
+    <h2>🎮 Loading Replay...</h2>
+    <p>Please wait while we prepare the game replay</p>
+  </div>
+  
+  <!-- Main Board (reuse from live.html structure) -->
+  <div id="boardWrapper" style="display:none;">
+    <!-- Board will be injected dynamically -->
+  </div>
+  
+  <!-- Replay Info Panel -->
+  <div id="replayInfo" class="replay-info" style="display:none;">
+    <h3>📊 Replay Info</h3>
+    <div class="replay-stat">
+      <span class="replay-stat-label">Duration:</span>
+      <span id="replayDuration">-</span>
+    </div>
+    <div class="replay-stat">
+      <span class="replay-stat-label">Players:</span>
+      <span id="replayPlayerCount">-</span>
+    </div>
+    <div class="replay-stat">
+      <span class="replay-stat-label">Total Rolls:</span>
+      <span id="replayRollCount">-</span>
+    </div>
+    <div class="replay-stat">
+      <span class="replay-stat-label">Winner:</span>
+      <span id="replayWinner" style="color: var(--success);">-</span>
+    </div>
+    <div class="replay-stat">
+      <span class="replay-stat-label">Views:</span>
+      <span id="replayViews">-</span>
+    </div>
+  </div>
+  
+  <!-- Replay Controls -->
+  <div id="replayControls" class="replay-controls" style="display:none;">
+    <button id="playPauseBtn" class="replay-btn">▶ Play</button>
+    <button id="restartBtn" class="replay-btn">⏮ Restart</button>
+    <div class="replay-timeline" id="replayTimeline">
+      <div class="replay-progress" id="replayProgress" style="width: 0%;"></div>
+    </div>
+    <span id="timeDisplay" style="color: var(--text-main); font-family: monospace;">0:00 / 0:00</span>
+    <div class="speed-control">
+      <span style="color: var(--text-muted); font-size: 12px;">Speed:</span>
+      <button class="speed-btn" data-speed="0.5">0.5x</button>
+      <button class="speed-btn active" data-speed="1">1x</button>
+      <button class="speed-btn" data-speed="2">2x</button>
+      <button class="speed-btn" data-speed="4">4x</button>
+    </div>
+  </div>
+
+  <script>
+    // Parse replay ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const replayId = urlParams.get('id');
+    
+    if (!replayId) {
+      document.getElementById('loadingReplay').innerHTML = '<h2>❌ Error</h2><p>No replay ID provided</p>';
+    } else {
+      loadAndPlayReplay(replayId);
+    }
+    
+    let replayData = null;
+    let currentEventIndex = 0;
+    let isPlaying = false;
+    let playbackSpeed = 1;
+    let playbackTimer = null;
+    
+    async function loadAndPlayReplay(id) {
+      try {
+        const response = await fetch(`/api/get_replay.php?id=${id}`);
+        if (!response.ok) throw new Error('Failed to load replay');
+        
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Unknown error');
+        
+        replayData = result.replay;
+        console.log('[Replay] Loaded:', replayData);
+        
+        // Hide loading, show UI
+        document.getElementById('loadingReplay').style.display = 'none';
+        document.getElementById('boardWrapper').style.display = 'block';
+        document.getElementById('replayInfo').style.display = 'block';
+        document.getElementById('replayControls').style.display = 'flex';
+        
+        // Populate replay info
+        document.getElementById('replayDuration').textContent = formatDuration(replayData.duration);
+        document.getElementById('replayPlayerCount').textContent = replayData.playerCount;
+        document.getElementById('replayRollCount').textContent = replayData.totalRolls;
+        document.getElementById('replayWinner').textContent = replayData.winner || 'N/A';
+        document.getElementById('replayViews').textContent = replayData.views;
+        
+        // Initialize board with initial state
+        initializeReplayBoard();
+        
+      } catch (error) {
+        console.error('[Replay] Load error:', error);
+        document.getElementById('loadingReplay').innerHTML = `<h2>❌ Error</h2><p>${error.message}</p>`;
+      }
+    }
+    
+    function initializeReplayBoard() {
+      // TODO: Create board visualization from replayData.replayData.initialState
+      console.log('[Replay] Initializing board...');
+      // For now, show placeholder
+      document.getElementById('boardWrapper').innerHTML = '<div style="text-align:center;padding:100px;color:var(--text-main);">Board visualization coming soon...</div>';
+    }
+    
+    function formatDuration(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    // Playback controls
+    document.getElementById('playPauseBtn')?.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      const btn = document.getElementById('playPauseBtn');
+      btn.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+      
+      if (isPlaying) {
+        playNextEvent();
+      } else {
+        if (playbackTimer) clearTimeout(playbackTimer);
+      }
+    });
+    
+    document.getElementById('restartBtn')?.addEventListener('click', () => {
+      currentEventIndex = 0;
+      isPlaying = false;
+      document.getElementById('playPauseBtn').textContent = '▶ Play';
+      document.getElementById('replayProgress').style.width = '0%';
+      initializeReplayBoard();
+    });
+    
+    // Speed control
+    document.querySelectorAll('.speed-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        playbackSpeed = parseFloat(btn.dataset.speed);
+      });
+    });
+    
+    // Timeline seek
+    document.getElementById('replayTimeline')?.addEventListener('click', (e) => {
+      const timeline = e.currentTarget;
+      const rect = timeline.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const percentage = clickX / rect.width;
+      
+      if (replayData && replayData.replayData.events) {
+        const targetIndex = Math.floor(percentage * replayData.replayData.events.length);
+        currentEventIndex = Math.max(0, Math.min(targetIndex, replayData.replayData.events.length - 1));
+        updateProgress();
+      }
+    });
+    
+    function playNextEvent() {
+      if (!replayData || !replayData.replayData.events) return;
+      
+      if (currentEventIndex >= replayData.replayData.events.length) {
+        isPlaying = false;
+        document.getElementById('playPauseBtn').textContent = '▶ Play';
+        return;
+      }
+      
+      const event = replayData.replayData.events[currentEventIndex];
+      console.log('[Replay] Playing event:', event);
+      
+      // TODO: Visualize event on board
+      
+      currentEventIndex++;
+      updateProgress();
+      
+      if (isPlaying) {
+        const nextEvent = replayData.replayData.events[currentEventIndex];
+        const delay = nextEvent ? (nextEvent.timestamp - event.timestamp) / playbackSpeed : 1000;
+        playbackTimer = setTimeout(playNextEvent, delay);
+      }
+    }
+    
+    function updateProgress() {
+      if (!replayData || !replayData.replayData.events) return;
+      const progress = (currentEventIndex / replayData.replayData.events.length) * 100;
+      document.getElementById('replayProgress').style.width = `${progress}%`;
+      
+      const currentTime = replayData.replayData.events[currentEventIndex]?.timestamp || 0;
+      const totalTime = replayData.duration * 1000;
+      document.getElementById('timeDisplay').textContent = 
+        `${formatDuration(Math.floor(currentTime / 1000))} / ${formatDuration(replayData.duration)}`;
+    }
+  </script>
+</body>
+</html>

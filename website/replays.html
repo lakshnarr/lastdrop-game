@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Last Drop — Game Replays</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Browse and watch Last Drop game replays. See the best games and learn strategies!" />
+  <meta name="keywords" content="Last Drop, board game, water conservation, game replays, leaderboard" />
+  
+  <link rel="stylesheet" href="assets/css/shared.css" />
+  
+  <style>
+    body {
+      background: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      padding: 20px;
+    }
+    
+    .replays-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 60px;
+    }
+    
+    .replays-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    .replays-header h1 {
+      color: var(--accent);
+      font-size: 48px;
+      margin: 0 0 10px 0;
+    }
+    
+    .replays-header p {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+    
+    .filters {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .filter-btn {
+      padding: 10px 20px;
+      background: var(--tile-bg);
+      color: var(--text-main);
+      border: 1px solid var(--tile-border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .filter-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+    
+    .filter-btn:hover {
+      transform: scale(1.05);
+    }
+    
+    .replays-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    
+    .replay-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    
+    .replay-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.2);
+    }
+    
+    .replay-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .replay-id {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-family: monospace;
+    }
+    
+    .featured-badge {
+      background: var(--accent);
+      color: #000;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .replay-players {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .player-pill {
+      background: var(--tile-bg);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .player-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    
+    .replay-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .stat {
+      text-align: center;
+      padding: 10px;
+      background: var(--tile-bg);
+      border-radius: 8px;
+    }
+    
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    
+    .replay-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 15px;
+      border-top: 1px solid var(--tile-border);
+    }
+    
+    .replay-date {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    
+    .watch-btn {
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    
+    .watch-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px var(--accent-soft);
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-muted);
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 40px;
+    }
+    
+    .page-btn {
+      padding: 10px 16px;
+      background: var(--tile-bg);
+      color: var(--text-main);
+      border: 1px solid var(--tile-border);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    
+    .page-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+    
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="replays-container">
+    <div class="replays-header">
+      <h1>🎮 Game Replays</h1>
+      <p>Watch the best Last Drop games and learn from the pros!</p>
+    </div>
+    
+    <div class="filters">
+      <button class="filter-btn active" data-sort="createdAt" data-order="DESC">🕒 Latest</button>
+      <button class="filter-btn" data-sort="views" data-order="DESC">👁️ Most Viewed</button>
+      <button class="filter-btn" data-sort="duration" data-order="DESC">⏱️ Longest Games</button>
+      <button class="filter-btn" data-sort="totalRolls" data-order="DESC">🎲 Most Rolls</button>
+      <button class="filter-btn" data-featured="1">⭐ Featured</button>
+    </div>
+    
+    <div id="replaysGrid" class="replays-grid">
+      <div class="loading">
+        <h3>Loading replays...</h3>
+      </div>
+    </div>
+    
+    <div id="pagination" class="pagination" style="display:none;"></div>
+  </div>
+
+  <script>
+    let currentPage = 0;
+    const replaysPerPage = 12;
+    let currentSort = 'createdAt';
+    let currentOrder = 'DESC';
+    let currentFeatured = null;
+    
+    // Load replays on page load
+    loadReplays();
+    
+    // Filter button handlers
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        if (btn.dataset.featured) {
+          currentFeatured = btn.dataset.featured === '1';
+          currentSort = 'views';
+          currentOrder = 'DESC';
+        } else {
+          currentFeatured = null;
+          currentSort = btn.dataset.sort;
+          currentOrder = btn.dataset.order;
+        }
+        
+        currentPage = 0;
+        loadReplays();
+      });
+    });
+    
+    async function loadReplays() {
+      const grid = document.getElementById('replaysGrid');
+      grid.innerHTML = '<div class="loading"><h3>Loading replays...</h3></div>';
+      
+      try {
+        let url = `/api/list_replays.php?limit=${replaysPerPage}&offset=${currentPage * replaysPerPage}&sortBy=${currentSort}&order=${currentOrder}`;
+        if (currentFeatured !== null) {
+          url += `&featured=${currentFeatured ? 1 : 0}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load replays');
+        
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Unknown error');
+        
+        displayReplays(result.replays);
+        setupPagination(result.total);
+        
+      } catch (error) {
+        console.error('[Replays] Load error:', error);
+        grid.innerHTML = `<div class="loading"><h3>❌ Error loading replays</h3><p>${error.message}</p></div>`;
+      }
+    }
+    
+    function displayReplays(replays) {
+      const grid = document.getElementById('replaysGrid');
+      
+      if (replays.length === 0) {
+        grid.innerHTML = '<div class="loading"><h3>No replays found</h3><p>Be the first to play!</p></div>';
+        return;
+      }
+      
+      grid.innerHTML = replays.map(replay => {
+        const date = new Date(replay.createdAt);
+        const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        return `
+          <div class="replay-card" onclick="watchReplay(${replay.id})">
+            <div class="replay-card-header">
+              <span class="replay-id">#${replay.id}</span>
+              ${replay.featured ? '<span class="featured-badge">⭐ Featured</span>' : ''}
+            </div>
+            
+            <div class="replay-players">
+              ${replay.playerNames.map((name, idx) => `
+                <div class="player-pill">
+                  <div class="player-dot" style="background: ${replay.playerColors[idx]};"></div>
+                  <span>${name}</span>
+                </div>
+              `).join('')}
+            </div>
+            
+            <div class="replay-stats">
+              <div class="stat">
+                <div class="stat-value">${formatDuration(replay.duration)}</div>
+                <div class="stat-label">Duration</div>
+              </div>
+              <div class="stat">
+                <div class="stat-value">${replay.totalRolls}</div>
+                <div class="stat-label">Rolls</div>
+              </div>
+              <div class="stat">
+                <div class="stat-value">${replay.views}</div>
+                <div class="stat-label">Views</div>
+              </div>
+            </div>
+            
+            <div class="replay-footer">
+              <span class="replay-date">📅 ${formattedDate}</span>
+              <button class="watch-btn" onclick="event.stopPropagation(); watchReplay(${replay.id});">👁️ Watch</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function setupPagination(total) {
+      const totalPages = Math.ceil(total / replaysPerPage);
+      const pagination = document.getElementById('pagination');
+      
+      if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+      }
+      
+      pagination.style.display = 'flex';
+      pagination.innerHTML = `
+        <button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>
+          ◀ Previous
+        </button>
+        <span class="page-btn active">Page ${currentPage + 1} of ${totalPages}</span>
+        <button class="page-btn" onclick="changePage(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
+          Next ▶
+        </button>
+      `;
+    }
+    
+    function changePage(page) {
+      currentPage = page;
+      loadReplays();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    function watchReplay(id) {
+      window.location.href = `replay.html?id=${id}`;
+    }
+    
+    function formatDuration(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+  </script>
+</body>
+</html>

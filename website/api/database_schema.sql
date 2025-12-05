@@ -31,7 +31,7 @@ CREATE TABLE active_sessions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
--- Table: game_replays (Future Phase 5)
+-- Table: game_replays (Phase 5.2: Game Replay System)
 -- Purpose: Store completed game data for replay viewing
 -- ============================================
 
@@ -39,20 +39,36 @@ CREATE TABLE game_replays (
     id INT PRIMARY KEY AUTO_INCREMENT,
     sessionId VARCHAR(64) NOT NULL,
     boardId VARCHAR(32) DEFAULT NULL,
+    
+    -- Game metadata
+    playerCount INT DEFAULT 0,
     playerNames JSON DEFAULT NULL,
     playerColors JSON DEFAULT NULL,
     duration INT DEFAULT 0,
+    totalRolls INT DEFAULT 0,
+    
+    -- Game outcome
     winner VARCHAR(64) DEFAULT NULL,
+    winnerPlayerId INT DEFAULT NULL,
     finalScores JSON DEFAULT NULL,
+    endReason ENUM('completed', 'abandoned', 'timeout') DEFAULT 'completed',
+    
+    -- Replay data (array of game events with timestamps)
     replayData JSON DEFAULT NULL,
+    
+    -- Metadata
     createdAt DATETIME NOT NULL,
     views INT DEFAULT 0,
+    featured BOOLEAN DEFAULT FALSE,
+    shareUrl VARCHAR(255) DEFAULT NULL,
     
     -- Indexes
     INDEX idx_session (sessionId),
     INDEX idx_board (boardId),
     INDEX idx_created (createdAt),
-    INDEX idx_views (views)
+    INDEX idx_views (views),
+    INDEX idx_featured (featured),
+    INDEX idx_winner (winnerPlayerId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

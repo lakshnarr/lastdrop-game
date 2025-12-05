@@ -28,6 +28,12 @@
     console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
     console.log('[live] API URL:', LIVE_STATE_URL);
     
+    // Initialize Replay Recorder
+    const replayRecorder = new ReplayRecorder();
+    let gameStarted = false;
+    let previousPlayerPositions = new Map();
+    let lastWinner = null;
+    
     const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
     let demoMode = false;
 
@@ -501,6 +507,16 @@
 
     function updateUIFromState(state) {
       if (!state) return;
+      
+      // Start recording when game begins (first time we receive valid state)
+      if (!gameStarted && state.players && state.players.length > 0) {
+        const sessionId = activeSessionId || `session-${Date.now()}`;
+        const boardId = activeBoardId || 'unknown';
+        replayRecorder.startRecording(sessionId, boardId, state.players);
+        gameStarted = true;
+        console.log('[Replay] Game started, recording begun');
+      }
+      
       playersList.innerHTML = "";
       eliminatedList.innerHTML = "";
       
@@ -527,6 +543,11 @@
         if (!previouslyEliminatedIds.has(p.id)) {
           playSound('eliminated');
           previouslyEliminatedIds.add(p.id);
+          
+          // Record elimination event
+          if (replayRecorder.isRecording()) {
+            replayRecorder.recordElimination(p.id, p.name || p.id);
+          }
         }
       });
       
@@ -617,7 +638,34 @@
       
       // Check for winner (only one player remaining)
       if (activePlayers.length === 1 && eliminatedPlayers.length > 0) {
-        showWinner(activePlayers[0]);
+        const winner = activePlayers[0];
+        
+        // Only record and save once
+        if (!lastWinner || lastWinner.id !== winner.id) {
+          lastWinner = winner;
+          showWinner(winner);
+          
+          // Record winner and auto-save replay
+          if (replayRecorder.isRecording()) {
+            replayRecorder.recordWinner(winner.id, winner.name || winner.id, winner.drops);
+            
+            // Collect final scores
+            const finalScores = players.map(p => p.drops || 0);
+            
+            // Auto-save replay
+            replayRecorder.autoSave('completed', winner, finalScores)
+              .then(result => {
+                if (result && result.shareUrl) {
+                  console.log('[Replay] Game replay saved! Share at:', result.shareUrl);
+                  // Optionally show share URL to user
+                  showReplaySharePopup(result.shareUrl, result.replayId);
+                }
+              })
+              .catch(err => {
+                console.error('[Replay] Failed to save replay:', err);
+              });
+          }
+        }
       }
 
       // If a dice animation is currently playing on the client, queue the latest
@@ -804,6 +852,11 @@
                 eventLog.innerHTML = `<span class='event-highlight'>${playerName}</span> rolled <span class='event-highlight'>${e.dice1}</span> and <span class='event-highlight'>${e.dice2}</span>, moved to <span class='event-highlight'>Tile ${e.tileIndex}</span>${e.chanceCardId ? ` and drew card <span class='event-highlight'>${e.chanceCardId}</span>.` : "."}`;
               }, diceColor1, diceColor2);
               
+              // Record dice roll event
+              if (replayRecorder.isRecording()) {
+                replayRecorder.recordRoll(e.playerId, playerName, e.dice1, e.dice2, diceColor1, diceColor2);
+              }
+              
               // DELAYED TOKEN MOVEMENT: Wait 3 seconds after receiving API data before moving tokens
               // This ensures dice animation (2s) completes first with 1s buffer
               console.debug('[live] Starting 3s timer before token movement');
@@ -811,6 +864,19 @@
                 console.debug('[live] Timer complete - clearing animation flag and moving tokens now');
                 isDiceAnimationPlaying = false;
                 updatePlayerPositions();
+                
+                // Record move event after positions update
+                if (replayRecorder.isRecording()) {
+                  const player = players.find(p => p.id === e.playerId);
+                  if (player) {
+                    const fromPos = previousPlayerPositions.get(e.playerId) || 0;
+                    const toPos = player.pos;
+                    const tileName = tileNames[toPos] || `Tile ${toPos}`;
+                    replayRecorder.recordMove(e.playerId, fromPos, toPos, tileName);
+                    previousPlayerPositions.set(e.playerId, toPos);
+                  }
+                }
+                
                 tokenMoveTimer = null;
               }, 3000);
             } else {
@@ -820,6 +886,11 @@
                 eventLog.innerHTML = `<span class='event-highlight'>${playerName}</span> rolled <span class='event-highlight'>${e.dice1}</span>, moved to <span class='event-highlight'>Tile ${e.tileIndex}</span>${e.chanceCardId ? ` and drew card <span class='event-highlight'>${e.chanceCardId}</span>.` : "."}`;
               }, diceColor1, diceColor2);
               
+              // Record dice roll event
+              if (replayRecorder.isRecording()) {
+                replayRecorder.recordRoll(e.playerId, playerName, e.dice1, null, diceColor1, null);
+              }
+              
               // DELAYED TOKEN MOVEMENT: Wait 3 seconds after receiving API data before moving tokens
               // This ensures dice animation (2s) completes first with 1s buffer
               console.debug('[live] Starting 3s timer before token movement');
@@ -827,6 +898,19 @@
                 console.debug('[live] Timer complete - clearing animation flag and moving tokens now');
                 isDiceAnimationPlaying = false;
                 updatePlayerPositions();
+                
+                // Record move event after positions update
+                if (replayRecorder.isRecording()) {
+                  const player = players.find(p => p.id === e.playerId);
+                  if (player) {
+                    const fromPos = previousPlayerPositions.get(e.playerId) || 0;
+                    const toPos = player.pos;
+                    const tileName = tileNames[toPos] || `Tile ${toPos}`;
+                    replayRecorder.recordMove(e.playerId, fromPos, toPos, tileName);
+                    previousPlayerPositions.set(e.playerId, toPos);
+                  }
+                }
+                
                 tokenMoveTimer = null;
               }, 3000);
             }
@@ -1653,4 +1737,52 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
     settingsPanel.classList.add('hidden');
     settingsBackdrop.classList.add('hidden');
   });
+
+  // Replay Share Popup Functions
+  function showReplaySharePopup(shareUrl, replayId) {
+    let popup = document.getElementById('replaySharePopup');
+    if (!popup) {
+      popup = document.createElement('div');
+      popup.id = 'replaySharePopup';
+      popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);padding:30px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:10000;display:none;max-width:500px;width:90%;';
+      popup.innerHTML = `
+        <h3 style="color:var(--accent);margin:0 0 15px 0;">🎮 Game Replay Saved!</h3>
+        <p style="color:var(--text-main);margin-bottom:15px;">Watch this game again or share it with friends:</p>
+        <input type="text" readonly value="${shareUrl}" id="replayShareUrl" style="width:100%;padding:12px;background:var(--tile-bg);border:1px solid var(--tile-border);color:var(--text-main);border-radius:8px;margin-bottom:15px;font-family:monospace;" />
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button onclick="copyReplayUrl()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:600;">📋 Copy Link</button>
+          <button onclick="openReplay()" style="flex:1;padding:12px;background:var(--success);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:600;">👁️ Watch Now</button>
+          <button onclick="closeReplayPopup()" style="flex:0.5;padding:12px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;">✖</button>
+        </div>
+      `;
+      document.body.appendChild(popup);
+    }
+    const urlInput = popup.querySelector('#replayShareUrl');
+    if (urlInput) urlInput.value = shareUrl;
+    popup.style.display = 'block';
+  }
+
+  window.copyReplayUrl = function() {
+    const urlInput = document.getElementById('replayShareUrl');
+    if (urlInput) {
+      urlInput.select();
+      document.execCommand('copy');
+      const copyBtn = document.querySelector('button[onclick="copyReplayUrl()"]');
+      if (copyBtn) {
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = '✓ Copied!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+      }
+    }
+  };
+
+  window.openReplay = function() {
+    const urlInput = document.getElementById('replayShareUrl');
+    if (urlInput) window.open(urlInput.value, '_blank');
+  };
+
+  window.closeReplayPopup = function() {
+    const popup = document.getElementById('replaySharePopup');
+    if (popup) popup.style.display = 'none';
+  };
 
