@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Last Drop - Water Conservation Board Game</title>
+  <meta name="description" content="The ultimate water conservation board game. Physical board game meets digital spectating. Educational, strategic, and family-friendly.">
+  <link rel="stylesheet" href="assets/css/shared.css">
+  <style>
+    :root {
+      --bg-color: #050711;
+      --accent: #40e0d0;
+      --accent-soft: rgba(64, 224, 208, 0.3);
+      --card-bg: #0b1020;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --danger: #f97373;
+      --success: #4ade80;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg-color) 55%);
+      color: var(--text-main);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(64, 224, 208, 0.1), transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      max-width: 900px;
+      z-index: 1;
+    }
+
+    .hero-title {
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      font-size: 0.9rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* CTA Buttons */
+    .cta-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .cta-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 24px;
+      border-radius: 16px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(64, 224, 208, 0.1), rgba(96, 165, 250, 0.1));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .cta-btn:hover::before {
+      opacity: 1;
+    }
+
+    .cta-btn.primary {
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      color: white;
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.4);
+    }
+
+    .cta-btn.secondary {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: var(--accent);
+      color: var(--text-main);
+    }
+
+    .cta-btn.tertiary {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: #60a5fa;
+      color: var(--text-main);
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(64, 224, 208, 0.6);
+    }
+
+    .cta-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .cta-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .cta-desc {
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+
+    /* How It Works Section */
+    .section {
+      max-width: 1200px;
+      margin: 80px auto;
+      padding: 0 20px;
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 48px;
+      color: var(--accent);
+    }
+
+    .how-it-works {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+    }
+
+    .step-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 32px 24px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .step-card:hover {
+      transform: translateY(-8px);
+      border-color: var(--accent);
+      box-shadow: 0 12px 32px rgba(64, 224, 208, 0.3);
+    }
+
+    .step-number {
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
+      color: var(--bg-color);
+      border-radius: 50%;
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 48px;
+      margin-bottom: 16px;
+    }
+
+    .step-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .step-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .step-desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .feature-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .feature-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    .feature-desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Download Section */
+    .download-section {
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      padding: 48px 32px;
+      text-align: center;
+      max-width: 600px;
+      margin: 80px auto;
+    }
+
+    .download-title {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .download-desc {
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .qr-placeholder {
+      width: 200px;
+      height: 200px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+    }
+
+    .download-link {
+      display: inline-block;
+      padding: 16px 32px;
+      background: var(--accent);
+      color: var(--bg-color);
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .download-link:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.5);
+    }
+
+    /* Footer */
+    .footer {
+      background: rgba(5, 7, 17, 0.95);
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 40px 20px;
+      text-align: center;
+      margin-top: 80px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .footer-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--accent);
+    }
+
+    .footer-copy {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero {
+        min-height: 80vh;
+        padding: 60px 20px;
+      }
+
+      .cta-section {
+        grid-template-columns: 1fr;
+      }
+
+      .how-it-works {
+        grid-template-columns: 1fr;
+      }
+
+      .section {
+        margin: 60px auto;
+      }
+
+      .download-section {
+        margin: 60px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 class="hero-title">Last Drop</h1>
+      <p class="hero-subtitle">The Ultimate Water Conservation Game</p>
+      <p class="hero-subtitle" style="font-size: 1.1rem; margin-bottom: 24px;">
+        Physical board game meets digital spectating
+      </p>
+      
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span>🎲</span>
+          <span id="activeGames">0 games playing now</span>
+        </div>
+        <div class="stat-item">
+          <span>👥</span>
+          <span id="activePlayers">0 players online</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Buttons -->
+  <section class="cta-section">
+    <a href="demo.html" class="cta-btn primary">
+      <div class="cta-icon">🎮</div>
+      <div class="cta-title">Play Demo Now</div>
+      <div class="cta-desc">Try it instantly in your browser</div>
+    </a>
+    
+    <a href="host.html" class="cta-btn secondary">
+      <div class="cta-icon">🏠</div>
+      <div class="cta-title">Host a Game</div>
+      <div class="cta-desc">Generate session & invite spectators</div>
+    </a>
+    
+    <a href="spectate.html" class="cta-btn tertiary">
+      <div class="cta-icon">👀</div>
+      <div class="cta-title">Watch Live Games</div>
+      <div class="cta-desc">See what others are playing</div>
+    </a>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="section">
+    <h2 class="section-title">How It Works</h2>
+    <div class="how-it-works">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <div class="step-icon">🎲</div>
+        <h3 class="step-title">Roll GoDice</h3>
+        <p class="step-desc">Bluetooth smart dice connect to your phone for instant dice detection</p>
+      </div>
+      
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <div class="step-icon">💡</div>
+        <h3 class="step-title">Physical Board Responds</h3>
+        <p class="step-desc">ESP32-powered board lights up your path with RGB LED tiles</p>
+      </div>
+      
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <div class="step-icon">📱</div>
+        <h3 class="step-title">Everyone Watches Live</h3>
+        <p class="step-desc">Friends and family spectate in real-time from anywhere via QR code</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game Features Section -->
+  <section class="section">
+    <h2 class="section-title">Game Features</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3 class="feature-title">Educational</h3>
+        <p class="feature-desc">Learn water conservation through engaging gameplay</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3 class="feature-title">Strategic</h3>
+        <p class="feature-desc">Chance cards & tile effects create dynamic gameplay</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">👨‍👩‍👧‍👦</div>
+        <h3 class="feature-title">Family-Friendly</h3>
+        <p class="feature-desc">Perfect for 2-4 players of all ages</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3 class="feature-title">Connected</h3>
+        <p class="feature-desc">Watch games from anywhere with live digital spectating</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download App Section -->
+  <section class="download-section">
+    <h2 class="download-title">Get the Android App</h2>
+    <p class="download-desc">Download the Last Drop controller app to host games and connect your physical board</p>
+    <div class="qr-placeholder">📲</div>
+    <a href="#" class="download-link">Download on Google Play</a>
+    <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted);">Available on Android 6.0+</p>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-links">
+      <a href="#" class="footer-link">Game Rules</a>
+      <a href="#" class="footer-link">About</a>
+      <a href="#" class="footer-link">Contact</a>
+      <a href="#" class="footer-link">Privacy Policy</a>
+    </div>
+    <p class="footer-copy">© 2025 Last Drop. All rights reserved.</p>
+  </footer>
+
+  <script>
+    // Fetch live stats (optional - can be implemented later)
+    async function updateStats() {
+      try {
+        const response = await fetch('/api/active_games.php?key=ABC123');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            const gamesCount = data.count || 0;
+            const playersCount = data.games?.reduce((sum, game) => sum + (game.playerCount || 0), 0) || 0;
+            
+            document.getElementById('activeGames').textContent = `${gamesCount} game${gamesCount !== 1 ? 's' : ''} playing now`;
+            document.getElementById('activePlayers').textContent = `${playersCount} player${playersCount !== 1 ? 's' : ''} online`;
+          }
+        }
+      } catch (err) {
+        console.log('Stats unavailable:', err);
+      }
+    }
+
+    // Update stats on load and every 30 seconds
+    updateStats();
+    setInterval(updateStats, 30000);
+  </script>
+</body>
+</html>
