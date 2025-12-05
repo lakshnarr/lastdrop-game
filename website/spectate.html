@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spectate Games - Last Drop</title>
+  <meta name="description" content="Watch live Last Drop games. Browse active game sessions and spectate in real-time.">
+  <link rel="stylesheet" href="assets/css/shared.css">
+  <style>
+    :root {
+      --bg-color: #050711;
+      --accent: #40e0d0;
+      --accent-soft: rgba(64, 224, 208, 0.3);
+      --card-bg: #0b1020;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #ef4444;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg-color) 55%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 20px 0;
+    }
+
+    .header h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      margin-bottom: 24px;
+    }
+
+    .home-link {
+      display: inline-block;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      transition: color 0.3s ease;
+    }
+
+    .home-link:hover {
+      color: var(--accent);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 16px 24px;
+      min-width: 150px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Search & Filter */
+    .controls {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 250px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px 16px 12px 44px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 1.2rem;
+    }
+
+    .filter-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 10px 20px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .filter-btn.active {
+      background: var(--accent);
+      color: var(--bg-color);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .refresh-btn {
+      padding: 10px 20px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: var(--bg-color);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 16px rgba(64, 224, 208, 0.4);
+    }
+
+    .refresh-btn.refreshing {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .refresh-icon {
+      display: inline-block;
+      transition: transform 0.3s ease;
+    }
+
+    .refresh-btn.refreshing .refresh-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Games Grid */
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .game-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), #60a5fa);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      border-color: var(--accent);
+    }
+
+    .game-card:hover::before {
+      opacity: 1;
+    }
+
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    .game-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .game-id {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .live-badge {
+      padding: 4px 12px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid var(--error);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--error);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--error);
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .game-info {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .info-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .game-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 16px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .game-time {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .watch-btn {
+      padding: 8px 20px;
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: var(--bg-color);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .watch-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(64, 224, 208, 0.5);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      display: none;
+    }
+
+    .empty-state.visible {
+      display: block;
+    }
+
+    .empty-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .empty-description {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-bottom: 24px;
+    }
+
+    .empty-action {
+      display: inline-block;
+      padding: 12px 32px;
+      background: var(--accent);
+      color: var(--bg-color);
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .empty-action:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.4);
+    }
+
+    /* Loading State */
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+      display: none;
+    }
+
+    .loading-state.visible {
+      display: block;
+    }
+
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(148, 163, 184, 0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    .loading-text {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    /* Error State */
+    .error-state {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 32px;
+      display: none;
+    }
+
+    .error-state.visible {
+      display: block;
+    }
+
+    .error-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .error-message {
+      color: var(--text-main);
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+
+    .retry-btn {
+      padding: 10px 24px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: var(--bg-color);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .retry-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .games-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .filter-buttons {
+        justify-content: center;
+      }
+
+      .stats-bar {
+        gap: 12px;
+      }
+
+      .stat-card {
+        min-width: 120px;
+        padding: 12px 16px;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>👀 Spectate Live Games</h1>
+      <p>Watch Last Drop games happening right now</p>
+      <a href="index.html" class="home-link">← Back to Home</a>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <span class="stat-value" id="totalGames">0</span>
+        <div class="stat-label">Active Games</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="totalPlayers">0</span>
+        <div class="stat-label">Players Online</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="totalSpectators">0</span>
+        <div class="stat-label">Spectators</div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" class="error-state">
+      <div class="error-icon">⚠️</div>
+      <div class="error-message" id="errorMessage">Failed to load games. Please check your connection.</div>
+      <button class="retry-btn" onclick="fetchGames()">Retry</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="Search by Board ID or Session ID..." 
+          oninput="filterGames()"
+        >
+      </div>
+      
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">
+          All Games
+        </button>
+        <button class="filter-btn" data-filter="2" onclick="setFilter('2')">
+          2 Players
+        </button>
+        <button class="filter-btn" data-filter="3" onclick="setFilter('3')">
+          3 Players
+        </button>
+        <button class="filter-btn" data-filter="4" onclick="setFilter('4')">
+          4 Players
+        </button>
+      </div>
+
+      <button class="refresh-btn" id="refreshBtn" onclick="fetchGames()">
+        <span class="refresh-icon">🔄</span>
+        <span>Refresh</span>
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading active games...</div>
+    </div>
+
+    <!-- Games Grid -->
+    <div id="gamesGrid" class="games-grid"></div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">🎲</div>
+      <h2 class="empty-title">No active games right now</h2>
+      <p class="empty-description">Be the first to start a game!</p>
+      <a href="host.html" class="empty-action">Host a Game</a>
+    </div>
+  </div>
+
+  <script>
+    let allGames = [];
+    let currentFilter = 'all';
+    let autoRefreshInterval;
+
+    // Fetch games from API
+    async function fetchGames() {
+      const loadingState = document.getElementById('loadingState');
+      const errorState = document.getElementById('errorState');
+      const gamesGrid = document.getElementById('gamesGrid');
+      const emptyState = document.getElementById('emptyState');
+      const refreshBtn = document.getElementById('refreshBtn');
+
+      // Show loading state
+      loadingState.classList.add('visible');
+      errorState.classList.remove('visible');
+      gamesGrid.innerHTML = '';
+      emptyState.classList.remove('visible');
+      refreshBtn.classList.add('refreshing');
+
+      try {
+        // Fetch from API
+        const response = await fetch('/api/active_games.php?key=ABC123');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+          allGames = data.games || [];
+          updateStats(data);
+          displayGames();
+        } else {
+          throw new Error(data.message || 'Failed to fetch games');
+        }
+      } catch (error) {
+        console.error('Error fetching games:', error);
+        
+        // Show error state
+        errorState.classList.add('visible');
+        document.getElementById('errorMessage').textContent = 
+          error.message || 'Failed to load games. Please check your connection.';
+        
+        // Use demo data for testing
+        useDemoData();
+      } finally {
+        loadingState.classList.remove('visible');
+        refreshBtn.classList.remove('refreshing');
+      }
+    }
+
+    // Use demo data for testing
+    function useDemoData() {
+      allGames = [
+        {
+          sessionId: 'a1b2c3d4',
+          boardId: 'LASTDROP-0001',
+          playerCount: 3,
+          spectatorCount: 5,
+          duration: '12:34',
+          startTime: Date.now() - (12 * 60 + 34) * 1000
+        },
+        {
+          sessionId: 'e5f6g7h8',
+          boardId: 'LASTDROP-0002',
+          playerCount: 2,
+          spectatorCount: 2,
+          duration: '05:12',
+          startTime: Date.now() - (5 * 60 + 12) * 1000
+        },
+        {
+          sessionId: 'i9j0k1l2',
+          boardId: 'LASTDROP-0003',
+          playerCount: 4,
+          spectatorCount: 8,
+          duration: '23:45',
+          startTime: Date.now() - (23 * 60 + 45) * 1000
+        }
+      ];
+
+      updateStats({
+        totalGames: allGames.length,
+        totalPlayers: allGames.reduce((sum, g) => sum + g.playerCount, 0),
+        totalSpectators: allGames.reduce((sum, g) => sum + g.spectatorCount, 0)
+      });
+
+      displayGames();
+    }
+
+    // Update stats bar
+    function updateStats(data) {
+      document.getElementById('totalGames').textContent = data.totalGames || allGames.length;
+      document.getElementById('totalPlayers').textContent = data.totalPlayers || 0;
+      document.getElementById('totalSpectators').textContent = data.totalSpectators || 0;
+    }
+
+    // Display games
+    function displayGames() {
+      const gamesGrid = document.getElementById('gamesGrid');
+      const emptyState = document.getElementById('emptyState');
+      const searchInput = document.getElementById('searchInput');
+      const searchTerm = searchInput.value.toLowerCase();
+
+      // Filter games
+      let filteredGames = allGames.filter(game => {
+        // Filter by player count
+        if (currentFilter !== 'all' && game.playerCount !== parseInt(currentFilter)) {
+          return false;
+        }
+
+        // Filter by search term
+        if (searchTerm) {
+          const boardMatch = game.boardId.toLowerCase().includes(searchTerm);
+          const sessionMatch = game.sessionId.toLowerCase().includes(searchTerm);
+          return boardMatch || sessionMatch;
+        }
+
+        return true;
+      });
+
+      // Show empty state if no games
+      if (filteredGames.length === 0) {
+        gamesGrid.innerHTML = '';
+        emptyState.classList.add('visible');
+        return;
+      }
+
+      emptyState.classList.remove('visible');
+
+      // Render game cards
+      gamesGrid.innerHTML = filteredGames.map(game => `
+        <div class="game-card" onclick="watchGame('${game.sessionId}')">
+          <div class="game-header">
+            <div>
+              <div class="game-title">${game.boardId}</div>
+              <div class="game-id">Session: ${game.sessionId}</div>
+            </div>
+            <div class="live-badge">
+              <span class="live-dot"></span>
+              LIVE
+            </div>
+          </div>
+
+          <div class="game-info">
+            <div class="info-item">
+              <div class="info-label">Players</div>
+              <div class="info-value">👥 ${game.playerCount}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Spectators</div>
+              <div class="info-value">👀 ${game.spectatorCount}</div>
+            </div>
+          </div>
+
+          <div class="game-footer">
+            <div class="game-time">⏱️ ${game.duration || formatDuration(Date.now() - game.startTime)}</div>
+            <button class="watch-btn" onclick="watchGame('${game.sessionId}'); event.stopPropagation();">
+              Watch Now
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Format duration from milliseconds
+    function formatDuration(ms) {
+      const minutes = Math.floor(ms / 60000);
+      const seconds = Math.floor((ms % 60000) / 1000);
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // Set filter
+    function setFilter(filter) {
+      currentFilter = filter;
+      
+      // Update button states
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+
+      // Re-display games
+      displayGames();
+    }
+
+    // Filter games by search
+    function filterGames() {
+      displayGames();
+    }
+
+    // Watch game
+    function watchGame(sessionId) {
+      window.location.href = `live.html?session=${sessionId}`;
+    }
+
+    // Auto-refresh games every 5 seconds
+    function startAutoRefresh() {
+      autoRefreshInterval = setInterval(() => {
+        fetchGames();
+      }, 5000);
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    }
+
+    // Initialize on page load
+    window.addEventListener('load', () => {
+      fetchGames();
+      startAutoRefresh();
+    });
+
+    // Stop auto-refresh when page is hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else {
+        startAutoRefresh();
+      }
+    });
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+      stopAutoRefresh();
+    });
+  </script>
+</body>
+</html>
