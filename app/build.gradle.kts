@@ -1,56 +1,35 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("com.google.devtools.ksp") version "1.9.25-1.0.20"
+    alias(libs.plugins.kotlin.compose) // keep compose plugin so ui.theme compiles
+    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
 android {
-    namespace = "com.example.lastdrop"
+    namespace = "earth.lastdrop.app"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "earth.lastdrop.app"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Load API key from local.properties (NOT committed to version control)
-        val localProperties = project.rootProject.file("local.properties")
-        if (localProperties.exists()) {
-            val properties = Properties()
-            properties.load(FileInputStream(localProperties))
-            val apiKey = properties.getProperty("LASTDROP_API_KEY") ?: "ABC123"
-            buildConfigField("String", "API_KEY", "\"$apiKey\"")
-        } else {
-            buildConfigField("String", "API_KEY", "\"ABC123\"")
+        
+        // Load API key from local.properties
+        val properties = org.jetbrains.kotlin.konan.properties.Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            properties.load(localPropertiesFile.inputStream())
         }
-    }
-
-    signingConfigs {
-        create("release") {
-            val localProperties = project.rootProject.file("local.properties")
-            if (localProperties.exists()) {
-                val properties = Properties()
-                properties.load(FileInputStream(localProperties))
-                
-                storeFile = file("../lastdrop-release-key.jks")
-                storePassword = properties.getProperty("KEYSTORE_PASSWORD")
-                keyAlias = "lastdrop"
-                keyPassword = properties.getProperty("KEY_PASSWORD")
-            }
-        }
+        buildConfigField("String", "API_KEY", "\"${properties.getProperty("LASTDROP_API_KEY", "ABC123")}\"")
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -67,7 +46,10 @@ android {
         jvmTarget = "11"
     }
 
+    // We keep compose = true (for the theme files),
+    // but our MainActivity uses XML with setContentView, which is fine.
     buildFeatures {
+        compose = true
         buildConfig = true
     }
 }
@@ -78,6 +60,12 @@ dependencies {
     // From your version catalog (original)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
     implementation(project(":godicesdklib"))
 
     // Extra standard UI libs (for AppCompat + Material XML widgets)
@@ -89,18 +77,29 @@ dependencies {
     // ✅ New: networking + async for ESP communication
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    
-    // ✅ QR Code Scanner (ZXing)
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    implementation("com.google.zxing:core:3.5.3")
 
     // Room
     implementation("androidx.room:room-runtime:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
 
+    // QR Code generation and scanning
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
     // Tests (from your original file)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// Auto-install to connected device after every debug build
+afterEvaluate {
+    tasks.named("assembleDebug").configure {
+        finalizedBy("installDebug")
+    }
 }

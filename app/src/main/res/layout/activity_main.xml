@@ -38,25 +38,40 @@
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="0dp"
             android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#2a2a2a"
             android:text="📜 History"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/btnLeaderboard"
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="0dp"
             android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#2a2a2a"
-            android:text="🏆 Leaderboard"
+            android:text="🏆 Ranks"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnChangePlayers"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:background="#2a2a2a"
+            android:text="👥 Players"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <Button
@@ -373,20 +388,36 @@
         android:orientation="horizontal"
         android:weightSum="2">
 
-        <Button
-            android:id="@+id/btnUndo"
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_marginEnd="6dp"
-            android:layout_weight="1"
-            android:backgroundTint="#FF9800"
-            android:elevation="4dp"
-            android:padding="8dp"
-            android:text="  ↩️  Undo Last Roll"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/btnUndo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:backgroundTint="#FF9800"
+                android:elevation="4dp"
+                android:padding="8dp"
+                android:text="  ↩️  Undo Last Roll"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ProgressBar
+                android:id="@+id/undoProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:layout_gravity="bottom"
+                android:max="5"
+                android:progress="5"
+                android:progressTint="#FFEB3B"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <Button
             android:id="@+id/btnRefreshScoreboard"
