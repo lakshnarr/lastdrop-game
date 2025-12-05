@@ -3,6 +3,8 @@
 -- Created: December 5, 2025
 
 -- Drop existing tables if they exist (for clean reinstall)
+DROP TABLE IF EXISTS player_stats;
+DROP TABLE IF EXISTS leaderboard_entries;
 DROP TABLE IF EXISTS game_replays;
 DROP TABLE IF EXISTS active_sessions;
 
@@ -69,6 +71,87 @@ CREATE TABLE game_replays (
     INDEX idx_views (views),
     INDEX idx_featured (featured),
     INDEX idx_winner (winnerPlayerId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: player_stats (Phase 5.3: Leaderboards)
+-- Purpose: Track aggregate player statistics across all games
+-- ============================================
+
+CREATE TABLE player_stats (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    playerName VARCHAR(100) UNIQUE NOT NULL,
+    
+    -- Game statistics
+    gamesPlayed INT DEFAULT 0,
+    gamesWon INT DEFAULT 0,
+    totalScore INT DEFAULT 0,
+    highestScore INT DEFAULT 0,
+    lowestScore INT DEFAULT 0,
+    avgScore DECIMAL(10,2) DEFAULT 0,
+    
+    -- Time statistics
+    totalPlayTime INT DEFAULT 0,  -- seconds
+    avgGameDuration INT DEFAULT 0,  -- seconds
+    
+    -- Win statistics
+    winRate DECIMAL(5,2) DEFAULT 0,  -- percentage
+    currentStreak INT DEFAULT 0,  -- consecutive wins
+    bestStreak INT DEFAULT 0,  -- best streak ever
+    
+    -- Ranking
+    eloRating INT DEFAULT 1000,  -- ELO rating system
+    rank INT DEFAULT NULL,  -- overall rank position
+    
+    -- Activity tracking
+    lastPlayed DATETIME DEFAULT NULL,
+    createdAt DATETIME NOT NULL,
+    updatedAt DATETIME NOT NULL,
+    
+    -- Indexes
+    INDEX idx_player_name (playerName),
+    INDEX idx_elo (eloRating),
+    INDEX idx_games_won (gamesWon),
+    INDEX idx_win_rate (winRate),
+    INDEX idx_rank (rank),
+    INDEX idx_last_played (lastPlayed)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: leaderboard_entries (Phase 5.3: Leaderboards)
+-- Purpose: Track daily/weekly/monthly leaderboard snapshots
+-- ============================================
+
+CREATE TABLE leaderboard_entries (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    playerName VARCHAR(100) NOT NULL,
+    
+    -- Period tracking
+    period ENUM('daily', 'weekly', 'monthly', 'alltime') NOT NULL,
+    periodStart DATE NOT NULL,
+    periodEnd DATE NOT NULL,
+    
+    -- Period statistics
+    gamesPlayed INT DEFAULT 0,
+    gamesWon INT DEFAULT 0,
+    totalScore INT DEFAULT 0,
+    avgScore DECIMAL(10,2) DEFAULT 0,
+    eloRating INT DEFAULT 1000,
+    
+    -- Ranking
+    rank INT NOT NULL,
+    
+    -- Metadata
+    createdAt DATETIME NOT NULL,
+    
+    -- Unique constraint: one entry per player per period
+    UNIQUE KEY unique_player_period (playerName, period, periodStart),
+    
+    -- Indexes
+    INDEX idx_period (period, periodStart),
+    INDEX idx_rank (rank),
+    INDEX idx_player (playerName),
+    INDEX idx_elo (eloRating)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

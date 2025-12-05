@@ -115,6 +115,9 @@ try {
     $updateStmt = $pdo->prepare("UPDATE game_replays SET shareUrl = :shareUrl WHERE id = :id");
     $updateStmt->execute([':shareUrl' => $shareUrl, ':id' => $replayId]);
     
+    // Update player stats for leaderboard (Phase 5.3)
+    updatePlayerStats($pdo, $data);
+    
     echo json_encode([
         'success' => true,
         'replayId' => $replayId,
@@ -125,3 +128,137 @@ try {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'Failed to save replay: ' . $e->getMessage()]);
 }
+
+/**
+ * Update player statistics for leaderboard
+ */
+function updatePlayerStats($pdo, $gameData) {
+    $playerNames = $gameData['playerNames'];
+    $finalScores = $gameData['finalScores'];
+    $winner = $gameData['winner'];
+    $duration = $gameData['duration'];
+    
+    // Calculate average opponent ELO for each player
+    $avgOpponentElo = 1000;  // Default for first games
+    
+    try {
+        $stmt = $pdo->prepare("SELECT AVG(eloRating) as avgElo FROM player_stats WHERE playerName IN (" . 
+            str_repeat('?,', count($playerNames) - 1) . "?)");
+        $stmt->execute($playerNames);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result && $result['avgElo']) {
+            $avgOpponentElo = (int)$result['avgElo'];
+        }
+    } catch (PDOException $e) {
+        // Ignore errors, use default
+    }
+    
+    // Update stats for each player
+    foreach ($playerNames as $idx => $playerName) {
+        $score = $finalScores[$idx] ?? 0;
+        $gameResult = ($playerName === $winner) ? 'win' : 'loss';
+        
+        try {
+            // Call update_player_stats logic inline
+            $stmt = $pdo->prepare("SELECT * FROM player_stats WHERE playerName = :playerName");
+            $stmt->execute([':playerName' => $playerName]);
+            $player = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$player) {
+                // Create new player
+                $stmt = $pdo->prepare("
+                    INSERT INTO player_stats (
+                        playerName, gamesPlayed, gamesWon, totalScore, highestScore, 
+                        lowestScore, totalPlayTime, eloRating, createdAt, updatedAt, lastPlayed
+                    ) VALUES (
+                        :playerName, 0, 0, 0, 0, 9999, 0, 1000, NOW(), NOW(), NOW()
+                    )
+                ");
+                $stmt->execute([':playerName' => $playerName]);
+                
+                $stmt = $pdo->prepare("SELECT * FROM player_stats WHERE playerName = :playerName");
+                $stmt->execute([':playerName' => $playerName]);
+                $player = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+            
+            // Calculate new stats
+            $gamesPlayed = $player['gamesPlayed'] + 1;
+            $gamesWon = $gameResult === 'win' ? $player['gamesWon'] + 1 : $player['gamesWon'];
+            $totalScore = $player['totalScore'] + $score;
+            $highestScore = max($player['highestScore'], $score);
+            $lowestScore = min($player['lowestScore'], $score);
+            $avgScore = $totalScore / $gamesPlayed;
+            $totalPlayTime = $player['totalPlayTime'] + $duration;
+            $avgGameDuration = $totalPlayTime / $gamesPlayed;
+            $winRate = ($gamesWon / $gamesPlayed) * 100;
+            
+            // Update streak
+            if ($gameResult === 'win') {
+                $currentStreak = $player['currentStreak'] + 1;
+                $bestStreak = max($player['bestStreak'], $currentStreak);
+            } else {
+                $currentStreak = 0;
+                $bestStreak = $player['bestStreak'];
+            }
+            
+            // Calculate new ELO
+            $currentElo = $player['eloRating'];
+            $expectedScore = 1 / (1 + pow(10, ($avgOpponentElo - $currentElo) / 400));
+            $actualScore = $gameResult === 'win' ? 1 : 0;
+            $newElo = round($currentElo + 32 * ($actualScore - $expectedScore));
+            
+            // Update player stats
+            $stmt = $pdo->prepare("
+                UPDATE player_stats SET
+                    gamesPlayed = :gamesPlayed,
+                    gamesWon = :gamesWon,
+                    totalScore = :totalScore,
+                    highestScore = :highestScore,
+                    lowestScore = :lowestScore,
+                    avgScore = :avgScore,
+                    totalPlayTime = :totalPlayTime,
+                    avgGameDuration = :avgGameDuration,
+                    winRate = :winRate,
+                    currentStreak = :currentStreak,
+                    bestStreak = :bestStreak,
+                    eloRating = :eloRating,
+                    lastPlayed = NOW(),
+                    updatedAt = NOW()
+                WHERE playerName = :playerName
+            ");
+            
+            $stmt->execute([
+                ':gamesPlayed' => $gamesPlayed,
+                ':gamesWon' => $gamesWon,
+                ':totalScore' => $totalScore,
+                ':highestScore' => $highestScore,
+                ':lowestScore' => $lowestScore,
+                ':avgScore' => $avgScore,
+                ':totalPlayTime' => $totalPlayTime,
+                ':avgGameDuration' => $avgGameDuration,
+                ':winRate' => $winRate,
+                ':currentStreak' => $currentStreak,
+                ':bestStreak' => $bestStreak,
+                ':eloRating' => $newElo,
+                ':playerName' => $playerName
+            ]);
+            
+        } catch (PDOException $e) {
+            // Log error but don't fail the replay save
+            error_log("Failed to update stats for $playerName: " . $e->getMessage());
+        }
+    }
+    
+    // Recalculate ranks
+    try {
+        $pdo->exec("
+            SET @rank = 0;
+            UPDATE player_stats
+            SET rank = (@rank := @rank + 1)
+            ORDER BY eloRating DESC, gamesWon DESC, winRate DESC
+        ");
+    } catch (PDOException $e) {
+        error_log("Failed to recalculate ranks: " . $e->getMessage());
+    }
+}
+

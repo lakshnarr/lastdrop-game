@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Last Drop — Leaderboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Top Last Drop players! See who's dominating the water conservation challenge." />
+  <meta name="keywords" content="Last Drop, leaderboard, rankings, top players, champions" />
+  
+  <link rel="stylesheet" href="assets/css/shared.css" />
+  
+  <style>
+    body {
+      background: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      padding: 20px;
+    }
+    
+    .leaderboard-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 60px;
+    }
+    
+    .leaderboard-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    .leaderboard-header h1 {
+      color: var(--accent);
+      font-size: 48px;
+      margin: 0 0 10px 0;
+    }
+    
+    .leaderboard-header p {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+    
+    .period-tabs {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    
+    .period-tab {
+      padding: 12px 24px;
+      background: var(--tile-bg);
+      color: var(--text-main);
+      border: 1px solid var(--tile-border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    
+    .period-tab.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+    
+    .period-tab:hover:not(.active) {
+      background: var(--tile-border);
+    }
+    
+    .podium {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 20px;
+      margin-bottom: 40px;
+      padding: 20px;
+    }
+    
+    .podium-place {
+      text-align: center;
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      min-width: 200px;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    
+    .podium-place:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 8px 24px rgba(64, 224, 208, 0.2);
+    }
+    
+    .podium-place.first {
+      order: 2;
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+      color: #000;
+      min-height: 280px;
+    }
+    
+    .podium-place.second {
+      order: 1;
+      background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%);
+      color: #000;
+      min-height: 240px;
+    }
+    
+    .podium-place.third {
+      order: 3;
+      background: linear-gradient(135deg, #CD7F32 0%, #A0522D 100%);
+      color: #fff;
+      min-height: 200px;
+    }
+    
+    .podium-rank {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    
+    .podium-name {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 15px;
+    }
+    
+    .podium-elo {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    
+    .podium-stats {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .leaderboard-table {
+      background: var(--card-bg);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    
+    .table-header {
+      display: grid;
+      grid-template-columns: 60px 1fr 120px 100px 100px 120px 100px;
+      gap: 15px;
+      padding: 20px;
+      background: var(--tile-bg);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .table-row {
+      display: grid;
+      grid-template-columns: 60px 1fr 120px 100px 100px 120px 100px;
+      gap: 15px;
+      padding: 20px;
+      border-bottom: 1px solid var(--tile-border);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    
+    .table-row:hover {
+      background: var(--tile-bg);
+    }
+    
+    .table-row:last-child {
+      border-bottom: none;
+    }
+    
+    .rank-cell {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+    }
+    
+    .player-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .player-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, #60a5fa 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+      color: #000;
+    }
+    
+    .player-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .elo-cell {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: center;
+    }
+    
+    .stat-cell {
+      text-align: center;
+      font-size: 14px;
+    }
+    
+    .win-rate {
+      color: var(--success);
+      font-weight: 600;
+    }
+    
+    .streak-badge {
+      display: inline-block;
+      background: var(--success);
+      color: #000;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-muted);
+    }
+    
+    @media (max-width: 768px) {
+      .table-header,
+      .table-row {
+        grid-template-columns: 50px 1fr 80px 80px;
+        gap: 10px;
+        font-size: 12px;
+      }
+      
+      .table-header .hide-mobile,
+      .table-row .hide-mobile {
+        display: none;
+      }
+      
+      .podium {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .podium-place {
+        order: unset !important;
+        min-height: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="leaderboard-container">
+    <div class="leaderboard-header">
+      <h1>🏆 Leaderboard</h1>
+      <p>The best Last Drop players in the world!</p>
+    </div>
+    
+    <div class="period-tabs">
+      <button class="period-tab" data-period="daily">📅 Daily</button>
+      <button class="period-tab" data-period="weekly">📆 Weekly</button>
+      <button class="period-tab" data-period="monthly">🗓️ Monthly</button>
+      <button class="period-tab active" data-period="alltime">⏳ All Time</button>
+    </div>
+    
+    <div id="podium" class="podium" style="display:none;">
+      <!-- Top 3 players will be inserted here -->
+    </div>
+    
+    <div class="leaderboard-table">
+      <div class="table-header">
+        <div>Rank</div>
+        <div>Player</div>
+        <div>ELO Rating</div>
+        <div class="hide-mobile">Games</div>
+        <div class="hide-mobile">Wins</div>
+        <div>Win Rate</div>
+        <div>Streak</div>
+      </div>
+      <div id="leaderboardBody">
+        <div class="loading">
+          <h3>Loading leaderboard...</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentPeriod = 'alltime';
+    
+    // Load leaderboard on page load
+    loadLeaderboard();
+    
+    // Period tab handlers
+    document.querySelectorAll('.period-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentPeriod = tab.dataset.period;
+        loadLeaderboard();
+      });
+    });
+    
+    async function loadLeaderboard() {
+      const body = document.getElementById('leaderboardBody');
+      const podium = document.getElementById('podium');
+      
+      body.innerHTML = '<div class="loading"><h3>Loading leaderboard...</h3></div>';
+      podium.style.display = 'none';
+      
+      try {
+        const response = await fetch(`/api/get_leaderboard.php?period=${currentPeriod}&limit=100`);
+        if (!response.ok) throw new Error('Failed to load leaderboard');
+        
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Unknown error');
+        
+        displayLeaderboard(result.leaderboard);
+        
+      } catch (error) {
+        console.error('[Leaderboard] Load error:', error);
+        body.innerHTML = `<div class="loading"><h3>❌ Error loading leaderboard</h3><p>${error.message}</p></div>`;
+      }
+    }
+    
+    function displayLeaderboard(leaderboard) {
+      const body = document.getElementById('leaderboardBody');
+      const podium = document.getElementById('podium');
+      
+      if (leaderboard.length === 0) {
+        body.innerHTML = '<div class="loading"><h3>No players yet</h3><p>Be the first to play!</p></div>';
+        return;
+      }
+      
+      // Show podium for top 3
+      if (leaderboard.length >= 3) {
+        podium.style.display = 'flex';
+        podium.innerHTML = [1, 0, 2].map(idx => {
+          const player = leaderboard[idx];
+          const placeClass = idx === 0 ? 'second' : idx === 1 ? 'first' : 'third';
+          return `
+            <div class="podium-place ${placeClass}" onclick="viewPlayer('${player.playerName}')">
+              <div class="podium-rank">${player.rank}</div>
+              <div class="podium-name">${player.playerName}</div>
+              <div class="podium-elo">${player.eloRating}</div>
+              <div class="podium-stats">
+                ${player.gamesWon}/${player.gamesPlayed} wins<br>
+                ${player.winRate}% win rate
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      // Display remaining players in table (skip top 3 if podium shown)
+      const startIdx = leaderboard.length >= 3 ? 3 : 0;
+      body.innerHTML = leaderboard.slice(startIdx).map(player => {
+        const initial = player.playerName.charAt(0).toUpperCase();
+        return `
+          <div class="table-row" onclick="viewPlayer('${player.playerName}')">
+            <div class="rank-cell">${player.rank}</div>
+            <div class="player-cell">
+              <div class="player-avatar">${initial}</div>
+              <div class="player-name">${player.playerName}</div>
+            </div>
+            <div class="elo-cell">${player.eloRating}</div>
+            <div class="stat-cell hide-mobile">${player.gamesPlayed}</div>
+            <div class="stat-cell hide-mobile">${player.gamesWon}</div>
+            <div class="stat-cell win-rate">${player.winRate}%</div>
+            <div class="stat-cell">
+              ${player.currentStreak > 0 ? `<span class="streak-badge">🔥 ${player.currentStreak}</span>` : '-'}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function viewPlayer(playerName) {
+      window.location.href = `player.html?name=${encodeURIComponent(playerName)}`;
+    }
+  </script>
+</body>
+</html>
