@@ -24,19 +24,22 @@ jobs:
           cd /home/lastdrop
           git pull origin main
           
-          # Deploy all website files directly to web root
-          sudo cp -r website/* /var/www/html/
+          # Deploy all website files to nginx public directory
+          sudo cp -r website/* /var/www/lastdrop.earth/public/
+          
+          # Remove old index.php if it exists (prevents override of index.html)
+          sudo rm -f /var/www/lastdrop.earth/public/index.php
           
           # Keep live.html and demo.html in root (for backwards compatibility)
-          sudo cp live.html /var/www/html/
-          sudo cp demo.html /var/www/html/
+          sudo cp live.html /var/www/lastdrop.earth/public/
+          sudo cp demo.html /var/www/lastdrop.earth/public/
           
           # Set proper permissions
-          sudo chown -R www-data:www-data /var/www/html/
-          sudo chmod -R 755 /var/www/html/
-          sudo find /var/www/html/ -type f -name "*.html" -exec chmod 644 {} \;
-          sudo find /var/www/html/ -type f -name "*.php" -exec chmod 644 {} \;
+          sudo chown -R www-data:www-data /var/www/lastdrop.earth/public/
+          sudo chmod -R 755 /var/www/lastdrop.earth/public/
+          sudo find /var/www/lastdrop.earth/public/ -type f -name "*.html" -exec chmod 644 {} \;
+          sudo find /var/www/lastdrop.earth/public/ -type f -name "*.php" -exec chmod 644 {} \;
           
           echo "Deployment completed at $(date)"
           echo "Deployed files:"
-          ls -la /var/www/html/ | head -15
+          ls -la /var/www/lastdrop.earth/public/ | head -15
