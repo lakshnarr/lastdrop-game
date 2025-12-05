@@ -26,6 +26,39 @@
         android:gravity="center"
         android:textAlignment="center" />
 
+    <!-- Menu Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnGameHistory"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="#2a2a2a"
+            android:text="📜 History"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnLeaderboard"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="#2a2a2a"
+            android:text="🏆 Leaderboard"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/btnConnectDice"
         android:layout_width="match_parent"

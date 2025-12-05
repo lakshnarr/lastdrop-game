@@ -67,6 +67,20 @@
             android:exported="false"
             android:label="Player Stats"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+        
+        <!-- Game History Screen -->
+        <activity
+            android:name=".GameHistoryActivity"
+            android:exported="false"
+            android:label="Game History"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+        
+        <!-- Leaderboard Screen -->
+        <activity
+            android:name=".LeaderboardActivity"
+            android:exported="false"
+            android:label="Leaderboard"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
 
     </application>
 

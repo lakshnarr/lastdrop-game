@@ -11,6 +11,9 @@ interface GameRecordDao {
     @Query("SELECT * FROM game_records WHERE profileId = :id ORDER BY playedAt DESC LIMIT 10")
     suspend fun getRecentGames(id: String): List<GameRecord>
     
+    @Query("SELECT * FROM game_records ORDER BY playedAt DESC")
+    suspend fun getAllGameRecords(): List<GameRecord>
+    
     @Query("SELECT * FROM game_records WHERE profileId = :id ORDER BY playedAt DESC LIMIT 1")
     suspend fun getLastGame(id: String): GameRecord?
     

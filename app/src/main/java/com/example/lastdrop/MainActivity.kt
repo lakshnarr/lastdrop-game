@@ -511,6 +511,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun setupUiListeners() {
         btnConnectDice.setOnClickListener { onConnectButtonClicked() }
         btnConnectBoard.setOnClickListener { onConnectBoardClicked() }
+        
+        // Menu buttons
+        findViewById<Button>(R.id.btnGameHistory)?.setOnClickListener {
+            startActivity(Intent(this, GameHistoryActivity::class.java))
+        }
+        findViewById<Button>(R.id.btnLeaderboard)?.setOnClickListener {
+            startActivity(Intent(this, LeaderboardActivity::class.java))
+        }
+        
         btnUndo.setOnClickListener {
             if (btnUndo.text.toString().startsWith("Confirm")) {
                 confirmUndo()
