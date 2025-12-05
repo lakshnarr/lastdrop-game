@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - Last Drop</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .period-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .period-btn {
+            padding: 10px 25px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .period-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .period-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-subtext {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-container.tall {
+            height: 400px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+        }
+
+        .heatmap-tile-id {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        .heatmap-count {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .top-performers {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .performer-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.3s;
+        }
+
+        .performer-item:hover {
+            background: #f8f9fa;
+        }
+
+        .performer-rank {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #667eea;
+            margin-right: 20px;
+            min-width: 40px;
+        }
+
+        .performer-rank.gold {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .performer-rank.silver {
+            background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .performer-rank.bronze {
+            background: linear-gradient(135deg, #CD7F32 0%, #8B4513 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .performer-info {
+            flex: 1;
+        }
+
+        .performer-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .performer-stats {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .performer-elo {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .heatmap-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Analytics Dashboard</h1>
+            <p>Game statistics and insights</p>
+        </div>
+
+        <div class="period-selector">
+            <button class="period-btn" data-period="daily">24 Hours</button>
+            <button class="period-btn active" data-period="weekly">7 Days</button>
+            <button class="period-btn" data-period="monthly">30 Days</button>
+            <button class="period-btn" data-period="alltime">All Time</button>
+        </div>
+
+        <div id="loading" class="loading">Loading analytics...</div>
+
+        <div id="dashboard" style="display: none;">
+            <!-- Overview Stats -->
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <!-- Dice Distribution -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🎲 Dice Roll Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="diceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Game Outcomes -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🎮 Games by Player Count</h3>
+                    <div class="chart-container">
+                        <canvas id="outcomesChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Player Activity Timeline -->
+                <div class="chart-card full-width">
+                    <h3 class="chart-title">📈 Daily Activity</h3>
+                    <div class="chart-container tall">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tile Heatmap -->
+                <div class="chart-card full-width">
+                    <h3 class="chart-title">🗺️ Tile Landing Heatmap</h3>
+                    <div class="heatmap-grid" id="heatmapGrid"></div>
+                </div>
+
+                <!-- Chance Cards -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🃏 Chance Card Frequency</h3>
+                    <div class="chart-container">
+                        <canvas id="chanceCardChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Performers -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🏆 Top Performers</h3>
+                    <div id="topPerformers"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = 'weekly';
+        let charts = {};
+
+        // Period selector
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPeriod = btn.dataset.period;
+                loadAnalytics();
+            });
+        });
+
+        // Load analytics on page load
+        loadAnalytics();
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch(`api/get_analytics.php?period=${currentPeriod}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+
+                displayAnalytics(result.analytics);
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                document.getElementById('loading').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function displayAnalytics(analytics) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+
+            // Overview stats
+            renderOverview(analytics.overview);
+
+            // Dice distribution chart
+            renderDiceChart(analytics.diceDistribution);
+
+            // Game outcomes chart
+            renderOutcomesChart(analytics.gameOutcomes);
+
+            // Activity timeline
+            renderActivityChart(analytics.playerActivity);
+
+            // Tile heatmap
+            renderHeatmap(analytics.tileHeatmap);
+
+            // Chance cards
+            renderChanceCardChart(analytics.chanceCardStats);
+
+            // Top performers
+            renderTopPerformers(analytics.topPerformers);
+        }
+
+        function renderOverview(overview) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const stats = [
+                { label: 'Total Games', value: overview.totalGames, subtext: 'Completed' },
+                { label: 'Unique Players', value: overview.uniquePlayers, subtext: 'Active' },
+                { label: 'Avg Duration', value: formatDuration(overview.avgGameDuration), subtext: 'Per game' },
+                { label: 'Avg Rolls', value: overview.avgRollsPerGame, subtext: 'Per game' }
+            ];
+
+            stats.forEach(stat => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <div class="stat-label">${stat.label}</div>
+                    <div class="stat-value">${stat.value}</div>
+                    <div class="stat-subtext">${stat.subtext}</div>
+                `;
+                statsGrid.appendChild(card);
+            });
+        }
+
+        function renderDiceChart(diceData) {
+            const ctx = document.getElementById('diceChart');
+            
+            if (charts.dice) charts.dice.destroy();
+
+            if (!diceData || diceData.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No dice roll data available</p>';
+                return;
+            }
+
+            charts.dice = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: diceData.map(d => `Roll ${d.diceValue}`),
+                    datasets: [{
+                        label: 'Roll Count',
+                        data: diceData.map(d => d.count),
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }, {
+                        label: 'Expected (Fair Dice)',
+                        data: diceData.map(d => d.count / d.percentage * 16.67),
+                        type: 'line',
+                        borderColor: 'rgba(255, 99, 132, 0.8)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true }
+                    }
+                }
+            });
+        }
+
+        function renderOutcomesChart(outcomes) {
+            const ctx = document.getElementById('outcomesChart');
+            
+            if (charts.outcomes) charts.outcomes.destroy();
+
+            if (!outcomes || outcomes.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No game data available</p>';
+                return;
+            }
+
+            charts.outcomes = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: outcomes.map(o => `${o.playerCount} Players`),
+                    datasets: [{
+                        data: outcomes.map(o => o.totalGames),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        function renderActivityChart(activity) {
+            const ctx = document.getElementById('activityChart');
+            
+            if (charts.activity) charts.activity.destroy();
+
+            if (!activity || activity.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No activity data available</p>';
+                return;
+            }
+
+            activity.reverse(); // Show oldest to newest
+
+            charts.activity = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: activity.map(a => new Date(a.date).toLocaleDateString()),
+                    datasets: [{
+                        label: 'Games Played',
+                        data: activity.map(a => a.gamesPlayed),
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'Unique Players',
+                        data: activity.map(a => a.uniquePlayers),
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderHeatmap(heatmap) {
+            const grid = document.getElementById('heatmapGrid');
+            grid.innerHTML = '';
+
+            if (!heatmap || heatmap.length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666; padding: 40px;">No tile data available</p>';
+                return;
+            }
+
+            const maxCount = Math.max(...heatmap.map(t => t.landedCount));
+
+            heatmap.forEach(tile => {
+                const intensity = tile.landedCount / maxCount;
+                const cell = document.createElement('div');
+                cell.className = 'heatmap-cell';
+                cell.style.background = `rgba(102, 126, 234, ${intensity})`;
+                cell.style.color = intensity > 0.5 ? 'white' : '#333';
+                cell.innerHTML = `
+                    <div class="heatmap-tile-id">Tile ${tile.tileId}</div>
+                    <div class="heatmap-count">${tile.landedCount} lands</div>
+                `;
+                grid.appendChild(cell);
+            });
+        }
+
+        function renderChanceCardChart(chanceCards) {
+            const ctx = document.getElementById('chanceCardChart');
+            
+            if (charts.chanceCard) charts.chanceCard.destroy();
+
+            if (!chanceCards || chanceCards.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No chance card data available</p>';
+                return;
+            }
+
+            charts.chanceCard = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chanceCards.map(c => formatCardName(c.cardType)),
+                    datasets: [{
+                        label: 'Times Drawn',
+                        data: chanceCards.map(c => c.drawnCount),
+                        backgroundColor: 'rgba(255, 206, 86, 0.6)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function renderTopPerformers(performers) {
+            const container = document.getElementById('topPerformers');
+            container.innerHTML = '';
+
+            if (!performers || performers.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No player data available</p>';
+                return;
+            }
+
+            performers.forEach((player, index) => {
+                const item = document.createElement('div');
+                item.className = 'performer-item';
+                
+                let rankClass = '';
+                if (index === 0) rankClass = 'gold';
+                else if (index === 1) rankClass = 'silver';
+                else if (index === 2) rankClass = 'bronze';
+
+                item.innerHTML = `
+                    <div class="performer-rank ${rankClass}">#${index + 1}</div>
+                    <div class="performer-info">
+                        <div class="performer-name">${player.playerName}</div>
+                        <div class="performer-stats">
+                            ${player.gamesWon} wins • ${player.winRate}% win rate • Streak: ${player.currentStreak}
+                        </div>
+                    </div>
+                    <div class="performer-elo">${player.eloRating}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0s';
+            const mins = Math.floor(seconds / 60);
+            return mins > 0 ? `${mins}m` : `${seconds}s`;
+        }
+
+        function formatCardName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+    </script>
+</body>
+</html>

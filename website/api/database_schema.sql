@@ -3,6 +3,7 @@
 -- Created: December 5, 2025
 
 -- Drop existing tables if they exist (for clean reinstall)
+DROP TABLE IF EXISTS analytics_events;
 DROP TABLE IF EXISTS tournament_matches;
 DROP TABLE IF EXISTS tournament_participants;
 DROP TABLE IF EXISTS tournaments;
@@ -312,6 +313,59 @@ CREATE TABLE tournament_matches (
     INDEX idx_status (status),
     INDEX idx_players (player1Name, player2Name),
     INDEX idx_session (sessionId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: analytics_events (Phase 5.5: Analytics Dashboard)
+-- Purpose: Track detailed game events for analytics and insights
+-- ============================================
+
+CREATE TABLE analytics_events (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    
+    -- Event identification
+    eventType ENUM(
+        'game_start', 'game_end', 'dice_roll', 'tile_landed',
+        'chance_card', 'player_eliminated', 'undo_action',
+        'spectator_join', 'spectator_leave'
+    ) NOT NULL,
+    
+    -- Session context
+    sessionId VARCHAR(64) DEFAULT NULL,
+    boardId VARCHAR(32) DEFAULT NULL,
+    
+    -- Player context
+    playerName VARCHAR(100) DEFAULT NULL,
+    playerId INT DEFAULT NULL,
+    
+    -- Event data (flexible JSON for different event types)
+    eventData JSON DEFAULT NULL,
+    /* Example eventData structures:
+     * dice_roll: {"diceValue": 5, "player": 0, "position": 12}
+     * tile_landed: {"tileId": 8, "tileName": "Oasis", "effect": "+3"}
+     * chance_card: {"cardType": "move_back", "value": 2}
+     * game_end: {"winner": "Alice", "duration": 1200, "totalRolls": 45}
+     */
+    
+    -- Aggregation helpers
+    diceValue INT DEFAULT NULL,  -- For dice roll analytics
+    tileId INT DEFAULT NULL,     -- For tile popularity heatmaps
+    
+    -- Timing
+    timestamp DATETIME NOT NULL,
+    sessionTime INT DEFAULT NULL,  -- Seconds since game start
+    
+    -- Metadata
+    createdAt DATETIME NOT NULL,
+    
+    -- Indexes for fast queries
+    INDEX idx_event_type (eventType),
+    INDEX idx_session (sessionId),
+    INDEX idx_player (playerName),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_tile (tileId),
+    INDEX idx_dice (diceValue),
+    INDEX idx_composite_session_time (sessionId, sessionTime)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

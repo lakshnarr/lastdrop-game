@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Analytics - Last Drop</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 1em;
+            transition: opacity 0.3s;
+        }
+
+        .back-link:hover {
+            opacity: 0.8;
+        }
+
+        .player-header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .player-header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .player-rank {
+            color: #667eea;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-container.tall {
+            height: 400px;
+        }
+
+        .dice-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .dice-cell {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .dice-number {
+            font-size: 2.5em;
+            margin-bottom: 5px;
+        }
+
+        .dice-count {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .lucky-badge {
+            background: #FFD700;
+            color: #333;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            margin-top: 5px;
+        }
+
+        .game-history {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-top: 25px;
+        }
+
+        .game-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.3s;
+        }
+
+        .game-item:hover {
+            background: #f8f9fa;
+        }
+
+        .game-result {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2em;
+            margin-right: 20px;
+        }
+
+        .game-result.win {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .game-result.loss {
+            background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%);
+            color: white;
+        }
+
+        .game-info {
+            flex: 1;
+        }
+
+        .game-date {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .game-score {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .insights-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .insight-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+
+        .insight-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .insight-text {
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dice-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="leaderboard.html" class="back-link">← Back to Leaderboard</a>
+
+        <div id="loading" class="loading">Loading player analytics...</div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="playerContent" style="display: none;">
+            <!-- Player Header -->
+            <div class="player-header">
+                <h1 id="playerName"></h1>
+                <div class="player-rank" id="playerRank"></div>
+
+                <div class="stats-grid" id="statsGrid"></div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <!-- Performance Trend -->
+                <div class="chart-card full-width">
+                    <h3 class="chart-title">📈 Performance Over Time</h3>
+                    <div class="chart-container tall">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Dice Statistics -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🎲 Dice Roll Statistics</h3>
+                    <div class="dice-grid" id="diceGrid"></div>
+                </div>
+
+                <!-- Win/Loss Patterns -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🏆 Win Rate by Player Count</h3>
+                    <div class="chart-container">
+                        <canvas id="winPatternChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tile Preferences -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🗺️ Most Visited Tiles</h3>
+                    <div class="chart-container">
+                        <canvas id="tileChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chance Cards -->
+                <div class="chart-card">
+                    <h3 class="chart-title">🃏 Chance Card History</h3>
+                    <div class="chart-container">
+                        <canvas id="chanceCardChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Games -->
+            <div class="game-history">
+                <h3 class="chart-title">🎮 Recent Games</h3>
+                <div id="gameHistory"></div>
+            </div>
+
+            <!-- AI Insights -->
+            <div class="insights-panel">
+                <h3 class="chart-title">💡 Player Insights</h3>
+                <div id="insights"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const playerName = urlParams.get('player');
+        let charts = {};
+
+        if (!playerName) {
+            showError('Player name not provided');
+        } else {
+            loadPlayerAnalytics();
+        }
+
+        async function loadPlayerAnalytics() {
+            try {
+                const response = await fetch(`api/get_player_analytics.php?playerName=${encodeURIComponent(playerName)}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+
+                displayPlayerAnalytics(result.playerAnalytics);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function displayPlayerAnalytics(analytics) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('playerContent').style.display = 'block';
+
+            const profile = analytics.profile;
+
+            // Header
+            document.getElementById('playerName').textContent = profile.playerName;
+            document.getElementById('playerRank').textContent = 
+                `Rank #${profile.rank} • ELO ${profile.eloRating}`;
+
+            // Stats grid
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const stats = [
+                { label: 'Games Played', value: profile.gamesPlayed },
+                { label: 'Win Rate', value: `${profile.winRate}%` },
+                { label: 'Current Streak', value: profile.currentStreak },
+                { label: 'Best Streak', value: profile.bestStreak },
+                { label: 'Highest Score', value: profile.highestScore },
+                { label: 'Avg Score', value: profile.avgScore }
+            ];
+
+            stats.forEach(stat => {
+                const item = document.createElement('div');
+                item.className = 'stat-item';
+                item.innerHTML = `
+                    <span class="stat-label">${stat.label}</span>
+                    <span class="stat-value">${stat.value}</span>
+                `;
+                statsGrid.appendChild(item);
+            });
+
+            // Charts
+            renderTrendChart(analytics.trends);
+            renderDiceGrid(analytics.diceStats);
+            renderWinPatternChart(analytics.winLossPatterns);
+            renderTileChart(analytics.tilePreferences);
+            renderChanceCardChart(analytics.chanceCardHistory);
+
+            // Recent games
+            renderGameHistory(analytics.trends.slice(0, 10));
+
+            // Insights
+            renderInsights(profile, analytics);
+        }
+
+        function renderTrendChart(trends) {
+            const ctx = document.getElementById('trendChart');
+
+            if (!trends || trends.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No game history available</p>';
+                return;
+            }
+
+            trends.reverse(); // Oldest to newest
+
+            charts.trend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trends.map((t, i) => `Game ${i + 1}`),
+                    datasets: [{
+                        label: 'Score',
+                        data: trends.map(t => t.score),
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderDiceGrid(diceStats) {
+            const grid = document.getElementById('diceGrid');
+            grid.innerHTML = '';
+
+            if (!diceStats.distribution || Object.keys(diceStats.distribution).length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666; padding: 40px;">No dice data available</p>';
+                return;
+            }
+
+            for (let i = 1; i <= 6; i++) {
+                const count = diceStats.distribution[i] || 0;
+                const isLucky = (i === diceStats.luckyNumber);
+
+                const cell = document.createElement('div');
+                cell.className = 'dice-cell';
+                cell.innerHTML = `
+                    <div class="dice-number">⚄</div>
+                    <div class="dice-number">${i}</div>
+                    <div class="dice-count">${count} rolls</div>
+                    ${isLucky ? '<div class="lucky-badge">Lucky!</div>' : ''}
+                `;
+                grid.appendChild(cell);
+            }
+        }
+
+        function renderWinPatternChart(patterns) {
+            const ctx = document.getElementById('winPatternChart');
+
+            if (!patterns.winsByPlayerCount || Object.keys(patterns.winsByPlayerCount).length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No win pattern data available</p>';
+                return;
+            }
+
+            const playerCounts = Object.keys(patterns.winsByPlayerCount).sort();
+            const wins = playerCounts.map(pc => patterns.winsByPlayerCount[pc]);
+
+            charts.winPattern = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: playerCounts.map(pc => `${pc} Players`),
+                    datasets: [{
+                        label: 'Wins',
+                        data: wins,
+                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function renderTileChart(tiles) {
+            const ctx = document.getElementById('tileChart');
+
+            if (!tiles || tiles.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No tile data available</p>';
+                return;
+            }
+
+            charts.tile = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: tiles.map(t => `Tile ${t.tileId}`),
+                    datasets: [{
+                        label: 'Visits',
+                        data: tiles.map(t => t.visitCount),
+                        backgroundColor: 'rgba(255, 206, 86, 0.6)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function renderChanceCardChart(cards) {
+            const ctx = document.getElementById('chanceCardChart');
+
+            if (!cards || cards.length === 0) {
+                ctx.parentElement.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No chance card data available</p>';
+                return;
+            }
+
+            charts.chanceCard = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: cards.map(c => formatCardName(c.cardType)),
+                    datasets: [{
+                        data: cards.map(c => c.drawnCount),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+
+        function renderGameHistory(games) {
+            const container = document.getElementById('gameHistory');
+            container.innerHTML = '';
+
+            if (!games || games.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No recent games</p>';
+                return;
+            }
+
+            games.forEach(game => {
+                const item = document.createElement('div');
+                item.className = 'game-item';
+
+                const resultClass = game.won ? 'win' : 'loss';
+                const resultText = game.won ? '✓ WIN' : '✗ LOSS';
+
+                item.innerHTML = `
+                    <div class="game-result ${resultClass}">${resultText}</div>
+                    <div class="game-info">
+                        <div class="game-date">${new Date(game.date).toLocaleDateString()}</div>
+                        <div class="game-score">Score: ${game.score} • ${game.rolls} rolls • ${formatDuration(game.duration)}</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderInsights(profile, analytics) {
+            const container = document.getElementById('insights');
+            const insights = [];
+
+            // Win rate insight
+            if (profile.winRate > 50) {
+                insights.push({
+                    title: '🏆 Strong Performer',
+                    text: `With a ${profile.winRate}% win rate, you're above average! Keep up the great work.`
+                });
+            }
+
+            // Streak insight
+            if (profile.currentStreak >= 3) {
+                insights.push({
+                    title: '🔥 Hot Streak',
+                    text: `You're on a ${profile.currentStreak} game winning streak! Can you extend it?`
+                });
+            }
+
+            // ELO insight
+            if (profile.eloRating > 1200) {
+                insights.push({
+                    title: '⭐ High ELO Rating',
+                    text: `Your ELO of ${profile.eloRating} puts you in the top tier of players.`
+                });
+            }
+
+            // Dice insight
+            if (analytics.diceStats.luckyNumber) {
+                insights.push({
+                    title: '🎲 Lucky Number',
+                    text: `You roll ${analytics.diceStats.luckyNumber} more often than any other number!`
+                });
+            }
+
+            // Game count insight
+            if (profile.gamesPlayed > 50) {
+                insights.push({
+                    title: '🎮 Veteran Player',
+                    text: `You've played ${profile.gamesPlayed} games. You're an experienced player!`
+                });
+            }
+
+            if (insights.length === 0) {
+                insights.push({
+                    title: '👋 Welcome',
+                    text: 'Play more games to unlock personalized insights!'
+                });
+            }
+
+            container.innerHTML = '';
+            insights.forEach(insight => {
+                const item = document.createElement('div');
+                item.className = 'insight-item';
+                item.innerHTML = `
+                    <div class="insight-title">${insight.title}</div>
+                    <div class="insight-text">${insight.text}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function formatCardName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
