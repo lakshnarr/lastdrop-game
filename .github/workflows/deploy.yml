@@ -24,13 +24,12 @@ jobs:
           cd /home/lastdrop
           git pull origin main
           
-          # Deploy live.html and demo.html to root
+          # Deploy all website files directly to web root
+          sudo cp -r website/* /var/www/html/
+          
+          # Keep live.html and demo.html in root (for backwards compatibility)
           sudo cp live.html /var/www/html/
           sudo cp demo.html /var/www/html/
-          
-          # Deploy website folder (all HTML, PHP, and API)
-          sudo mkdir -p /var/www/html/website
-          sudo cp -r website/* /var/www/html/website/
           
           # Set proper permissions
           sudo chown -R www-data:www-data /var/www/html/
@@ -39,5 +38,5 @@ jobs:
           sudo find /var/www/html/ -type f -name "*.php" -exec chmod 644 {} \;
           
           echo "Deployment completed at $(date)"
-          echo "Website files:"
-          ls -la /var/www/html/website/ | head -10
+          echo "Deployed files:"
+          ls -la /var/www/html/ | head -15
