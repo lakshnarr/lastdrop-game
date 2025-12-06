@@ -29,7 +29,7 @@ class BoardScanManager(
 ) {
     companion object {
         private const val TAG = "BoardScanManager"
-        private const val SCAN_TIMEOUT_MS = 10000L  // 10 seconds
+        private const val SCAN_TIMEOUT_MS = 60000L  // 60 seconds
         const val BOARD_PREFIX = "LASTDROP-"
         
         // MAC address whitelist (optional security)
@@ -116,7 +116,7 @@ class BoardScanManager(
                 
                 when {
                     discoveredBoards.isEmpty() -> {
-                        onLogMessage("⏱️ No boards found (10s timeout)")
+                        onLogMessage("⏱️ No boards found (60s timeout)")
                         Toast.makeText(
                             context,
                             "No LASTDROP boards found. Check power and proximity.",

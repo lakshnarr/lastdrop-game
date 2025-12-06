@@ -3225,6 +3225,26 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
         connStatus.textContent = "OFFLINE";
         connStatus.classList.remove("badge-green");
         connStatus.classList.add("badge-red");
+        
+        // Initialize demo game state and UI
+        const initialState = {
+          players: demoPlayers.map((p, i) => ({
+            id: p.id,
+            name: p.name,
+            pos: p.pos,
+            score: p.drops,
+            alive: !p.eliminated,
+            color: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"][i]
+          })),
+          lastEvent: {
+            eventType: "game_start",
+            message: "Demo game started! Watch 4 AI players compete."
+          }
+        };
+        updateUIFromState(initialState);
+        
+        // Trigger first demo step immediately
+        setTimeout(() => runDemoStep(), 1000);
       });
       
       // Show disclaimer on small screens with modified button

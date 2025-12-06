@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Board Logs - Last Drop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .board-selector {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .board-selector select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+        
+        .log-viewer {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 600px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        
+        .log-line {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        
+        .log-line.INFO {
+            background: rgba(76, 175, 80, 0.2);
+            border-left: 3px solid #4CAF50;
+        }
+        
+        .log-line.WARN {
+            background: rgba(255, 152, 0, 0.2);
+            border-left: 3px solid #FF9800;
+        }
+        
+        .log-line.ERROR {
+            background: rgba(244, 67, 54, 0.2);
+            border-left: 3px solid #F44336;
+        }
+        
+        .log-line.DEBUG {
+            background: rgba(33, 150, 243, 0.2);
+            border-left: 3px solid #2196F3;
+        }
+        
+        .log-timestamp {
+            color: #888;
+        }
+        
+        .log-level {
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin: 0 5px;
+        }
+        
+        .log-level.INFO { color: #4CAF50; }
+        .log-level.WARN { color: #FF9800; }
+        .log-level.ERROR { color: #F44336; }
+        .log-level.DEBUG { color: #2196F3; }
+        
+        .log-message {
+            color: #fff;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+        }
+        
+        .filter-btn.active {
+            background: rgba(255, 255, 255, 0.4);
+            font-weight: bold;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 ESP32 Board Logs</h1>
+            <p>Real-time monitoring for Last Drop boards</p>
+        </header>
+        
+        <div class="board-selector">
+            <label for="boardSelect">Select Board:</label>
+            <select id="boardSelect">
+                <option value="">Loading boards...</option>
+            </select>
+        </div>
+        
+        <div class="stats" id="stats"></div>
+        
+        <div class="controls">
+            <button onclick="loadLogs()">🔄 Refresh Logs</button>
+            <button onclick="clearDisplay()">🗑️ Clear Display</button>
+            <button onclick="toggleAutoRefresh()">⏱️ Auto-Refresh: <span id="autoRefreshStatus">OFF</span></button>
+            
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-level="ALL" onclick="filterLevel('ALL')">All</button>
+                <button class="filter-btn" data-level="INFO" onclick="filterLevel('INFO')">INFO</button>
+                <button class="filter-btn" data-level="WARN" onclick="filterLevel('WARN')">WARN</button>
+                <button class="filter-btn" data-level="ERROR" onclick="filterLevel('ERROR')">ERROR</button>
+                <button class="filter-btn" data-level="DEBUG" onclick="filterLevel('DEBUG')">DEBUG</button>
+            </div>
+        </div>
+        
+        <div class="log-viewer" id="logViewer">
+            <div class="loading">Loading logs...</div>
+        </div>
+    </div>
+    
+    <script>
+        let currentBoard = '';
+        let currentFilter = 'ALL';
+        let autoRefresh = false;
+        let refreshInterval = null;
+        
+        // Load available boards on page load
+        async function loadBoards() {
+            // For now, manually list boards - could be enhanced to scan log directory
+            const boards = [
+                'LASTDROP-NOHW-0001',
+                'LASTDROP-NOHW-0002',
+                'LASTDROP-0001',
+                'LASTDROP-0002'
+            ];
+            
+            const select = document.getElementById('boardSelect');
+            select.innerHTML = '<option value="">-- Select a board --</option>';
+            
+            boards.forEach(board => {
+                const option = document.createElement('option');
+                option.value = board;
+                option.textContent = board;
+                select.appendChild(option);
+            });
+            
+            select.addEventListener('change', (e) => {
+                currentBoard = e.target.value;
+                if (currentBoard) {
+                    loadLogs();
+                }
+            });
+        }
+        
+        async function loadLogs() {
+            if (!currentBoard) return;
+            
+            const logViewer = document.getElementById('logViewer');
+            logViewer.innerHTML = '<div class="loading">Loading logs...</div>';
+            
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const response = await fetch(`../logs/esp32/${currentBoard}_${today}.log`);
+                
+                if (!response.ok) {
+                    logViewer.innerHTML = '<div class="loading">No logs found for today. Upload some logs from ESP32!</div>';
+                    return;
+                }
+                
+                const logText = await response.text();
+                displayLogs(logText);
+            } catch (error) {
+                logViewer.innerHTML = `<div class="loading">Error loading logs: ${error.message}</div>`;
+            }
+        }
+        
+        function displayLogs(logText) {
+            const lines = logText.split('\n');
+            const logViewer = document.getElementById('logViewer');
+            logViewer.innerHTML = '';
+            
+            const stats = { INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
+            
+            lines.forEach(line => {
+                if (!line.trim() || line.startsWith('===') || line.startsWith('---')) return;
+                
+                const parts = line.split('|');
+                if (parts.length >= 5) {
+                    const timestamp = parts[0];
+                    const level = parts[1];
+                    const message = parts.slice(4).join('|');
+                    
+                    if (stats.hasOwnProperty(level)) {
+                        stats[level]++;
+                    }
+                    
+                    if (currentFilter === 'ALL' || currentFilter === level) {
+                        const logLine = document.createElement('div');
+                        logLine.className = `log-line ${level}`;
+                        logLine.innerHTML = `
+                            <span class="log-timestamp">[${new Date(parseInt(timestamp)).toLocaleTimeString()}]</span>
+                            <span class="log-level ${level}">${level}</span>
+                            <span class="log-message">${message}</span>
+                        `;
+                        logViewer.appendChild(logLine);
+                    }
+                }
+            });
+            
+            updateStats(stats);
+        }
+        
+        function updateStats(stats) {
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">INFO</div>
+                    <div class="stat-value" style="color: #4CAF50">${stats.INFO}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">WARNINGS</div>
+                    <div class="stat-value" style="color: #FF9800">${stats.WARN}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">ERRORS</div>
+                    <div class="stat-value" style="color: #F44336">${stats.ERROR}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">DEBUG</div>
+                    <div class="stat-value" style="color: #2196F3">${stats.DEBUG}</div>
+                </div>
+            `;
+        }
+        
+        function filterLevel(level) {
+            currentFilter = level;
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.level === level) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            loadLogs();
+        }
+        
+        function clearDisplay() {
+            document.getElementById('logViewer').innerHTML = '<div class="loading">Cleared. Select a board to load logs.</div>';
+            document.getElementById('stats').innerHTML = '';
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const statusSpan = document.getElementById('autoRefreshStatus');
+            
+            if (autoRefresh) {
+                statusSpan.textContent = 'ON';
+                refreshInterval = setInterval(() => {
+                    if (currentBoard) loadLogs();
+                }, 5000); // Refresh every 5 seconds
+            } else {
+                statusSpan.textContent = 'OFF';
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            }
+        }
+        
+        // Initialize
+        loadBoards();
+    </script>
+</body>
+</html>

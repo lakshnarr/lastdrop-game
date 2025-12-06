@@ -191,20 +191,47 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                     val pairingVariant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR)
                     
-                    if (device?.address == pairingDevice?.address && pairingVariant == BluetoothDevice.PAIRING_VARIANT_PIN) {
-                        // Show PIN entry dialog
-                        device?.let { showPinEntryDialog(it) }
-                        abortBroadcast() // Prevent default pairing dialog
+                    Log.d(TAG, "Pairing request: variant=$pairingVariant, device=${device?.address}")
+                    
+                    if (device?.address == pairingDevice?.address) {
+                        when (pairingVariant) {
+                            BluetoothDevice.PAIRING_VARIANT_PIN -> {
+                                // User needs to enter PIN
+                                Log.d(TAG, "PIN pairing variant")
+                                device?.let { showPinEntryDialog(it) }
+                                abortBroadcast()
+                            }
+                            BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION -> {
+                                // ESP32 displays passkey, user confirms
+                                val passkey = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_KEY, -1)
+                                Log.d(TAG, "Passkey confirmation variant: $passkey")
+                                device?.let { showPasskeyConfirmationDialog(it, passkey) }
+                                abortBroadcast()
+                            }
+                            0 -> {
+                                // PAIRING_VARIANT_CONSENT (API 19+) - Just consent required (no passkey)
+                                Log.d(TAG, "Consent pairing variant")
+                                device?.setPairingConfirmation(true)
+                                abortBroadcast()
+                            }
+                            else -> {
+                                Log.w(TAG, "Unknown pairing variant: $pairingVariant")
+                            }
+                        }
                     }
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                     val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                    val prevBondState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
+                    
+                    Log.d(TAG, "Bond state changed: ${device?.address}, prev=$prevBondState, new=$bondState")
                     
                     if (device?.address == pairingDevice?.address) {
                         when (bondState) {
                             BluetoothDevice.BOND_BONDED -> {
                                 Log.d(TAG, "Device paired successfully")
+                                appendTestLog("✅ Pairing successful!")
                                 device?.let { dev ->
                                     runOnUiThread {
                                         Toast.makeText(this@MainActivity, "Board paired successfully!", Toast.LENGTH_SHORT).show()
@@ -215,11 +242,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                                 pairingDevice = null
                             }
                             BluetoothDevice.BOND_NONE -> {
-                                Log.d(TAG, "Pairing failed or cancelled")
+                                Log.d(TAG, "Pairing failed or cancelled (prev state: $prevBondState)")
+                                appendTestLog("❌ Pairing failed")
                                 runOnUiThread {
-                                    Toast.makeText(this@MainActivity, "Pairing failed", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(this@MainActivity, "Pairing failed. Check ESP32 PIN.", Toast.LENGTH_LONG).show()
+                                    btnConnectBoard.text = "🎮  Connect Board"
+                                    btnConnectBoard.isEnabled = true
                                 }
                                 pairingDevice = null
+                            }
+                            BluetoothDevice.BOND_BONDING -> {
+                                Log.d(TAG, "Pairing in progress...")
+                                appendTestLog("🔐 Pairing in progress...")
                             }
                         }
                     }
@@ -279,6 +313,51 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
             .setCancelable(false)  // Force user to choose
+            .show()
+    }
+    
+    // Show passkey confirmation dialog for ESP32 pairing
+    @SuppressLint("MissingPermission")
+    private fun showPasskeyConfirmationDialog(device: BluetoothDevice, passkey: Int) {
+        val passkeyStr = String.format("%06d", passkey)
+        
+        AlertDialog.Builder(this)
+            .setTitle("Pair with ${device.name ?: device.address}")
+            .setMessage("Confirm that the following passkey matches\nthe one shown on the ESP32 Serial Monitor:\n\n$passkeyStr")
+            .setPositiveButton("Match") { _, _ ->
+                try {
+                    val success = device.setPairingConfirmation(true)
+                    Log.d(TAG, "Pairing confirmation result: $success")
+                    if (success) {
+                        runOnUiThread {
+                            Toast.makeText(this, "Pairing...", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        runOnUiThread {
+                            Toast.makeText(this, "Failed to confirm pairing", Toast.LENGTH_SHORT).show()
+                        }
+                        pairingDevice = null
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error confirming pairing", e)
+                    runOnUiThread {
+                        Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    pairingDevice = null
+                }
+            }
+            .setNegativeButton("Don't Match") { _, _ ->
+                try {
+                    device.setPairingConfirmation(false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error rejecting pairing", e)
+                }
+                pairingDevice = null
+                runOnUiThread {
+                    Toast.makeText(this, "Pairing rejected", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setCancelable(false)
             .show()
     }
     
@@ -717,7 +796,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             
             // Re-enable button after scan timeout
             mainScope.launch {
-                delay(10000)  // 10 second scan timeout
+                delay(60000)  // 60 second scan timeout
                 if (!esp32Connected) {
                     runOnUiThread {
                         btnConnectBoard.text = "🎮  Connect Board"
@@ -2455,27 +2534,40 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     @SuppressLint("MissingPermission")
     private fun connectToESP32Device(device: BluetoothDevice) {
-        Log.d(TAG, "Connecting to ESP32: ${device.address}")
+        Log.d(TAG, "Connecting to ESP32: ${device.name} (${device.address})")
+        appendTestLog("📡 Connecting to ${device.name}...")
         
         // Check bonding state before connecting
         when (device.bondState) {
             BluetoothDevice.BOND_BONDED -> {
                 // Already paired, proceed with connection
                 Log.d(TAG, "Device already bonded, connecting...")
+                appendTestLog("✓ Already paired, connecting...")
                 proceedWithESP32Connection(device)
             }
             BluetoothDevice.BOND_NONE -> {
                 // Not paired, initiate pairing
                 Log.d(TAG, "Device not bonded, initiating pairing...")
+                appendTestLog("🔐 Initiating pairing...")
                 pairingDevice = device
                 runOnUiThread {
                     Toast.makeText(this, "Pairing with ${device.name}...", Toast.LENGTH_SHORT).show()
                 }
-                device.createBond()
+                val bondResult = device.createBond()
+                Log.d(TAG, "createBond() result: $bondResult")
+                if (!bondResult) {
+                    appendTestLog("❌ Failed to start pairing")
+                    runOnUiThread {
+                        Toast.makeText(this, "Failed to start pairing", Toast.LENGTH_SHORT).show()
+                    }
+                    pairingDevice = null
+                }
             }
             BluetoothDevice.BOND_BONDING -> {
                 // Pairing in progress, wait
                 Log.d(TAG, "Pairing already in progress...")
+                appendTestLog("⏳ Pairing in progress...")
+                pairingDevice = device
                 runOnUiThread {
                     Toast.makeText(this, "Pairing in progress...", Toast.LENGTH_SHORT).show()
                 }

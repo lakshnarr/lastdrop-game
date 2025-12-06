@@ -71,14 +71,22 @@ class ProfileManager(context: Context) {
                 return Result.failure(Exception("Maximum $MAX_PROFILES profiles allowed"))
             }
             
-            // Assign color based on profile count (cycles through 4 colors)
-            val tileColor = PROFILE_TILE_COLORS[count % PROFILE_TILE_COLORS.size]
+            // Get currently used colors
+            val existingProfiles = dao.getAllProfilesList()
+            val usedColors = existingProfiles
+                .filter { !it.isGuest && !it.isAI }
+                .map { it.avatarColor }
+                .toSet()
+            
+            // Find first available color
+            val tileColor = PROFILE_TILE_COLORS.firstOrNull { it !in usedColors }
+                ?: PROFILE_TILE_COLORS[0] // Fallback to first color if all used
             
             val profile = PlayerProfile(
                 playerCode = generatePlayerCode(),
                 name = name.trim(),
                 nickname = nickname.trim(),
-                avatarColor = tileColor, // Use assigned tile color
+                avatarColor = tileColor, // Use first available unique color
                 isGuest = false
             )
             
@@ -180,18 +188,32 @@ class ProfileManager(context: Context) {
     
     /**
      * Update existing profiles with vibrant tile colors
-     * Migrates old gray profiles to colorful ones
+     * Migrates old gray profiles to colorful ones and ensures all profiles have unique colors
      */
     suspend fun updateProfileColors() {
         val allProfiles = dao.getAllProfilesList()
         val regularProfiles = allProfiles.filter { !it.isAI && !it.isGuest }
         
-        regularProfiles.forEachIndexed { index, profile ->
-            // Only update if profile has old gray color
-            if (profile.avatarColor == "808080" || profile.avatarColor == "9E9E9E") {
-                val newColor = PROFILE_TILE_COLORS[index % PROFILE_TILE_COLORS.size]
+        // Track used colors
+        val usedColors = mutableSetOf<String>()
+        val availableColors = PROFILE_TILE_COLORS.toMutableList()
+        
+        regularProfiles.forEach { profile ->
+            val needsUpdate = profile.avatarColor == "808080" || 
+                             profile.avatarColor == "9E9E9E" ||
+                             profile.avatarColor in usedColors // Duplicate color
+            
+            if (needsUpdate) {
+                // Find first available color
+                val newColor = availableColors.firstOrNull() ?: PROFILE_TILE_COLORS[0]
                 val updatedProfile = profile.copy(avatarColor = newColor)
                 dao.updateProfile(updatedProfile)
+                usedColors.add(newColor)
+                availableColors.remove(newColor)
+            } else {
+                // Mark existing color as used
+                usedColors.add(profile.avatarColor)
+                availableColors.remove(profile.avatarColor)
             }
         }
     }

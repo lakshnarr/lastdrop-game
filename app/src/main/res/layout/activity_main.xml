@@ -12,7 +12,10 @@
     android:layout_height="wrap_content"
     android:gravity="top|center_horizontal"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingLeft="16dp"
+    android:paddingRight="16dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="120dp">
 
     <TextView
         android:id="@+id/tvTitle"
@@ -99,6 +102,21 @@
         android:elevation="4dp"
         android:padding="12dp"
         android:text="🎮  Connect Board"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnConnectServer"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#4CAF50"
+        android:drawablePadding="8dp"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="🌐  Connect to Live Server"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
         android:textSize="16sp"
@@ -810,6 +828,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:layout_marginBottom="100dp"
         android:backgroundTint="#666666"
         android:text="Clear Log"
         android:textColor="#FFFFFF"

@@ -1,4 +1,462 @@
-﻿
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Last Drop – Demo Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="assets/css/shared.css" />
+</head>
+<body>
+  
+  <!-- Small Screen Disclaimer -->
+  <div id="smallScreenDisclaimer" class="small-screen-disclaimer hidden">
+    <div class="disclaimer-content">
+      <div class="disclaimer-icon">📺</div>
+      <div class="disclaimer-title">Best Viewed on Large Screens</div>
+      <div class="disclaimer-text">
+        This live board is designed for TV and large screens for an immersive gaming experience. 
+        For the best experience, please use a larger display (tablet, laptop, or TV).
+      </div>
+      <button id="dismissDisclaimer" class="btn-small">Continue Anyway</button>
+    </div>
+  </div>
+  
+  <div id="tutorialOverlay" class="tutorial-overlay hidden">
+    <div class="tutorial-card">
+      <div class="tutorial-title">How to Play</div>
+      <ol class="tutorial-steps">
+        <li>Roll the dice.</li>
+        <li>Watch your pawn move.</li>
+        <li>Read the tile effect.</li>
+      </ol>
+      <button id="closeTutorial" class="btn-small">Got it</button>
+    </div>
+  </div>
+
+  <!-- Connection Popup -->
+  <div id="connectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🎮 Connect LastDrop Controller</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator" id="connectionIndicator">
+            <div class="status-dot"></div>
+            <span id="connectionText">Waiting for controller...</span>
+          </div>
+        </div>
+        <div class="connection-instructions">
+          <p>1. Open LastDrop app on your phone</p>
+          <p>2. Start a game session</p>
+          <p>3. Roll dice to connect automatically</p>
+        </div>
+        <div class="connection-actions">
+          <button id="skipConnection" class="btn-small">Skip (Demo Mode)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Reconnection Overlay -->
+  <div id="reconnectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🔄 Reconnecting...</div>
+      <div class="connection-content">
+        <div class="connection-status">
+          <div class="status-indicator">
+            <div class="spinner"></div>
+            <span id="reconnectionText">Attempting to reconnect...</span>
+          </div>
+        </div>
+        <div class="reconnection-info" id="reconnectionInfo">
+          <p>Retry attempt: <strong id="retryAttempt">1</strong>/5</p>
+          <p>Next retry in: <strong id="retryDelay">2</strong>s</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Welcome Screen (Demo Mode) -->
+  <div id="welcomeOverlay" class="connection-overlay">
+    <div class="connection-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+      <div class="connection-title">💧 Welcome to Last Drop Demo!</div>
+      <div class="connection-content" style="text-align: left;">
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎯 Game Objective</h3>
+          <p style="margin: 8px 0; font-size: 0.9rem; line-height: 1.6;">
+            Be the last player standing with water drops! Collect drops by landing on positive tiles, 
+            avoid negative tiles, and survive till the end.
+          </p>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">🎲 How to Play</h3>
+          <ul style="margin: 8px 0; padding-left: 20px; font-size: 0.85rem; line-height: 1.8;">
+            <li><strong>Roll the dice</strong> - Move forward based on dice value</li>
+            <li><strong>Tile effects</strong> - Gain or lose water drops depending on where you land</li>
+            <li><strong>Chance cards</strong> - Land on special tiles to draw random events</li>
+            <li><strong>Complete laps</strong> - Pass START to earn +5 bonus drops</li>
+            <li><strong>Elimination</strong> - Players with 0 drops are out of the game</li>
+          </ul>
+        </div>
+        
+        <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+          <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem;">⚡ Demo Features</h3>
+          <p style="margin: 8px 0; font-size: 0.85rem; line-height: 1.6;">
+            Watch 4 AI players compete automatically. See dice rolls, token movement, 
+            chance cards, and real-time scoring in action!
+          </p>
+        </div>
+        
+        <div style="text-align: center;">
+          <button id="startDemoBtn" class="btn-small" style="font-size: 1rem; padding: 12px 32px; background: linear-gradient(135deg, var(--accent), #60a5fa); border: none; cursor: pointer;">
+            🎮 Start Demo Game
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <h1>LAST DROP – DEMO MODE</h1>
+    <div class="subtitle">
+      Play the demo version in your browser – <a href="live.html" style="color: var(--accent); text-decoration: underline;">Switch to Live Mode</a>
+      <span id="sessionInfo" class="last-updated" style="color: #60a5fa;"></span>
+      <span id="lastUpdated" class="last-updated"></span>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <!-- Board Section -->
+    <section class="board-card">
+      <div class="board-header">
+        <div class="live-label">
+          <span class="live-dot"></span>
+          Live
+        </div>
+        <span class="board-status">
+          Connection: <span id="connStatus" class="badge-red">OFFLINE</span>
+        </span>
+      </div>
+
+      <div class="perspective-wrapper">
+        <div id="boardWrapper" class="board-wrapper">
+          <div id="board3d" class="board3d">
+            <div class="board-surface"></div>
+            <div class="tiles-grid" id="tilesGrid"></div>
+            <div class="tokens-layer" id="tokensLayer"></div>
+            
+            <div id="chanceCard" class="chance-card">
+              <div id="chanceImage" class="chance-image"></div>
+              <div class="chance-body">
+                <div id="chanceTitle" class="chance-title">Chance Card</div>
+                <div id="chanceText" class="chance-text">Awaiting event…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scoreboard Sidebar -->
+    <aside class="side-card">
+      <div class="section-title">
+        Players
+        <span class="pill">Synced from ESP32</span>
+      </div>
+      <div id="playersList" class="players-list"></div>
+
+      <div class="section-title">
+        Last Event
+        <span class="pill">Dice / Tile / Card</span>
+      </div>
+
+      <!-- Dice Display for Scoreboard -->
+      <div id="scoreboardDiceDisplay" class="scoreboard-dice-display">
+        <div id="dicePlayerName" class="dice-player-name">Player 1 rolling dice...</div>
+        <div class="dice-3d-container">
+          <div id="scoreboardDice1" class="dice-3d">
+            <div class="dice-face dice-front" data-value="1">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-back" data-value="6">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-right" data-value="3">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-left" data-value="4">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-top" data-value="5">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-bottom" data-value="2">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+          </div>
+          <div id="scoreboardDice2" class="dice-3d">
+            <div class="dice-face dice-front" data-value="1">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-back" data-value="6">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-right" data-value="3">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-left" data-value="4">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-top" data-value="5">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+            <div class="dice-face dice-bottom" data-value="2">
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+              <span class="dice-dot"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="eventLog" class="event-log">Waiting for first drop…</div>
+
+      <div class="section-title" style="margin-top: 12px;">
+        Eliminated
+        <span class="pill" id="eliminatedCount">0</span>
+      </div>
+      <div id="eliminatedList" class="eliminated-list"></div>
+
+      <div class="status-row">
+        <span>Connection: <span id="connStatus" class="badge-red">OFFLINE</span></span>
+        <span>Mode: <span id="modeStatus" class="badge-green">DEMO</span></span>
+      </div>
+
+      <div class="footer-note">
+        ESP32 → Android → Server → Live — visual only, rules stay on hardware.
+      </div>
+    </aside>
+  </main>
+
+  <!-- Winner Celebration Overlay -->
+  <div id="winnerOverlay" class="winner-overlay hidden">
+    <div class="winner-card">
+      <div class="winner-trophy">🏆</div>
+      <div class="winner-title">WINNER!</div>
+      <div id="winnerName" class="winner-name">Player 1</div>
+      <div id="winnerDrops" class="winner-drops">💧 15 drops</div>
+      <div class="winner-confetti">
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button id="settingsBtn" class="btn-small" type="button">⚙️ Settings</button>
+  </footer>
+
+  <!-- Settings Backdrop -->
+  <div id="settingsBackdrop" class="settings-backdrop hidden"></div>
+
+  <!-- Settings Panel (Sidebar) -->
+  <div id="settingsPanel" class="settings-panel hidden">
+    <div class="settings-content">
+      <div class="settings-title">
+        <span>⚙️ Settings</span>
+        <button id="closeSettings" class="btn-small" type="button">✕ Close</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="row">
+          <label>View</label>
+          <button id="viewToggle" class="btn-small" type="button">Toggle</button>
+          <span id="viewStatus">Top</span>
+        </div>
+        <div class="row">
+          <label for="zoomRange">Zoom</label>
+          <input id="zoomRange" type="range" min="70" max="130" value="100" />
+        </div>
+        <div class="row">
+          <label for="rotateXRange">Tilt X</label>
+          <input id="rotateXRange" type="range" min="0" max="90" value="55" />
+        </div>
+        <div class="row">
+          <label for="rotateYRange">Tilt Y</label>
+          <input id="rotateYRange" type="range" min="-45" max="45" value="0" />
+        </div>
+        <div class="row">
+          <label for="rotateRange">Rotate</label>
+          <input id="rotateRange" type="range" min="-30" max="30" value="45" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="row">
+          <label>Kid Mode</label>
+          <button id="kidToggle" class="btn-small" type="button">Toggle</button>
+          <span id="kidStatus">OFF</span>
+        </div>
+        <div class="row">
+          <label>Dev Mode</label>
+          <button id="devToggle" class="btn-small" type="button">Toggle</button>
+          <span id="devStatus">ON</span>
+        </div>
+      </div>
+
+      <div class="settings-section" id="devControls" class="dev-controls">
+        <div class="row">
+          <label for="offsetXRange">Coin X</label>
+          <input id="offsetXRange" type="number" min="-50" max="50" value="-12" style="width:60px" />
+          <span id="offsetXValue">-12</span>
+        </div>
+        <div class="row">
+          <label for="offsetYRange">Coin Y</label>
+          <input id="offsetYRange" type="number" min="-50" max="50" value="0" style="width:60px" />
+          <span id="offsetYValue">0</span>
+        </div>
+        <div class="row">
+          <button id="applyCoinOffset" class="btn-small" type="button">Apply Offset</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="row">
+          <label>Demo Mode</label>
+          <button id="demoToggle" class="btn-small" type="button">Toggle</button>
+          <span id="demoStatus">OFF</span>
+        </div>
+        <div class="row">
+          <button id="helpBtn" class="btn-small" type="button">Show Tutorial</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-subsection-title">🔊 Audio Controls</div>
+        <div class="row">
+          <label>Master Audio</label>
+          <button id="audioToggle" class="btn-small" type="button">Toggle</button>
+          <span id="audioStatus">ON</span>
+        </div>
+        <div class="row">
+          <label for="bgMusicVolume">Background Music</label>
+          <input id="bgMusicVolume" type="range" min="0" max="100" value="30" />
+          <span id="bgMusicValue">30%</span>
+        </div>
+        <div class="row">
+          <label for="diceVolume">Dice Roll</label>
+          <input id="diceVolume" type="range" min="0" max="100" value="50" />
+          <span id="diceValue">50%</span>
+        </div>
+        <div class="row">
+          <label for="moveVolume">Coin Movement</label>
+          <input id="moveVolume" type="range" min="0" max="100" value="40" />
+          <span id="moveValue">40%</span>
+        </div>
+        <div class="row">
+          <label for="chanceVolume">Chance Card</label>
+          <input id="chanceVolume" type="range" min="0" max="100" value="50" />
+          <span id="chanceValue">50%</span>
+        </div>
+        <div class="row">
+          <label for="tileVolume">Tile Landing</label>
+          <input id="tileVolume" type="range" min="0" max="100" value="40" />
+          <span id="tileValue">40%</span>
+        </div>
+        <div class="row">
+          <label for="eliminatedVolume">Elimination</label>
+          <input id="eliminatedVolume" type="range" min="0" max="100" value="60" />
+          <span id="eliminatedValue">60%</span>
+        </div>
+        <div class="row">
+          <label for="winnerVolume">Winner</label>
+          <input id="winnerVolume" type="range" min="0" max="100" value="70" />
+          <span id="winnerValue">70%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
     // Parse URL parameters for session-specific viewing
     const urlParams = new URLSearchParams(window.location.search);
     const sessionParam = urlParams.get('session');  // Format: "LASTDROP-0001_uuid"
@@ -28,11 +486,1261 @@
     console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
     console.log('[live] API URL:', LIVE_STATE_URL);
     
-    // Initialize Replay Recorder
-    const replayRecorder = new ReplayRecorder();
-    let gameStarted = false;
-    let previousPlayerPositions = new Map();
-    let lastWinner = null;
+    const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
+    let demoMode = false;
+
+    // Audio System
+    const audioEnabled = { value: true };
+    const audioVolumes = {
+      bgMusic: 0.3,
+      dice: 0.5,
+      move: 0.4,
+      chance: 0.5,
+      tile: 0.4,
+      eliminated: 0.6,
+      winner: 0.7
+    };
+
+    // Audio players (using Web Audio API compatible approach)
+    const audioPlayers = {};
+    
+    function playSound(type) {
+      if (!audioEnabled.value) return;
+      
+      // For now, we'll use a simple beep generator as placeholder
+      // In production, you'd load actual audio files
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      // Different frequencies for different sounds
+      const frequencies = {
+        dice: 440,
+        move: 523,
+        chance: 659,
+        tile: 392,
+        eliminated: 293,
+        winner: 880
+      };
+      
+      oscillator.frequency.value = frequencies[type] || 440;
+      oscillator.type = 'sine';
+      
+      const volume = audioVolumes[type] || 0.5;
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.2);
+    }
+
+    // Background music loop
+    let bgMusicInterval;
+    function startBackgroundMusic() {
+      if (bgMusicInterval) return;
+      if (!audioEnabled.value) return;
+      // Placeholder - in production, use actual audio file
+      // bgMusicInterval = setInterval(() => {}, 30000);
+    }
+
+    function stopBackgroundMusic() {
+      if (bgMusicInterval) {
+        clearInterval(bgMusicInterval);
+        bgMusicInterval = null;
+      }
+    }
+
+    const boardWrapper = document.getElementById("boardWrapper");
+    const board3d = document.getElementById("board3d");
+    const tokensLayer = document.getElementById("tokensLayer");
+    const tilesGrid = document.getElementById("tilesGrid");
+    const zoomRange = document.getElementById("zoomRange");
+    const rotateRange = document.getElementById("rotateRange");
+    const rotateXRange = document.getElementById("rotateXRange");
+    const rotateYRange = document.getElementById("rotateYRange");
+    const playersList = document.getElementById("playersList");
+    const eliminatedList = document.getElementById("eliminatedList");
+    const eliminatedCount = document.getElementById("eliminatedCount");
+    const winnerOverlay = document.getElementById("winnerOverlay");
+    const winnerName = document.getElementById("winnerName");
+    const winnerDrops = document.getElementById("winnerDrops");
+    const sessionInfoEl = document.getElementById("sessionInfo");
+    
+    // Display session info in header if present
+    if (activeBoardId || activeSessionId) {
+      let sessionText = "Viewing: ";
+      if (activeBoardId) {
+        sessionText += `Board ${activeBoardId}`;
+      }
+      if (activeSessionId) {
+        const shortSession = activeSessionId.substring(0, 8);
+        sessionText += ` (Session: ${shortSession}...)`;
+      }
+      sessionInfoEl.textContent = sessionText;
+      console.log('[live] Session info displayed:', sessionText);
+    }
+    
+    // Track previously eliminated players to detect new eliminations
+    let previouslyEliminatedIds = new Set();
+    
+    // Track last event to detect new dice rolls
+    let lastProcessedEvent = null;
+    let currentDiceColor = "#60a5fa"; // Default blue, updated from API
+    // Guard to prevent token moves while dice animation plays
+    let isDiceAnimationPlaying = false;
+    // Store the latest polled state while animation is playing (only keep newest)
+    let queuedLiveState = null;
+    // Timer to delay token movement after receiving dice roll from API
+    let tokenMoveTimer = null;
+    
+    const eventLog = document.getElementById("eventLog");
+    const connStatus = document.getElementById("connStatus");
+    const modeStatus = document.getElementById("modeStatus");
+    const demoToggle = document.getElementById("demoToggle");
+    const viewToggle = document.getElementById("viewToggle");
+    const offsetXRange = document.getElementById("offsetXRange");
+    const offsetYRange = document.getElementById("offsetYRange");
+    const viewStatus = document.getElementById("viewStatus");
+    let is3DView = false;
+    const demoStatus = document.getElementById("demoStatus");
+    const chanceCard = document.getElementById("chanceCard");
+    const chanceImage = document.getElementById("chanceImage");
+    const chanceTitle = document.getElementById("chanceTitle");
+    const chanceText = document.getElementById("chanceText");
+
+    // Connection popup elements - moved inside load event to ensure DOM is ready
+    let connectionOverlay, connectionIndicator, connectionText, skipConnection;
+    let reconnectionOverlay, reconnectionText, retryAttemptEl, retryDelayEl, reconnectionInfo;
+    let loadingOverlay;
+    let firstFetchComplete = false;
+    let lastUpdatedEl;
+
+    // Dice elements
+    let diceDisplay, dice1El, dice2El;
+    let scoreboardDiceDisplay, scoreboardDice1, scoreboardDice2, dicePlayerName;
+
+    const tileCenters = {};
+    const tokensByPlayerId = {};
+    let lastChanceTimeout = null;
+    let connectionEstablished = false;
+
+    function initTiles() {
+      const grid = [1,2,3,4,5,6, 20,0,0,0,0,7, 19,0,0,0,0,8, 18,0,0,0,0,9, 17,0,0,0,0,10, 16,15,14,13,12,11];
+      grid.forEach((tileNum,idx) => {
+        const tile = document.createElement("div");
+        if (tileNum === 0) {
+          tile.className = "tile empty";
+        } else {
+          tile.className = "tile";
+          tile.dataset.tile = tileNum;
+          const inner = document.createElement("div");
+          inner.className = "tile-inner";
+          inner.style.backgroundImage = `url('/assets/tiles/tile-${tileNum}.jpg')`;
+          const label = document.createElement("div");
+          label.className = "tile-label";
+          label.textContent = tileNames[tileNum-1] || ("Tile "+tileNum);
+          inner.appendChild(label);
+          tile.appendChild(inner);
+        }
+        tilesGrid.appendChild(tile);
+      });
+    }
+
+    function computeTileCenters() { #e5e7eb;
+      --text-muted: #9ca3af;
+      --danger: #f97373;
+      --success: #4ade80;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, var(--bg-color) 55%);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas: 
+        "header"
+        "main"
+        "footer";
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Scrollbar styling */
+    .side-card::-webkit-scrollbar,
+    .settings-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .side-card::-webkit-scrollbar-track,
+    .settings-content::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.3);
+    }
+
+    .side-card::-webkit-scrollbar-thumb,
+    .settings-content::-webkit-scrollbar-thumb {
+      background: rgba(96, 165, 250, 0.3);
+      border-radius: 3px;
+    }
+
+    .side-card::-webkit-scrollbar-thumb:hover,
+    .settings-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(96, 165, 250, 0.5);
+    }
+
+    .header {
+      grid-area: header;
+      background: rgba(5, 7, 17, 0.95);
+      border-bottom: 1px solid var(--tile-border);
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 0;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .last-updated {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .main-content {
+      grid-area: main;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* Tablet and Mobile Responsive */
+    @media (max-width: 1024px) {
+      .main-content {
+        grid-template-columns: 1fr 280px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .main-content {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      
+      .side-card {
+        order: -1;
+        max-height: 40vh;
+        overflow-y: auto;
+        border-bottom: 1px solid var(--tile-border);
+      }
+      
+      .board-card {
+        padding: 12px;
+      }
+      
+      .perspective-wrapper {
+        height: min(55vh, 450px);
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        grid-template-rows: auto 1fr;
+      }
+      
+      .header {
+        padding: 8px 12px;
+      }
+      
+      h1 {
+        font-size: 1rem;
+      }
+      
+      .subtitle {
+        font-size: 0.7rem;
+      }
+      
+      .footer {
+        display: none;
+      }
+      
+      .board-card {
+        padding: 8px;
+      }
+      
+      .perspective-wrapper {
+        height: min(50vh, 400px);
+      }
+      
+      .side-card {
+        padding: 8px;
+        max-height: 35vh;
+      }
+      
+      .players-list, .eliminated-list {
+        font-size: 0.75rem;
+      }
+      
+      .player-row {
+        padding: 4px;
+      }
+      
+      .player-rank {
+        font-size: 0.6rem;
+        padding: 1px 4px;
+        min-width: 20px;
+      }
+      
+      .player-dot {
+        width: 10px;
+        height: 10px;
+      }
+      
+      .event-log {
+        font-size: 0.7rem;
+        padding: 5px 6px;
+      }
+      
+      .dice-3d {
+        width: 30px;
+        height: 30px;
+      }
+      
+      .dice-face {
+        width: 30px;
+        height: 30px;
+        padding: 3px;
+      }
+      
+      .dice-dot {
+        width: 5px;
+        height: 5px;
+      }
+      
+      .scoreboard-dice-display {
+        padding: 6px;
+      }
+      
+      .player-token {
+        width: 16px;
+        height: 16px;
+      }
+      
+      .player-token-label {
+        font-size: 0.35rem;
+        padding: 0px 2px;
+        top: -6px;
+      }
+      
+      body:not(.dev-mode) .dev-controls {
+        display: none;
+      }
+      
+      .connection-card, .winner-card {
+        margin: 0 12px;
+        padding: 20px;
+      }
+      
+      .winner-trophy {
+        font-size: 3.5rem;
+      }
+      
+      .winner-title {
+        font-size: 1.8rem;
+      }
+      
+      .winner-name {
+        font-size: 1.3rem;
+      }
+      
+      .winner-drops {
+        font-size: 1rem;
+      }
+    }
+
+    @media (max-width: 400px) {
+      h1 {
+        font-size: 0.9rem;
+      }
+      
+      .subtitle {
+        display: none;
+      }
+      
+      .perspective-wrapper {
+        height: min(45vh, 350px);
+      }
+      
+      .player-token {
+        width: 14px;
+        height: 14px;
+      }
+      
+      .player-token-label {
+        font-size: 0.3rem;
+        padding: 0px 2px;
+        top: -5px;
+      }
+      
+      .tile-label {
+        font-size: 0.35rem;
+      }
+    }
+
+    .board-card {
+      background: radial-gradient(circle at top left, #111827 0, #020617 55%);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .board-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px rgba(248, 113, 113, 0.9);
+      margin-right: 4px;
+    }
+
+    .live-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #fecaca;
+    }
+
+    .board-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .control-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .control-group input[type="range"] {
+      width: 80px;
+    }
+
+    .btn-small {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .btn-small:hover {
+      border-color: var(--accent);
+      background: rgba(15, 23, 42, 1);
+    }
+
+    .btn-small:active {
+      transform: scale(0.95);
+    }
+
+    /* Touch-friendly interactive elements */
+    @media (max-width: 600px) {
+      .btn-small {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        min-height: 36px;
+      }
+    }
+
+    .perspective-wrapper {
+      position: relative;
+      width: 100%;
+      height: min(60vh, 520px);
+      margin-top: 6px;
+      perspective: 1200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+    }
+
+    .board-wrapper {
+      transform-style: preserve-3d;
+      transition: transform 0.2s ease-out;
+    }
+
+    .board3d {
+      position: relative;
+      width: min(460px, 80vw);
+      aspect-ratio: 1 / 1;
+      background: radial-gradient(
+          circle at 30% 0%,
+          rgba(56, 189, 248, 0.2),
+          transparent 55%
+        );
+      border-radius: 22px;
+      transform: rotateX(55deg) rotateZ(45deg);
+      transform-style: preserve-3d;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      overflow: visible;
+    }
+
+    .board-surface {
+      position: absolute;
+      inset: 22px;
+      background: radial-gradient(circle at top, #111827, #020617);
+      border-radius: 18px;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+    }
+
+    .tiles-grid {
+      position: absolute;
+      inset: 36px;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(7, 1fr);
+      gap: 4px;
+      transform-style: preserve-3d;
+    }
+
+    .tile {
+      position: relative;
+      background: var(--tile-bg);
+      border-radius: 6px;
+      border: 1px solid var(--tile-border);
+      overflow: hidden;
+      box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .tile-inner {
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+    }
+
+    .tile-label {
+      position: absolute;
+      left: 3px;
+      bottom: 3px;
+      right: 3px;
+      font-size: 0.45rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-main);
+      background: linear-gradient(
+        to top,
+        rgba(15, 23, 42, 0.9),
+        rgba(15, 23, 42, 0.1)
+      );
+      padding: 2px 4px;
+      border-radius: 4px;
+      text-align: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .tile.empty {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+
+    .tokens-layer {
+      position: absolute;
+      inset: 36px;
+      transform-style: preserve-3d;
+      inset: 36px;
+      z-index: 1000;
+    }
+    .player-token {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.6)) drop-shadow(0 2px 12px rgba(0, 0, 0, 0.4));
+      transition: all 0.4s ease-out;
+      z-index: 2000;
+    }
+    
+    /* Eliminated player styling */
+    .player-token.eliminated {
+      filter: grayscale(100%) blur(2px) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+      opacity: 0.4;
+      position: relative;
+    }
+    
+    .player-token.eliminated::before {
+      content: '☠';
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      font-size: 20px;
+      background: var(--danger);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(249, 115, 115, 0.8);
+      z-index: 100;
+    }
+    
+    .player-token.eliminated::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: -5px;
+      right: -5px;
+      height: 3px;
+      background: var(--danger);
+      transform: translateY(-50%) rotate(-15deg);
+      box-shadow: 0 0 8px rgba(249, 115, 115, 0.8);
+    }
+
+    .player-token[data-player="P1"] {
+      background-image: url("/assets/pawns/pawn-red.svg");
+    }
+
+    .player-token[data-player="P2"] {
+      background-image: url("/assets/pawns/pawn-green.svg");
+    }
+
+    .player-token[data-player="P3"] {
+      background-image: url("/assets/pawns/pawn-blue.svg");
+    }
+
+    .player-token[data-player="P4"] {
+      background-image: url("/assets/pawns/pawn-yellow.svg");
+    }
+
+    .player-token-label {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.5rem;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      padding: 1px 4px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      white-space: nowrap;
+    }
+
+    .chance-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 160px;
+      max-width: 50vw;
+      transform: translate(-50%, -50%) translateZ(20px);
+      background: linear-gradient(135deg, #0f172a, #020617);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-out;
+    }
+
+    .chance-card.visible {
+      opacity: 1;
+      pointer-events: auto;
+      animation: popCard 0.3s ease-out;
+    }
+
+    @keyframes popCard {
+      0% {
+        transform: translate(-50%, -50%) translateZ(20px) scale(0.7);
+      }
+      100% {
+        transform: translate(-50%, -50%) translateZ(20px) scale(1);
+      }
+    }
+
+    .chance-image {
+      width: 100%;
+      height: 90px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    .chance-body {
+      padding: 6px 8px 8px;
+    }
+
+    .chance-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 3px;
+    }
+
+    .chance-text {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .side-card {
+      background: radial-gradient(circle at top right, #0f172a, #020617);
+      padding: 16px;
+      border-left: 1px solid rgba(148, 163, 184, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      height: 100%;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pill {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--accent);
+    }
+
+    .players-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.8rem;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 6px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+    }
+
+    .player-main {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .player-rank {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(96, 165, 250, 0.15);
+      border: 1px solid rgba(96, 165, 250, 0.4);
+      padding: 2px 5px;
+      border-radius: 4px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .eliminated-rank {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .player-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid #020617;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .player-name {
+      font-weight: 500;
+    }
+
+    .player-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .player-pos {
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .event-log {
+      font-size: 0.76rem;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px dashed rgba(148, 163, 184, 0.5);
+      padding: 6px 8px;
+      color: var(--text-muted);
+      min-height: 36px;
+    }
+
+    .event-highlight {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .badge-green {
+      color: var(--success);
+    }
+
+    .badge-red {
+      color: var(--danger);
+    }
+
+    .footer-note {
+      margin-top: 6px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    .footer {
+      grid-area: footer;
+      background: rgba(5, 7, 17, 0.95);
+      border-top: 1px solid var(--tile-border);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      min-height: 40px;
+    }
+
+    /* Settings Panel (Sidebar) */
+    .settings-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      height: 100vh;
+      width: min(340px, 86vw);
+      background: rgba(2, 6, 23, 0.96);
+      border-left: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+      z-index: 2800;
+      backdrop-filter: blur(6px);
+      transform: translateX(0);
+      transition: transform 0.3s ease-out;
+    }
+
+    .settings-panel.hidden {
+      transform: translateX(100%);
+    }
+
+    .settings-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2700;
+      opacity: 1;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .settings-backdrop.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (max-width: 600px) {
+      .settings-panel {
+        width: 100vw;
+      }
+    }
+
+    .settings-content {
+      padding: 16px;
+      color: var(--text-main);
+      height: 100%;
+      overflow-y: auto;
+    }
+
+    .settings-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--tile-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .settings-section {
+      margin-bottom: 20px;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+      border: 1px solid var(--tile-border);
+    }
+
+    .settings-subsection-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .row label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      min-width: 60px;
+      flex: 1;
+    }
+
+    .row span:last-child {
+      min-width: 40px;
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .row input[type="range"] {
+      flex: 1;
+    }
+
+    .row input[type="number"] {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--tile-border);
+      color: var(--text-main);
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+
+    .board-status {
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Eliminated Players */
+    .eliminated-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.75rem;
+      min-height: 30px;
+    }
+
+    .eliminated-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      background: rgba(127, 29, 29, 0.2);
+      border-radius: 6px;
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      opacity: 0.7;
+    }
+
+    .eliminated-token {
+      width: 16px;
+      height: 16px;
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      filter: grayscale(100%) brightness(0.6);
+    }
+
+    /* Winner Celebration Overlay */
+    .winner-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .winner-overlay.hidden {
+      display: none;
+    }
+
+    .winner-card {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border: 3px solid var(--accent);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+      position: relative;
+      animation: bounceIn 0.6s ease-out;
+    }
+
+    .winner-trophy {
+      font-size: 5rem;
+      animation: bounce 1s infinite;
+    }
+
+    .winner-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+      margin: 10px 0;
+      text-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+    }
+
+    .winner-name {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin: 10px 0;
+    }
+
+    .winner-drops {
+      font-size: 1.3rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .winner-confetti {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      top: -10px;
+      animation: fall 3s linear infinite;
+    }
+
+    .confetti:nth-child(1) { left: 10%; animation-delay: 0s; background: #60a5fa; }
+    .confetti:nth-child(2) { left: 25%; animation-delay: 0.3s; background: #34d399; }
+    .confetti:nth-child(3) { left: 40%; animation-delay: 0.6s; background: #fbbf24; }
+    .confetti:nth-child(4) { left: 55%; animation-delay: 0.9s; background: #f87171; }
+    .confetti:nth-child(5) { left: 70%; animation-delay: 1.2s; background: #a78bfa; }
+    .confetti:nth-child(6) { left: 85%; animation-delay: 1.5s; background: #fb923c; }
+    .confetti:nth-child(7) { left: 20%; animation-delay: 0.5s; background: #60a5fa; }
+    .confetti:nth-child(8) { left: 75%; animation-delay: 1s; background: #34d399; }
+
+    @keyframes fall {
+      to { top: 100%; transform: rotate(360deg); }
+    }
+
+    @keyframes bounceIn {
+      0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+      50% { transform: scale(1.05) rotate(2deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Small Screen Disclaimer */
+    .small-screen-disclaimer {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 15000;
+      padding: 20px;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .small-screen-disclaimer.hidden {
+      display: none;
+    }
+
+    .disclaimer-content {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      padding: 30px 24px;
+      text-align: center;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+      animation: bounceIn 0.5s ease-out;
+    }
+
+    .disclaimer-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    .disclaimer-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    .disclaimer-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 400px) {
+      .disclaimer-content {
+        padding: 24px 18px;
+      }
+
+      .disclaimer-icon {
+        font-size: 2.5rem;
+      }
+
+      .disclaimer-title {
+        font-size: 1.1rem;
+      }
+
+      .disclaimer-text {
+        font-size: 0.85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- Small Screen Disclaimer -->
+    // Parse URL parameters for session-specific viewing
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionParam = urlParams.get('session');  // Format: "LASTDROP-0001_uuid"
+    const boardIdParam = urlParams.get('board');     // Alternative: just board ID
+    
+    // Extract boardId and sessionId from URL
+    let activeBoardId = null;
+    let activeSessionId = null;
+    
+    if (sessionParam) {
+      const parts = sessionParam.split('_');
+      activeBoardId = parts[0];
+      activeSessionId = parts.length > 1 ? parts[1] : null;
+    } else if (boardIdParam) {
+      activeBoardId = boardIdParam;
+    }
+    
+    // Build API URL with session parameters
+    let LIVE_STATE_URL = "/api/live_state.php?key=ABC123";
+    if (activeBoardId) {
+      LIVE_STATE_URL += `&boardId=${encodeURIComponent(activeBoardId)}`;
+    }
+    if (activeSessionId) {
+      LIVE_STATE_URL += `&sessionId=${encodeURIComponent(activeSessionId)}`;
+    }
+    
+    console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
+    console.log('[live] API URL:', LIVE_STATE_URL);
     
     const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
     let demoMode = false;
@@ -367,7 +2075,7 @@
 
       // Prevent immediate repositioning while a dice animation is playing.
       // If the client is animating dice and someone requests a non-animated
-      // move to a different tile, ignore it â€” the queued state will be
+      // move to a different tile, ignore it — the queued state will be
       // applied after the dice animation completes.
       if (isDiceAnimationPlaying && !animate) {
         const currentIdx = (token.dataset.tileIndex !== undefined && token.dataset.tileIndex !== '') ? parseInt(token.dataset.tileIndex) : null;
@@ -507,16 +2215,6 @@
 
     function updateUIFromState(state) {
       if (!state) return;
-      
-      // Start recording when game begins (first time we receive valid state)
-      if (!gameStarted && state.players && state.players.length > 0) {
-        const sessionId = activeSessionId || `session-${Date.now()}`;
-        const boardId = activeBoardId || 'unknown';
-        replayRecorder.startRecording(sessionId, boardId, state.players);
-        gameStarted = true;
-        console.log('[Replay] Game started, recording begun');
-      }
-      
       playersList.innerHTML = "";
       eliminatedList.innerHTML = "";
       
@@ -543,11 +2241,6 @@
         if (!previouslyEliminatedIds.has(p.id)) {
           playSound('eliminated');
           previouslyEliminatedIds.add(p.id);
-          
-          // Record elimination event
-          if (replayRecorder.isRecording()) {
-            replayRecorder.recordElimination(p.id, p.name || p.id);
-          }
         }
       });
       
@@ -597,7 +2290,7 @@
         main.appendChild(meta);
         const pos = document.createElement("div");
         pos.className = "player-pos";
-        pos.textContent = `ðŸ’§ ${p.drops ?? 0}`;
+        pos.textContent = `💧 ${p.drops ?? 0}`;
         row.appendChild(main);
         row.appendChild(pos);
         playersList.appendChild(row);
@@ -638,44 +2331,17 @@
       
       // Check for winner (only one player remaining)
       if (activePlayers.length === 1 && eliminatedPlayers.length > 0) {
-        const winner = activePlayers[0];
-        
-        // Only record and save once
-        if (!lastWinner || lastWinner.id !== winner.id) {
-          lastWinner = winner;
-          showWinner(winner);
-          
-          // Record winner and auto-save replay
-          if (replayRecorder.isRecording()) {
-            replayRecorder.recordWinner(winner.id, winner.name || winner.id, winner.drops);
-            
-            // Collect final scores
-            const finalScores = players.map(p => p.drops || 0);
-            
-            // Auto-save replay
-            replayRecorder.autoSave('completed', winner, finalScores)
-              .then(result => {
-                if (result && result.shareUrl) {
-                  console.log('[Replay] Game replay saved! Share at:', result.shareUrl);
-                  // Optionally show share URL to user
-                  showReplaySharePopup(result.shareUrl, result.replayId);
-                }
-              })
-              .catch(err => {
-                console.error('[Replay] Failed to save replay:', err);
-              });
-          }
-        }
+        showWinner(activePlayers[0]);
       }
 
       // If a dice animation is currently playing on the client, queue the latest
       // polled state and DO NOT touch tokens at all (they are animating).
       if (isDiceAnimationPlaying) {
-        console.debug('[live] updateUIFromState â€” animation playing, queuing latest state');
+        console.debug('[live] updateUIFromState — animation playing, queuing latest state');
         queuedLiveState = state; // keep only newest state
         // Keep a minimal event message while animation plays
         if (state.lastEvent && state.lastEvent.rolling) {
-          eventLog.innerHTML = `<span class='event-highlight'>${state.lastEvent.playerName || state.lastEvent.playerId} is rollingâ€¦</span>`;
+          eventLog.innerHTML = `<span class='event-highlight'>${state.lastEvent.playerName || state.lastEvent.playerId} is rolling…</span>`;
         }
         return;
       }
@@ -722,7 +2388,7 @@
               if (t) t.dataset.tileIndex = newPos;
             });
           } else {
-            // No animation required â€” position immediately and update dataset
+            // No animation required — position immediately and update dataset
             positionToken(p.id, newPos, idx, false);
             token.dataset.tileIndex = newPos;
           }
@@ -852,11 +2518,6 @@
                 eventLog.innerHTML = `<span class='event-highlight'>${playerName}</span> rolled <span class='event-highlight'>${e.dice1}</span> and <span class='event-highlight'>${e.dice2}</span>, moved to <span class='event-highlight'>Tile ${e.tileIndex}</span>${e.chanceCardId ? ` and drew card <span class='event-highlight'>${e.chanceCardId}</span>.` : "."}`;
               }, diceColor1, diceColor2);
               
-              // Record dice roll event
-              if (replayRecorder.isRecording()) {
-                replayRecorder.recordRoll(e.playerId, playerName, e.dice1, e.dice2, diceColor1, diceColor2);
-              }
-              
               // DELAYED TOKEN MOVEMENT: Wait 3 seconds after receiving API data before moving tokens
               // This ensures dice animation (2s) completes first with 1s buffer
               console.debug('[live] Starting 3s timer before token movement');
@@ -864,19 +2525,6 @@
                 console.debug('[live] Timer complete - clearing animation flag and moving tokens now');
                 isDiceAnimationPlaying = false;
                 updatePlayerPositions();
-                
-                // Record move event after positions update
-                if (replayRecorder.isRecording()) {
-                  const player = players.find(p => p.id === e.playerId);
-                  if (player) {
-                    const fromPos = previousPlayerPositions.get(e.playerId) || 0;
-                    const toPos = player.pos;
-                    const tileName = tileNames[toPos] || `Tile ${toPos}`;
-                    replayRecorder.recordMove(e.playerId, fromPos, toPos, tileName);
-                    previousPlayerPositions.set(e.playerId, toPos);
-                  }
-                }
-                
                 tokenMoveTimer = null;
               }, 3000);
             } else {
@@ -886,11 +2534,6 @@
                 eventLog.innerHTML = `<span class='event-highlight'>${playerName}</span> rolled <span class='event-highlight'>${e.dice1}</span>, moved to <span class='event-highlight'>Tile ${e.tileIndex}</span>${e.chanceCardId ? ` and drew card <span class='event-highlight'>${e.chanceCardId}</span>.` : "."}`;
               }, diceColor1, diceColor2);
               
-              // Record dice roll event
-              if (replayRecorder.isRecording()) {
-                replayRecorder.recordRoll(e.playerId, playerName, e.dice1, null, diceColor1, null);
-              }
-              
               // DELAYED TOKEN MOVEMENT: Wait 3 seconds after receiving API data before moving tokens
               // This ensures dice animation (2s) completes first with 1s buffer
               console.debug('[live] Starting 3s timer before token movement');
@@ -898,19 +2541,6 @@
                 console.debug('[live] Timer complete - clearing animation flag and moving tokens now');
                 isDiceAnimationPlaying = false;
                 updatePlayerPositions();
-                
-                // Record move event after positions update
-                if (replayRecorder.isRecording()) {
-                  const player = players.find(p => p.id === e.playerId);
-                  if (player) {
-                    const fromPos = previousPlayerPositions.get(e.playerId) || 0;
-                    const toPos = player.pos;
-                    const tileName = tileNames[toPos] || `Tile ${toPos}`;
-                    replayRecorder.recordMove(e.playerId, fromPos, toPos, tileName);
-                    previousPlayerPositions.set(e.playerId, toPos);
-                  }
-                }
-                
                 tokenMoveTimer = null;
               }, 3000);
             }
@@ -922,14 +2552,14 @@
           }
         }
       } else {
-        eventLog.textContent = "Waiting for first dropâ€¦";
+        eventLog.textContent = "Waiting for first drop…";
       }
 
       if (state.lastEvent && state.lastEvent.chanceCardId) {
         const id = state.lastEvent.chanceCardId;
         playSound('chance'); // Play chance card sound
         chanceImage.style.backgroundImage = `url('/assets/chance/${id}.jpg')`;
-        chanceTitle.textContent = `Chance Card â€“ ${id}`;
+        chanceTitle.textContent = `Chance Card – ${id}`;
         chanceText.textContent = (state.chanceDescriptions && state.chanceDescriptions[id]) || "Special event triggered by the board.";
         chanceCard.classList.add("visible");
         if (lastChanceTimeout) clearTimeout(lastChanceTimeout);
@@ -1034,7 +2664,7 @@
     function onControllerConnected() {
       // Update popup status
       connectionIndicator.querySelector('.status-dot').classList.add('connected');
-      connectionText.textContent = 'Controller Connected! ðŸŽ‰';
+      connectionText.textContent = 'Controller Connected! 🎉';
 
       // Hide popup after 2 seconds
       setTimeout(() => {
@@ -1099,7 +2729,7 @@
     function showWinner(player) {
       playSound('winner');
       winnerName.textContent = player.name || player.id;
-      winnerDrops.textContent = `ðŸ’§ ${player.drops} drops`;
+      winnerDrops.textContent = `💧 ${player.drops} drops`;
       winnerOverlay.classList.remove('hidden');
     }
 
@@ -1216,7 +2846,7 @@ function showRollingDice(
     // Die 1 still rolling
     scoreboardDice1.style.animation = 'dice-roll 0.5s linear infinite';
   } else {
-    // Not rolling and no value â€“ keep idle
+    // Not rolling and no value – keep idle
     scoreboardDice1.style.animation = 'none';
   }
 
@@ -1308,7 +2938,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       }
       // Mark that the client is playing a dice animation so incoming polled
       // states won't move tokens until this animation completes.
-      console.debug('[live] show3DDiceRoll START â€” setting isDiceAnimationPlaying = true', value1, value2, playerName);
+      console.debug('[live] show3DDiceRoll START — setting isDiceAnimationPlaying = true', value1, value2, playerName);
       isDiceAnimationPlaying = true;
       
       // Update dice colors if provided
@@ -1395,7 +3025,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
           dicePlayerName.textContent = `${playerName} rolled ${value2 !== null ? value1 + ' & ' + value2 : value1}`;
 
           // Clear animation guard, then run callback and apply any queued state
-          console.debug('[live] show3DDiceRoll END â€” clearing isDiceAnimationPlaying and applying queued state');
+          console.debug('[live] show3DDiceRoll END — clearing isDiceAnimationPlaying and applying queued state');
           isDiceAnimationPlaying = false;
 
           if (callback) callback();
@@ -1584,8 +3214,9 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       retryDelayEl = document.getElementById("retryDelay");
       reconnectionInfo = document.getElementById("reconnectionInfo");
       
-      // Initialize loading overlay
-      loadingOverlay = document.getElementById("loadingOverlay");
+      // Initialize welcome overlay
+      const welcomeOverlay = document.getElementById("welcomeOverlay");
+      const startDemoBtn = document.getElementById("startDemoBtn");
       
       // Initialize last updated element
       lastUpdatedEl = document.getElementById("lastUpdated");
@@ -1605,16 +3236,52 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       scoreboardDice2 = document.getElementById("scoreboardDice2");
       dicePlayerName = document.getElementById("dicePlayerName");
 
-      // Show disclaimer first on small screens, then connection popup
+      // Welcome overlay DISABLED - auto-start demo immediately
+      welcomeOverlay.classList.add("hidden");
+      
+      // Auto-start demo mode on page load
+      demoMode = true;
+      demoStatus.textContent = "ON";
+      modeStatus.textContent = "DEMO";
+      connStatus.textContent = "OFFLINE";
+      connStatus.classList.remove("badge-green");
+      connStatus.classList.add("badge-red");
+      
+      // Initialize demo game state and UI
+      const initialState = {
+        players: demoPlayers.map((p, i) => ({
+          id: p.id,
+          name: p.name,
+          pos: p.pos,
+          score: p.drops,
+          alive: !p.eliminated,
+          color: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"][i]
+        })),
+        lastEvent: {
+          eventType: "game_start",
+          message: "Demo game started! Watch 4 AI players compete."
+        }
+      };
+      updateUIFromState(initialState);
+      
+      // Trigger first demo step after 1 second
+      setTimeout(() => runDemoStep(), 1000);
+      
+      // Keep button handler for manual restart if needed
+      startDemoBtn?.addEventListener('click', () => {
+        welcomeOverlay.classList.add("hidden");
+        demoMode = true;
+        updateUIFromState(initialState);
+        setTimeout(() => runDemoStep(), 1000);
+      });
+      
+      // Show disclaimer on small screens with modified button
       if (window.innerWidth <= 768) {
         smallScreenDisclaimer.classList.remove("hidden");
         
         dismissDisclaimer?.addEventListener('click', () => {
           smallScreenDisclaimer.classList.add("hidden");
-          showConnectionPopup();
         });
-      } else {
-        showConnectionPopup();
       }
 
       skipConnection?.addEventListener('click', () => {
@@ -1659,7 +3326,9 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
         showReconnectionOverlay(0, null);
       });
     });
+  </script>
 
+  <script>
   // Mode toggles and helpers
   const kidToggle = document.getElementById('kidToggle');
   const devToggle = document.getElementById('devToggle');
@@ -1733,52 +3402,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
     settingsPanel.classList.add('hidden');
     settingsBackdrop.classList.add('hidden');
   });
+</script>
 
-  // Replay Share Popup Functions
-  function showReplaySharePopup(shareUrl, replayId) {
-    let popup = document.getElementById('replaySharePopup');
-    if (!popup) {
-      popup = document.createElement('div');
-      popup.id = 'replaySharePopup';
-      popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);padding:30px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:10000;display:none;max-width:500px;width:90%;';
-      popup.innerHTML = `
-        <h3 style="color:var(--accent);margin:0 0 15px 0;">🎮 Game Replay Saved!</h3>
-        <p style="color:var(--text-main);margin-bottom:15px;">Watch this game again or share it with friends:</p>
-        <input type="text" readonly value="${shareUrl}" id="replayShareUrl" style="width:100%;padding:12px;background:var(--tile-bg);border:1px solid var(--tile-border);color:var(--text-main);border-radius:8px;margin-bottom:15px;font-family:monospace;" />
-        <div style="display:flex;gap:10px;justify-content:center;">
-          <button onclick="copyReplayUrl()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:600;">📋 Copy Link</button>
-          <button onclick="openReplay()" style="flex:1;padding:12px;background:var(--success);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:600;">👁️ Watch Now</button>
-          <button onclick="closeReplayPopup()" style="flex:0.5;padding:12px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;">✖</button>
-        </div>
-      `;
-      document.body.appendChild(popup);
-    }
-    const urlInput = popup.querySelector('#replayShareUrl');
-    if (urlInput) urlInput.value = shareUrl;
-    popup.style.display = 'block';
-  }
-
-  window.copyReplayUrl = function() {
-    const urlInput = document.getElementById('replayShareUrl');
-    if (urlInput) {
-      urlInput.select();
-      document.execCommand('copy');
-      const copyBtn = document.querySelector('button[onclick="copyReplayUrl()"]');
-      if (copyBtn) {
-        const orig = copyBtn.textContent;
-        copyBtn.textContent = '✓ Copied!';
-        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
-      }
-    }
-  };
-
-  window.openReplay = function() {
-    const urlInput = document.getElementById('replayShareUrl');
-    if (urlInput) window.open(urlInput.value, '_blank');
-  };
-
-  window.closeReplayPopup = function() {
-    const popup = document.getElementById('replaySharePopup');
-    if (popup) popup.style.display = 'none';
-  };
-
+</body>
+</html>

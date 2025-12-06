@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -49,6 +50,17 @@ class ProfileSelectionActivity : AppCompatActivity() {
             // Migrate old gray profiles to vibrant colors
             profileManager.updateProfileColors()
             loadProfiles()
+        }
+    }
+    
+    override fun onBackPressed() {
+        // If this is initial launch (not called from MainActivity), exit app instead of going to MainActivity
+        if (!isCalledFromMainActivity) {
+            // Exit the app completely
+            finishAffinity()
+        } else {
+            // Called from MainActivity - just go back
+            super.onBackPressed()
         }
     }
     
@@ -105,7 +117,8 @@ class ProfileSelectionActivity : AppCompatActivity() {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    topMargin = 8
+                    topMargin = 16
+                    bottomMargin = 100 // Extra padding for navigation bar
                 }
             }
             addView(btnStartGame)
@@ -116,6 +129,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
         adapter = ProfileAdapter(
             onProfileClick = { profile -> toggleProfileSelection(profile) },
             onProfileLongClick = { profile -> showProfileOptions(profile) },
+            onProfileMenu = { profile -> showProfileMenu(profile) },
             onCreateClick = { showCreateProfileDialog() }
         )
         
@@ -233,6 +247,34 @@ class ProfileSelectionActivity : AppCompatActivity() {
         }
     }
     
+    private fun showProfileMenu(profile: PlayerProfile) {
+        // Three-dot menu with edit and delete options
+        AlertDialog.Builder(this)
+            .setTitle(profile.name)
+            .setItems(arrayOf("✏️ Edit Profile", "🗑️ Delete Profile")) { _, which ->
+                when (which) {
+                    0 -> showEditProfileDialog(profile)
+                    1 -> confirmDeleteProfile(profile)
+                }
+            }
+            .show()
+    }
+    
+    private fun showEditProfileDialog(profile: PlayerProfile) {
+        lifecycleScope.launch {
+            val newName = ProfileDialogs.showRenameProfileDialog(this@ProfileSelectionActivity, profile.name)
+            if (newName != null && newName != profile.name) {
+                val result = profileManager.updateProfileName(profile.playerId, newName)
+                result.onSuccess {
+                    Toast.makeText(this@ProfileSelectionActivity, "Profile renamed to $newName", Toast.LENGTH_SHORT).show()
+                    loadProfiles()
+                }.onFailure {
+                    Toast.makeText(this@ProfileSelectionActivity, it.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+    
     private fun showProfileOptions(profile: PlayerProfile) {
         // AI and Guest players cannot be edited or deleted
         if (profile.isAI) {
@@ -326,55 +368,99 @@ class ProfileSelectionActivity : AppCompatActivity() {
             
             if (profiles.isEmpty()) return@launch
             
-            // Generate greetings for all players
-            val greetings = profiles.mapNotNull { profile ->
-                if (profile.isGuest) {
-                    "${profile.name}: Ready to play!"
-                } else {
-                    try {
-                        val history = profileManager.getGameHistoryForGreeting(profile.playerId)
-                        val timeContext = TimeContext.from(history.lastPlayedTimestamp)
-                        val greeting = AIGreetings.getPersonalizedGreeting(history, timeContext)
-                        "${profile.nickname}: $greeting"
-                    } catch (e: Exception) {
-                        "${profile.nickname}: First game - let's make it count!"
-                    }
-                }
-            }
+            // Sort profiles: Regular players → Guest → AI
+            val sortedProfiles = profiles.sortedWith(compareBy(
+                { if (it.isAI) 2 else if (it.isGuest) 1 else 0 },
+                { it.name }
+            ))
             
-            // Create color selection UI with greetings
-            val colorAssignments = profiles.mapIndexed { index, profile ->
-                "${profile.name} → ${ProfileManager.COLOR_NAMES[index]}"
-            }.joinToString("\n")
+            // Track selected colors
+            val selectedColors = mutableMapOf<String, String>() // profileId → color
+            val availableColors = ProfileManager.GAME_COLORS.toMutableList()
             
-            val message = buildString {
-                append("🎮 AI GAME MASTER 🎮\n\n")
-                append(greetings.joinToString("\n\n"))
-                append("\n\n━━━━━━━━━━━━━━\n")
-                append("Color Assignments:\n")
-                append(colorAssignments)
-            }
-            
-            AlertDialog.Builder(this@ProfileSelectionActivity)
-                .setTitle("Game Starting")
-                .setMessage(message)
-                .setPositiveButton("Let's Play!") { _, _ ->
-                    // Pass profiles with assigned colors to MainActivity
-                    val colorMap = profiles.indices.map { index ->
-                        ProfileManager.GAME_COLORS.getOrNull(index) ?: "FF0000"
-                    }
-                    
-                    val resultIntent = Intent().apply {
-                        putStringArrayListExtra("selected_profiles", ArrayList(selectedProfiles))
-                        putStringArrayListExtra("assigned_colors", ArrayList(colorMap))
-                    }
-                    
-                    setResult(RESULT_OK, resultIntent)
-                    finish()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+            // Start interactive color selection
+            showColorPickerForPlayer(sortedProfiles, 0, selectedColors, availableColors)
         }
+    }
+    
+    private fun showColorPickerForPlayer(
+        profiles: List<PlayerProfile>,
+        currentIndex: Int,
+        selectedColors: MutableMap<String, String>,
+        availableColors: MutableList<String>
+    ) {
+        if (currentIndex >= profiles.size) {
+            // All players have colors, start game
+            startGameWithColors(profiles, selectedColors)
+            return
+        }
+        
+        val profile = profiles[currentIndex]
+        
+        // AI auto-picks last available color
+        if (profile.isAI) {
+            val autoColor = availableColors.firstOrNull() ?: ProfileManager.GAME_COLORS[0]
+            selectedColors[profile.playerId] = autoColor
+            availableColors.remove(autoColor)
+            
+            // Show AI picked message briefly, then continue
+            Toast.makeText(this, "☁️ Cloudie chose ${getColorName(autoColor)}!", Toast.LENGTH_SHORT).show()
+            
+            // Continue to next player after short delay
+            lifecycleScope.launch {
+                delay(800)
+                showColorPickerForPlayer(profiles, currentIndex + 1, selectedColors, availableColors)
+            }
+            return
+        }
+        
+        // Human or Guest player - show color picker
+        val colorNames = availableColors.map { getColorName(it) }.toTypedArray()
+        val playerLabel = when {
+            profile.isGuest -> "👤 ${profile.name}"
+            else -> profile.nickname
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("$playerLabel - Choose Your Color")
+            .setItems(colorNames) { _, which ->
+                val chosenColor = availableColors[which]
+                selectedColors[profile.playerId] = chosenColor
+                availableColors.remove(chosenColor)
+                
+                // Move to next player
+                showColorPickerForPlayer(profiles, currentIndex + 1, selectedColors, availableColors)
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    private fun getColorName(colorHex: String): String {
+        return when (colorHex) {
+            "FF0000" -> "🔴 Red"
+            "00FF00" -> "🟢 Green"
+            "0000FF" -> "🔵 Blue"
+            "FFFF00" -> "🟡 Yellow"
+            else -> "Color"
+        }
+    }
+    
+    private fun startGameWithColors(
+        profiles: List<PlayerProfile>,
+        selectedColors: Map<String, String>
+    ) {
+        // Build final color array in original selection order
+        val orderedColors = selectedProfiles.map { profileId ->
+            selectedColors[profileId] ?: ProfileManager.GAME_COLORS[0]
+        }
+        
+        val resultIntent = Intent().apply {
+            putStringArrayListExtra("selected_profiles", ArrayList(selectedProfiles))
+            putStringArrayListExtra("assigned_colors", ArrayList(orderedColors))
+        }
+        
+        setResult(RESULT_OK, resultIntent)
+        finish()
     }
 }
 
@@ -383,6 +469,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
 class ProfileAdapter(
     private val onProfileClick: (PlayerProfile) -> Unit,
     private val onProfileLongClick: (PlayerProfile) -> Unit,
+    private val onProfileMenu: (PlayerProfile) -> Unit,
     private val onCreateClick: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     
@@ -411,7 +498,11 @@ class ProfileAdapter(
     }
     
     override fun getItemCount(): Int {
-        return minOf(profiles.size + 1, ProfileManager.MAX_PROFILES + 1)
+        // Show all profiles + add button (if not at limit)
+        // We allow: Cloudie + Guestie + 4 custom profiles = 6 total profiles + 1 add button = 7 slots
+        val regularProfileCount = profiles.count { !it.isAI && !it.isGuest }
+        val canAddMore = regularProfileCount < ProfileManager.MAX_PROFILES
+        return if (canAddMore) profiles.size + 1 else profiles.size
     }
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -474,6 +565,25 @@ class ProfileAdapter(
                     // Set dull background color
                     setBackgroundColor(Color.parseColor("#${profile.avatarColor}"))
                     outlineProvider = null
+                }
+                
+                // Add three-dot menu button in top-right corner (only for non-AI/Guest profiles)
+                if (!profile.isAI && !profile.isGuest) {
+                    addView(Button(context).apply {
+                        text = "⋮"
+                        textSize = 24f
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(Color.TRANSPARENT)
+                        layoutParams = FrameLayout.LayoutParams(
+                            80,
+                            80
+                        ).apply {
+                            gravity = android.view.Gravity.TOP or android.view.Gravity.END
+                        }
+                        setOnClickListener { 
+                            onProfileMenu(profile)
+                        }
+                    })
                 }
                 
                 addView(LinearLayout(context).apply {

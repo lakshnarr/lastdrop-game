@@ -20,7 +20,7 @@ interface PlayerProfileDao {
     @Query("SELECT * FROM player_profiles WHERE playerCode = :code")
     suspend fun getProfileByCode(code: String): PlayerProfile?
     
-    @Query("SELECT COUNT(*) FROM player_profiles WHERE isGuest = 0")
+    @Query("SELECT COUNT(*) FROM player_profiles WHERE isGuest = 0 AND isAI = 0")
     suspend fun getProfileCount(): Int
     
     @Query("SELECT * FROM player_profiles WHERE isGuest = 0 ORDER BY wins DESC LIMIT 1")

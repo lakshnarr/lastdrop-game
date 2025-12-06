@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Last Drop – Demo Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="assets/css/shared.css" />
+</head>
+<body>
+  
+  <!-- Small Screen Disclaimer -->
+  <div id="smallScreenDisclaimer" class="small-screen-disclaimer hidden">
+    <div class="disclaimer-content">
+      <div class="disclaimer-icon">📺</div>
+      <div class="disclaimer-title">Best Viewed on Large Screens</div>
+      <div class="disclaimer-text">
+        This demo is designed for landscape mode on laptops, desktops, or tablets.
+        Please rotate your device or switch to a larger screen for the best experience.
+      </div>
+      <button id="closeDisclaimer" class="btn-primary">Continue Anyway</button>
+    </div>
+  </div>
+
+  <!-- Settings Backdrop -->
+  <div id="settingsBackdrop" class="settings-backdrop hidden"></div>
+
+  <!-- Settings Panel -->
+  <div id="settingsPanel" class="settings-panel hidden">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button id="closeSettings" class="btn-icon" aria-label="Close settings">&times;</button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>Audio</h3>
+        <div class="settings-row">
+          <label>
+            <input type="checkbox" id="audioToggle" checked />
+            Enable sound effects
+          </label>
+        </div>
+        <div class="settings-row">
+          <label for="musicVolume">Music Volume</label>
+          <input type="range" id="musicVolume" min="0" max="100" value="30" />
+        </div>
+        <div class="settings-row">
+          <label for="effectsVolume">Effects Volume</label>
+          <input type="range" id="effectsVolume" min="0" max="100" value="50" />
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>Display</h3>
+        <div class="settings-row">
+          <label>
+            <input type="checkbox" id="showDevOverlays" />
+            Show developer overlays
+          </label>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Connection Overlay -->
+  <div id="connectionOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">🎮 Connect LastDrop Controller</div>
+      <div class="connection-subtitle">
+        This live board can pair with the LastDrop controller box or ESP32 game engine.
+      </div>
+
+      <div class="connection-status">
+        <div class="status-icon">🌐</div>
+        <div class="status-text">
+          <div id="connStatusHeader" class="status-header">No controller detected</div>
+          <div id="connStatusDetail" class="status-detail">
+            You can still run in demo mode with simulated dice and moves.
+          </div>
+        </div>
+      </div>
+
+      <div class="connection-actions">
+        <button id="connectNowBtn" class="btn-primary">Connect Controller</button>
+        <button id="demoOnlyBtn" class="btn-secondary">Continue in Demo Mode</button>
+      </div>
+
+      <div class="connection-footer">
+        <div class="connection-tip">
+          <strong>Tip:</strong> On the real setup, the ESP32 box connects to Wi-Fi and pushes
+          game state here in realtime.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="page-container demo-page">
+    <header class="top-bar">
+      <div class="top-left">
+        <div class="brand-mark">
+          <div class="brand-logo">💧</div>
+          <div class="brand-text">
+            <div class="brand-title">Last Drop – Live Board</div>
+            <div class="brand-subtitle">Realtime smart board + web demo</div>
+          </div>
+        </div>
+        <div id="sessionInfo" class="session-info hidden"></div>
+      </div>
+
+      <div class="top-center">
+        <div class="badge-group">
+          <span id="modeStatus" class="badge badge-purple">DEMO</span>
+          <span id="connStatus" class="badge badge-red">OFFLINE</span>
+          <span id="espStatus" class="badge badge-gray">ESP: NOT LINKED</span>
+        </div>
+        <div class="top-hints">
+          <span class="hint-pill">🎲 Dice rolls are simulated in demo</span>
+          <span class="hint-pill">🧠 ESP32 will drive moves in real setup</span>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <button id="helpBtn" class="btn-ghost">How it works</button>
+        <button id="kidToggle" class="btn-ghost small-pill">
+          Kid View: <span id="kidStatus">OFF</span>
+        </button>
+        <button id="devToggle" class="btn-ghost small-pill">
+          Dev Mode: <span id="devStatus">OFF</span>
+        </button>
+        <button id="settingsBtn" class="btn-icon" aria-label="Open settings">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Main Content: Board + Sidebar -->
+    <main class="main-layout">
+      <section class="board-area">
+        <div class="board-wrapper">
+          <div id="board3DContainer" class="board-3d-container">
+            <div id="board3D" class="board-3d">
+              <!-- Main Board -->
+              <div id="boardGrid" class="board-grid">
+                <!-- Tiles will be dynamically injected here -->
+              </div>
+
+              <!-- Player Tokens -->
+              <div id="tokenLayer" class="token-layer">
+                <!-- Tokens for players -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Board Footer: Dice + Status -->
+        <div class="board-footer">
+          <div class="dice-panel">
+            <div class="dice-title">Dice</div>
+            <div class="dice-display">
+              <div class="dice-face" id="diceFace">
+                <span id="diceValue">-</span>
+              </div>
+              <div class="dice-meta">
+                <div>Last Dice: <span id="lastDiceText">–</span></div>
+                <div>Turn: <span id="turnText">Waiting…</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-panel">
+            <div class="status-row">
+              <span>Board Rotation</span>
+              <span id="rotationLabel">Neutral</span>
+            </div>
+            <div class="status-row">
+              <span>Demo Mode</span>
+              <span id="demoStatus" class="badge badge-green">ON</span>
+            </div>
+            <div class="status-row">
+              <span>Network</span>
+              <span id="netStatusLabel">Offline (Demo only)</span>
+            </div>
+          </div>
+
+          <div class="cta-panel">
+            <div class="cta-title">This is a demo view</div>
+            <p class="cta-text">
+              In the final expo setup, this screen will mirror the **physical board** and
+              the **Android app**, driven by the ESP32 game engine.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <section class="players-card">
+          <div class="section-header">
+            <h3>Players</h3>
+            <span id="playerCount" class="badge badge-gray">0</span>
+          </div>
+          <div id="playersList" class="players-list">
+            <!-- Player items -->
+          </div>
+        </section>
+
+        <section class="log-card">
+          <div class="section-header">
+            <h3>Game Log</h3>
+          </div>
+          <div id="logList" class="log-list">
+            <!-- Log entries -->
+          </div>
+        </section>
+
+        <section class="winner-card">
+          <div class="section-header">
+            <h3>Winner</h3>
+          </div>
+          <div id="winnerBox" class="winner-box">
+            <div id="winnerName" class="winner-name">No winner yet</div>
+            <div id="winnerDrops" class="winner-drops">–</div>
+            <div class="winner-note">
+              In elimination mode, the last player surviving water shortage wins.
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <!-- Tutorial Overlay -->
+    <div id="tutorialOverlay" class="tutorial-overlay hidden">
+      <div class="tutorial-card">
+        <div class="tutorial-title">How to Play</div>
+        <ol class="tutorial-steps">
+          <li>Roll the dice.</li>
+          <li>Watch your pawn move.</li>
+          <li>Read the tile effect.</li>
+        </ol>
+        <button id="closeTutorial" class="btn-small">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Parse URL parameters for session-specific viewing
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionParam = urlParams.get('session');  // Format: "LASTDROP-0001_uuid"
+    const boardIdParam = urlParams.get('board');     // Alternative: just board ID
+    
+    // Extract boardId and sessionId from URL
+    let activeBoardId = null;
+    let activeSessionId = null;
+    
+    if (sessionParam) {
+      const parts = sessionParam.split('_');
+      activeBoardId = parts[0];
+      activeSessionId = parts.length > 1 ? parts[1] : null;
+    } else if (boardIdParam) {
+      activeBoardId = boardIdParam;
+    }
+    
+    // Build API URL with session parameters
+    let LIVE_STATE_URL = "/api/live_state.php?key=ABC123";
+    if (activeBoardId) {
+      LIVE_STATE_URL += `&boardId=${encodeURIComponent(activeBoardId)}`;
+    }
+    if (activeSessionId) {
+      LIVE_STATE_URL += `&sessionId=${encodeURIComponent(activeSessionId)}`;
+    }
+    
+    console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
+    console.log('[live] API URL:', LIVE_STATE_URL);
+    
+    const tileNames = [
+      "START",
+      "Tile 2","Tile 3","Tile 4","Tile 5",
+      "Tile 6","Tile 7","Tile 8","Tile 9",
+      "Tile 10","Tile 11","Tile 12","Tile 13",
+      "Tile 14","Tile 15","Tile 16","Tile 17",
+      "Tile 18","Tile 19","Tile 20"
+    ];
+    let demoMode = false;
+
+    // Audio System
+    const audioEnabled = { value: true };
+    const audioVolumes = {
+      bgMusic: 0.3,
+      dice: 0.5,
+      move: 0.4,
+      chance: 0.5,
+      tile: 0.4,
+      eliminated: 0.6,
+      winner: 0.7
+    };
+    const audioPlayers = {};
+    
+    function playSound(type) {
+      if (!audioEnabled.value) return;
+      
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      const frequencies = {
+        dice: 440,
+        move: 523,
+        chance: 659,
+        tile: 392,
+        eliminated: 293,
+        winner: 880
+      };
+      
+      oscillator.frequency.value = frequencies[type] || 440;
+      oscillator.type = 'sine';
+      
+      const volume = audioVolumes[type] || 0.5;
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.2);
+    }
+
+    let bgMusicInterval;
+    function startBackgroundMusic() {
+      if (bgMusicInterval) return;
+      if (!audioEnabled.value) return;
+    }
+
+    function stopBackgroundMusic() {
+      if (bgMusicInterval) {
+        clearInterval(bgMusicInterval);
+        bgMusicInterval = null;
+      }
+    }
+
+    // DOM references
+    const boardGrid = document.getElementById("boardGrid");
+    const tokenLayer = document.getElementById("tokenLayer");
+    const diceValueEl = document.getElementById("diceValue");
+    const lastDiceText = document.getElementById("lastDiceText");
+    const turnText = document.getElementById("turnText");
+    const rotationLabel = document.getElementById("rotationLabel");
+    const demoStatus = document.getElementById("demoStatus");
+    const netStatusLabel = document.getElementById("netStatusLabel");
+    const connStatus = document.getElementById("connStatus");
+    const espStatus = document.getElementById("espStatus");
+    const playerCountBadge = document.getElementById("playerCount");
+    const playersList = document.getElementById("playersList");
+    const logList = document.getElementById("logList");
+    const winnerBox = document.getElementById("winnerBox");
+    const winnerName = document.getElementById("winnerName");
+    const winnerDrops = document.getElementById("winnerDrops");
+    const sessionInfoEl = document.getElementById("sessionInfo");
+    const board3D = document.getElementById("board3D");
+    const board3DContainer = document.getElementById("board3DContainer");
+    const smallScreenDisclaimer = document.getElementById("smallScreenDisclaimer");
+    const closeDisclaimer = document.getElementById("closeDisclaimer");
+    const connectionOverlay = document.getElementById("connectionOverlay");
+    const connectNowBtn = document.getElementById("connectNowBtn");
+    const demoOnlyBtn = document.getElementById("demoOnlyBtn");
+    const connStatusHeader = document.getElementById("connStatusHeader");
+    const connStatusDetail = document.getElementById("connStatusDetail");
+
+    if (activeBoardId || activeSessionId) {
+      let sessionText = "Viewing: ";
+      if (activeBoardId) {
+        sessionText += `Board ${activeBoardId}`;
+      }
+      if (activeSessionId) {
+        const shortSession = activeSessionId.substring(0, 8);
+        sessionText += ` (Session: ${shortSession}...)`;
+      }
+      sessionInfoEl.textContent = sessionText;
+      sessionInfoEl.classList.remove("hidden");
+    }
+
+    // Tile and board construction
+    function createTileElement(index) {
+      const tileEl = document.createElement("div");
+      tileEl.className = "board-tile";
+      tileEl.dataset.index = index;
+
+      const label = document.createElement("div");
+      label.className = "tile-label";
+      label.textContent = tileNames[index - 1] || `Tile ${index}`;
+      tileEl.appendChild(label);
+
+      const coord = document.createElement("div");
+      coord.className = "tile-coord";
+      coord.textContent = index;
+      tileEl.appendChild(coord);
+
+      const droplet = document.createElement("div");
+      droplet.className = "tile-droplet";
+      tileEl.appendChild(droplet);
+
+      return tileEl;
+    }
+
+    function buildBoardLayout() {
+      boardGrid.innerHTML = "";
+      for (let i = 1; i <= 20; i++) {
+        const tileEl = createTileElement(i);
+        boardGrid.appendChild(tileEl);
+      }
+    }
+
+    const tokensByPlayerId = {};
+    function createOrUpdateToken(player) {
+      let token = tokensByPlayerId[player.playerId];
+      if (!token) {
+        token = document.createElement("div");
+        token.className = "player-token";
+        token.dataset.playerId = player.playerId;
+
+        const avatar = document.createElement("div");
+        avatar.className = "token-avatar";
+        avatar.textContent = player.icon || "💧";
+
+        const label = document.createElement("div");
+        label.className = "token-label";
+        label.textContent = player.name || player.playerId;
+
+        token.appendChild(avatar);
+        token.appendChild(label);
+        tokenLayer.appendChild(token);
+        tokensByPlayerId[player.playerId] = token;
+      }
+      token.dataset.tileIndex = player.tileIndex;
+    }
+
+    function positionTokens() {
+      const tiles = boardGrid.querySelectorAll(".board-tile");
+      const tileWidth = tiles[0]?.offsetWidth || 60;
+      const tileHeight = tiles[0]?.offsetHeight || 60;
+
+      Object.values(tokensByPlayerId).forEach(token => {
+        const tileIndex = parseInt(token.dataset.tileIndex || "1", 10);
+        const tileEl = boardGrid.querySelector(`.board-tile[data-index="${tileIndex}"]`);
+        if (!tileEl) return;
+        const rect = tileEl.getBoundingClientRect();
+        const boardRect = boardGrid.getBoundingClientRect();
+        const x = rect.left - boardRect.left + tileWidth / 2;
+        const y = rect.top - boardRect.top + tileHeight / 2;
+        token.style.transform = `translate(${x}px, ${y}px)`;
+      });
+    }
+
+    function logEvent(message, type = "info") {
+      const entry = document.createElement("div");
+      entry.className = `log-entry log-${type}`;
+      const time = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${message}</span>`;
+      logList.prepend(entry);
+
+      const maxEntries = 60;
+      while (logList.children.length > maxEntries) {
+        logList.removeChild(logList.lastChild);
+      }
+    }
+
+    function updatePlayersList(players) {
+      playersList.innerHTML = "";
+      players.forEach(player => {
+        const row = document.createElement("div");
+        row.className = "player-row";
+
+        const left = document.createElement("div");
+        left.className = "player-left";
+        left.textContent = player.name || player.playerId;
+
+        const right = document.createElement("div");
+        right.className = "player-right";
+        right.innerHTML = `
+          <span class="player-drops">${player.drops ?? "–"}💧</span>
+          <span class="player-tile">Tile ${player.tileIndex}</span>
+        `;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        playersList.appendChild(row);
+      });
+      playerCountBadge.textContent = players.length;
+    }
+
+    // Connection overlay controls
+    let overlayTimeout;
+    function showReconnectionOverlay(reasonCode, data) {
+      clearTimeout(overlayTimeout);
+      if (reasonCode === 0) {
+        connStatusHeader.textContent = "Using Demo Mode";
+        connStatusDetail.textContent = "No controller is linked. You are seeing simulated moves.";
+      } else if (reasonCode === 1) {
+        connStatusHeader.textContent = "Connection Lost";
+        connStatusDetail.textContent = "We lost contact with the controller. We'll try to reconnect.";
+      } else if (reasonCode === 2) {
+        connStatusHeader.textContent = "ESP32 Not Responding";
+        connStatusDetail.textContent = "The board microcontroller is not sending updates.";
+      }
+      connectionOverlay.classList.remove("hidden");
+      overlayTimeout = setTimeout(() => {
+        connectionOverlay.classList.add("hidden");
+      }, 8000);
+    }
+
+    function hideReconnectionOverlay() {
+      clearTimeout(overlayTimeout);
+      connectionOverlay.classList.add("hidden");
+    }
+
+    connectNowBtn?.addEventListener("click", () => {
+      showReconnectionOverlay(1, null);
+    });
+
+    demoOnlyBtn?.addEventListener("click", () => {
+      demoMode = true;
+      demoStatus.textContent = "ON";
+      demoStatus.classList.remove("badge-gray");
+      demoStatus.classList.add("badge-green");
+      connStatus.textContent = "OFFLINE";
+      connStatus.classList.remove("badge-green");
+      connStatus.classList.add("badge-red");
+      netStatusLabel.textContent = "Offline (Demo)";
+      hideReconnectionOverlay();
+      logEvent("Switched to demo-only mode", "info");
+    });
+
+    // Small screen disclaimer
+    function checkSmallScreen() {
+      const isSmall = window.innerWidth < 900 || window.innerHeight < 600;
+      if (isSmall) {
+        smallScreenDisclaimer.classList.remove("hidden");
+      } else {
+        smallScreenDisclaimer.classList.add("hidden");
+      }
+    }
+
+    window.addEventListener("resize", checkSmallScreen);
+    closeDisclaimer?.addEventListener("click", () => {
+      smallScreenDisclaimer.classList.add("hidden");
+    });
+
+    // Live state + demo mode engine
+    const gameState = {
+      players: [],
+      activePlayerId: null,
+      lastDice: null,
+      winner: null,
+      lastUpdateAt: null,
+      boardRotation: 0
+    };
+
+    function applyGameState(state) {
+      gameState.players = state.players || [];
+      gameState.activePlayerId = state.activePlayerId || null;
+      gameState.lastDice = state.lastDice || null;
+      gameState.winner = state.winner || null;
+      gameState.lastUpdateAt = state.lastUpdateAt || Date.now();
+      gameState.boardRotation = state.boardRotation ?? 0;
+
+      diceValueEl.textContent = gameState.lastDice ?? "-";
+      lastDiceText.textContent = gameState.lastDice ? `${gameState.lastDice}` : "–";
+      turnText.textContent = gameState.activePlayerId
+        ? `Player ${gameState.activePlayerId}'s turn`
+        : "Waiting for roll…";
+
+      board3D.style.transform = `rotateX(12deg) rotateY(${gameState.boardRotation}deg) rotateZ(0deg)`;
+      rotationLabel.textContent =
+        gameState.boardRotation > 0 ? "Rotated Right" :
+        gameState.boardRotation < 0 ? "Rotated Left" :
+        "Neutral";
+
+      updatePlayersList(gameState.players);
+      gameState.players.forEach(p => createOrUpdateToken(p));
+      positionTokens();
+
+      if (gameState.winner) {
+        winnerName.textContent = gameState.winner.name || gameState.winner.playerId;
+        winnerDrops.textContent = `${gameState.winner.drops ?? "-"} 💧 remaining`;
+        winnerBox.classList.add("winner-active");
+      } else {
+        winnerName.textContent = "No winner yet";
+        winnerDrops.textContent = "–";
+        winnerBox.classList.remove("winner-active");
+      }
+    }
+
+    async function fetchAndUpdate() {
+      if (demoMode) return;
+      try {
+        connStatus.textContent = "ONLINE";
+        connStatus.classList.remove("badge-red");
+        connStatus.classList.add("badge-green");
+        netStatusLabel.textContent = "Online (Polling)";
+
+        const response = await fetch(LIVE_STATE_URL, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        const data = await response.json();
+        applyGameState(data);
+        logEvent(`Update: dice ${data.lastDice}, active ${data.activePlayerId}`, "info");
+      } catch (err) {
+        console.error("Error fetching live state:", err);
+        connStatus.textContent = "OFFLINE";
+        connStatus.classList.remove("badge-green");
+        connStatus.classList.add("badge-red");
+        netStatusLabel.textContent = "Error talking to server";
+        showReconnectionOverlay(1, null);
+      }
+    }
+
+    let pollingInterval;
+    function startLivePolling() {
+      if (pollingInterval) return;
+      pollingInterval = setInterval(fetchAndUpdate, 3000);
+    }
+
+    function stopLivePolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    // Demo mode system
+    const demoPlayers = [
+      { playerId: "P1", name: "Player 1", tileIndex: 1, drops: 10, icon: "🧒" },
+      { playerId: "P2", name: "Player 2", tileIndex: 1, drops: 10, icon: "👧" },
+      { playerId: "P3", name: "Player 3", tileIndex: 1, drops: 10, icon: "🧑" },
+      { playerId: "P4", name: "Player 4", tileIndex: 1, drops: 10, icon: "👦" }
+    ];
+
+    let demoStep = 0;
+    function runDemoStep() {
+      demoMode = true;
+      const diceRoll = Math.floor(Math.random() * 6) + 1;
+      const activeIndex = demoStep % demoPlayers.length;
+      const activePlayer = demoPlayers[activeIndex];
+
+      activePlayer.tileIndex += diceRoll;
+      if (activePlayer.tileIndex > 20) {
+        activePlayer.tileIndex = 20;
+      }
+
+      const state = {
+        players: demoPlayers,
+        activePlayerId: activePlayer.playerId,
+        lastDice: diceRoll,
+        boardRotation: (demoStep % 2 === 0) ? 10 : -10
+      };
+
+      applyGameState(state);
+      logEvent(
+        `Demo: ${activePlayer.name} rolled ${diceRoll}, moved to tile ${activePlayer.tileIndex}`,
+        "info"
+      );
+      playSound("dice");
+      playSound("move");
+      demoStep++;
+    }
+
+    // Auto-start demo mode
+    demoMode = true;
+    demoStatus.textContent = "ON";
+    demoStatus.classList.remove("badge-gray");
+    demoStatus.classList.add("badge-green");
+    connStatus.textContent = "OFFLINE";
+    connStatus.classList.remove("badge-green");
+    connStatus.classList.add("badge-red");
+    netStatusLabel.textContent = "Offline (Demo only)";
+
+    function initBoard() {
+      buildBoardLayout();
+      demoPlayers.forEach(p => createOrUpdateToken(p));
+      positionTokens();
+    }
+
+    window.addEventListener("resize", positionTokens);
+    window.addEventListener("load", () => {
+      initBoard();
+      checkSmallScreen();
+      runDemoStep();
+      setInterval(runDemoStep, 5000);
+    });
+  </script>
+
+  <script>
+    // Mode toggles and helpers
+    const kidToggle = document.getElementById('kidToggle');
+    const devToggle = document.getElementById('devToggle');
+    const helpBtn   = document.getElementById('helpBtn');
+    const kidStatus = document.getElementById('kidStatus');
+    const devStatus = document.getElementById('devStatus');
+    const tutorialOverlay = document.getElementById('tutorialOverlay');
+    const closeTutorial = document.getElementById('closeTutorial');
+    const toastContainer = document.getElementById('toastContainer');
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      toastContainer.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.add('show');
+      });
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          toastContainer.removeChild(toast);
+        }, 300);
+      }, 2500);
+    }
+
+    let kidMode = false;
+    let devMode = false;
+
+    kidToggle?.addEventListener('click', () => {
+      kidMode = !kidMode;
+      kidStatus.textContent = kidMode ? 'ON' : 'OFF';
+      kidToggle.classList.toggle('pill-on', kidMode);
+      document.body.classList.toggle('kid-mode', kidMode);
+      showToast(kidMode ? 'Kid-friendly view enabled' : 'Kid-friendly view disabled');
+    });
+
+    devToggle?.addEventListener('click', () => {
+      devMode = !devMode;
+      devStatus.textContent = devMode ? 'ON' : 'OFF';
+      devToggle.classList.toggle('pill-on', devMode);
+      document.body.classList.toggle('dev-mode', devMode);
+      showToast(devMode ? 'Developer overlays enabled' : 'Developer overlays disabled');
+    });
+
+    helpBtn?.addEventListener('click', () => {
+      tutorialOverlay.classList.remove('hidden');
+    });
+
+    closeTutorial?.addEventListener('click', () => {
+      tutorialOverlay.classList.add('hidden');
+    });
+
+    tutorialOverlay?.addEventListener('click', (e) => {
+      if (e.target === tutorialOverlay) {
+        tutorialOverlay.classList.add('hidden');
+      }
+    });
+  </script>
+
+  <script>
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsBackdrop = document.getElementById('settingsBackdrop');
+    const closeSettings = document.getElementById('closeSettings');
+    
+    settingsBtn?.addEventListener('click', () => {
+      settingsPanel.classList.toggle('hidden');
+      settingsBackdrop.classList.toggle('hidden');
+    });
+    
+    closeSettings?.addEventListener('click', () => {
+      settingsPanel.classList.add('hidden');
+      settingsBackdrop.classList.add('hidden');
+    });
+    
+    settingsBackdrop?.addEventListener('click', () => {
+      settingsPanel.classList.add('hidden');
+      settingsBackdrop.classList.add('hidden');
+    });
+  </script>
+
+</body>
+</html>
