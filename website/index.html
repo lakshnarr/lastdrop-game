@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Version: 2025-12-05-v2 - Play Now Buttons Added -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -30,17 +31,20 @@
       color: var(--text-main);
       line-height: 1.6;
       overflow-x: hidden;
+      overflow-y: auto !important;
+      height: auto !important;
+      min-height: 100vh;
     }
 
     /* Hero Section */
     .hero {
-      min-height: 100vh;
+      min-height: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 40px 20px;
+      padding: 40px 20px 20px 20px;
       position: relative;
       overflow: hidden;
     }
@@ -82,7 +86,7 @@
       display: flex;
       gap: 32px;
       justify-content: center;
-      margin-bottom: 48px;
+      margin-bottom: 0;
       flex-wrap: wrap;
     }
 
@@ -92,6 +96,119 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    /* Play Now Section */
+    .play-now-section {
+      max-width: 1000px;
+      margin: 80px auto 60px;
+      padding: 40px 20px;
+      text-align: center;
+      position: relative;
+      z-index: 10;
+      background: rgba(5, 7, 17, 0.8);
+      border-radius: 24px;
+    }
+
+    .play-now-title {
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 700;
+      margin-bottom: 48px;
+      color: var(--accent);
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .play-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 32px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .play-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 32px;
+      border-radius: 24px;
+      text-decoration: none;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+      min-height: 280px;
+      border: 3px solid transparent;
+    }
+
+    .play-btn-icon {
+      font-size: 4rem;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+      transition: transform 0.4s ease;
+    }
+
+    .play-btn-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      transition: transform 0.3s ease;
+    }
+
+    .play-btn-desc {
+      font-size: 1rem;
+      opacity: 0.85;
+      transition: opacity 0.3s ease;
+    }
+
+    .play-btn.live-btn {
+      background: linear-gradient(135deg, var(--accent), #10b981);
+      color: white;
+      box-shadow: 0 12px 40px rgba(64, 224, 208, 0.5);
+    }
+
+    .play-btn.demo-btn {
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      color: white;
+      box-shadow: 0 12px 40px rgba(96, 165, 250, 0.5);
+    }
+
+    .play-btn:not(.disabled):hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px rgba(64, 224, 208, 0.6);
+    }
+
+    .play-btn.demo-btn:not(.disabled):hover {
+      box-shadow: 0 20px 60px rgba(96, 165, 250, 0.6);
+    }
+
+    .play-btn:not(.disabled):hover .play-btn-icon {
+      transform: scale(1.15) rotate(5deg);
+    }
+
+    .play-btn:not(.disabled):hover .play-btn-title {
+      transform: scale(1.05);
+    }
+
+    .play-btn.disabled {
+      background: linear-gradient(135deg, #374151, #1f2937);
+      color: #6b7280;
+      cursor: not-allowed;
+      box-shadow: none;
+      border-color: #374151;
+      pointer-events: none;
+    }
+
+    .play-btn.disabled .play-btn-icon {
+      opacity: 0.4;
+      filter: grayscale(100%);
+    }
+
+    .play-btn.disabled .play-btn-desc {
+      opacity: 0.6;
     }
 
     /* CTA Buttons */
@@ -375,6 +492,27 @@
       .download-section {
         margin: 60px 20px;
       }
+
+      .play-buttons {
+        grid-template-columns: 1fr;
+      }
+
+      .play-btn {
+        min-height: 240px;
+        padding: 40px 28px;
+      }
+
+      .play-btn-icon {
+        font-size: 3rem;
+      }
+
+      .play-btn-title {
+        font-size: 1.5rem;
+      }
+
+      .play-now-section {
+        margin: 60px auto 40px;
+      }
     }
   </style>
 </head>
@@ -382,7 +520,7 @@
   <!-- Hero Section -->
   <section class="hero">
     <div class="hero-content">
-      <h1 class="hero-title">Last Drop</h1>
+      <h1 class="hero-title">Last Drop Earth AI Board Game</h1>
       <p class="hero-subtitle">The Ultimate Water Conservation Game</p>
       <p class="hero-subtitle" style="font-size: 1.1rem; margin-bottom: 24px;">
         Physical board game meets digital spectating
@@ -402,7 +540,7 @@
   </section>
 
   <!-- CTA Buttons -->
-  <section class="cta-section">
+  <section class="cta-section" style="margin-top: 0; padding-top: 0;">
     <a href="demo.html" class="cta-btn primary">
       <div class="cta-icon">🎮</div>
       <div class="cta-title">Play Demo Now</div>
@@ -410,14 +548,14 @@
     </a>
     
     <a href="host.html" class="cta-btn secondary">
-      <div class="cta-icon">🏠</div>
-      <div class="cta-title">Host a Game</div>
+      <div class="cta-icon">🌍</div>
+      <div class="cta-title">Join a Live Game</div>
       <div class="cta-desc">Generate session & invite spectators</div>
     </a>
     
     <a href="spectate.html" class="cta-btn tertiary">
       <div class="cta-icon">👀</div>
-      <div class="cta-title">Watch Live Games</div>
+      <div class="cta-title">Available Live Games</div>
       <div class="cta-desc">See what others are playing</div>
     </a>
   </section>
@@ -488,6 +626,24 @@
     <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted);">Available on Android 6.0+</p>
   </section>
 
+  <!-- Play Now Section -->
+  <section class="play-now-section">
+    <h2 class="play-now-title">Ready to Play?</h2>
+    <div class="play-buttons">
+      <a href="live.html" id="liveGameBtn" class="play-btn live-btn disabled">
+        <div class="play-btn-icon">🎮</div>
+        <div class="play-btn-title">Watch Live Game</div>
+        <div class="play-btn-desc" id="liveGameDesc">No games playing now</div>
+      </a>
+      
+      <a href="demo.html" class="play-btn demo-btn">
+        <div class="play-btn-icon">🎲</div>
+        <div class="play-btn-title">Try Demo Game</div>
+        <div class="play-btn-desc">Play instantly in browser</div>
+      </a>
+    </div>
+  </section>
+
   <!-- Footer -->
   <footer class="footer">
     <div class="footer-links">
@@ -500,7 +656,7 @@
   </footer>
 
   <script>
-    // Fetch live stats (optional - can be implemented later)
+    // Fetch live stats and update Live Game button state
     async function updateStats() {
       try {
         const response = await fetch('/api/active_games.php?key=ABC123');
@@ -512,6 +668,17 @@
             
             document.getElementById('activeGames').textContent = `${gamesCount} game${gamesCount !== 1 ? 's' : ''} playing now`;
             document.getElementById('activePlayers').textContent = `${playersCount} player${playersCount !== 1 ? 's' : ''} online`;
+            
+            // Update Live Game button state
+            const liveBtn = document.getElementById('liveGameBtn');
+            const liveDesc = document.getElementById('liveGameDesc');
+            if (gamesCount > 0) {
+              liveBtn.classList.remove('disabled');
+              liveDesc.textContent = `${gamesCount} game${gamesCount !== 1 ? 's' : ''} available to watch`;
+            } else {
+              liveBtn.classList.add('disabled');
+              liveDesc.textContent = 'No games playing now';
+            }
           }
         }
       } catch (err) {

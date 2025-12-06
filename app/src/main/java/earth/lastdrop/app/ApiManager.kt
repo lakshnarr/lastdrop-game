@@ -52,6 +52,15 @@ class ApiManager(
         }
         Log.d(TAG, "Heartbeat started for session: $sessionId")
     }
+    
+    /**
+     * Send immediate heartbeat (used when connecting to live server)
+     */
+    fun sendImmediateHeartbeat() {
+        scope.launch {
+            sendHeartbeat()
+        }
+    }
 
     /**
      * Stop heartbeat when game ends
@@ -159,6 +168,9 @@ class ApiManager(
                 }
 
                 val root = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")  // Optional board ID
                     put("players", playersJson)
                     put("lastEvent", lastEventJson)
                 }
@@ -281,6 +293,9 @@ class ApiManager(
                 }
 
                 val payload = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
                     put("players", playersJson)
                     put("lastEvent", JSONObject().apply {
                         put("playerId", playerId)
@@ -412,6 +427,9 @@ class ApiManager(
 
                 // 3) Wrap into root JSON
                 val root = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
                     put("players", playersJson)
                     put("lastEvent", lastEventJson)
                 }
@@ -496,6 +514,9 @@ class ApiManager(
                 }
 
                 val root = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
                     put("players", playersJson)
                     put("lastEvent", lastEventJson)
                 }

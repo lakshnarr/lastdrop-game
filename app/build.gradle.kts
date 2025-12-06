@@ -12,9 +12,9 @@ android {
     defaultConfig {
         applicationId = "earth.lastdrop.app"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 35
+        versionCode = 6
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -27,6 +27,15 @@ android {
         buildConfigField("String", "API_KEY", "\"${properties.getProperty("LASTDROP_API_KEY", "ABC123")}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("lastdrop-release-key.jks")
+            storePassword = "Lastdrop1!app"
+            keyAlias = "lastdrop"
+            keyPassword = "Lastdrop1!app"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -34,6 +43,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

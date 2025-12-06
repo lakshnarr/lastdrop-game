@@ -29,6 +29,7 @@
   <script src="assets/js/replay-recorder.js"></script>
 </head>
 <body>
+  <style>
     :root {
       --bg-color: #050711;
       --accent: #40e0d0;
@@ -1206,6 +1207,8 @@
       .disclaimer-text {
         font-size: 0.85rem;
       }
+    }
+  </style>
 </head>
 <body>
   
@@ -1632,7 +1635,8 @@
   </div>
 
 
-  <script src="assets/js/live-main.js">
+  <script src="assets/js/live-main.js?v=20251205"></script>
+  <script>
 
     // ======================
     // SHARE FUNCTIONALITY
@@ -1752,11 +1756,80 @@
       // gtag('event', 'share', { method: 'twitter' });
     });
     */
+    
+    // Session-based game state loading
+    (function initSessionLoading() {
+      // Get session ID from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('session');
+      
+      if (!sessionId) {
+        console.error('No session ID in URL');
+        document.getElementById('loadingOverlay').innerHTML = '<div class="connection-card"><div class="connection-title">Error</div><div class="connection-content">No session ID provided</div></div>';
+        return;
+      }
+      
+      console.log('Loading session:', sessionId);
+      document.getElementById('sessionInfo').textContent = `Session: ${sessionId.substring(0, 8)}...`;
+      
+      // Fetch game state from API
+      async function loadGameState() {
+        try {
+          const response = await fetch(`/api/live_state.php?session=${sessionId}&key=ABC123`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          console.log('Game state loaded:', data);
+          
+          // Hide loading overlay
+          document.getElementById('loadingOverlay').style.display = 'none';
+          
+          // Update connection status
+          document.getElementById('connStatus').textContent = 'CONNECTED';
+          document.getElementById('connStatus').className = 'badge-green';
+          
+          // TODO: Initialize the board with loaded data when the 3D board code is ready
+          // For now, just log the data to console
+          console.log('Players:', data.players);
+          console.log('Last Event:', data.lastEvent);
+          
+        } catch (error) {
+          console.error('Error loading game state:', error);
+          document.getElementById('loadingOverlay').innerHTML = 
+            `<div class="connection-card">
+              <div class="connection-title">Connection Error</div>
+              <div class="connection-content">
+                <p>${error.message}</p>
+                <button onclick="location.reload()">Retry</button>
+              </div>
+            </div>`;
+        }
+      }
+      
+      // Load immediately
+      loadGameState();
+      
+      // Poll for updates every 2 seconds
+      setInterval(loadGameState, 2000);
+    })();
     </script>
 
+  <script>
+    // Force hide loading overlay on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+          overlay.style.display = 'none';
+          console.log('Loading overlay hidden');
+        }
+      }, 1000);
+    });
+  </script>
 
-
-
+</body>
+</html>
 
 
 

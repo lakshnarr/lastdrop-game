@@ -8,8 +8,10 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -178,6 +180,108 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
     private lateinit var esp32StateValidator: ESP32StateValidator
     private lateinit var stateSyncManager: StateSyncManager
+    
+    // ---------- Pairing Support ----------
+    private var pairingDevice: BluetoothDevice? = null
+    private val pairingReceiver = object : BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothDevice.ACTION_PAIRING_REQUEST -> {
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val pairingVariant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR)
+                    
+                    if (device?.address == pairingDevice?.address && pairingVariant == BluetoothDevice.PAIRING_VARIANT_PIN) {
+                        // Show PIN entry dialog
+                        device?.let { showPinEntryDialog(it) }
+                        abortBroadcast() // Prevent default pairing dialog
+                    }
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                    
+                    if (device?.address == pairingDevice?.address) {
+                        when (bondState) {
+                            BluetoothDevice.BOND_BONDED -> {
+                                Log.d(TAG, "Device paired successfully")
+                                device?.let { dev ->
+                                    runOnUiThread {
+                                        Toast.makeText(this@MainActivity, "Board paired successfully!", Toast.LENGTH_SHORT).show()
+                                        // Now connect
+                                        proceedWithESP32Connection(dev)
+                                    }
+                                }
+                                pairingDevice = null
+                            }
+                            BluetoothDevice.BOND_NONE -> {
+                                Log.d(TAG, "Pairing failed or cancelled")
+                                runOnUiThread {
+                                    Toast.makeText(this@MainActivity, "Pairing failed", Toast.LENGTH_SHORT).show()
+                                }
+                                pairingDevice = null
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Show PIN entry dialog for ESP32 pairing
+    @SuppressLint("MissingPermission")
+    private fun showPinEntryDialog(device: BluetoothDevice) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            hint = "Enter 6-digit PIN"
+            setText("654321")  // Pre-fill with default PIN
+            selectAll()  // Select all text for easy override
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("Pair with ${device.name ?: device.address}")
+            .setMessage("Enter the PIN code for this board\n(Default: 654321)")
+            .setView(input)
+            .setPositiveButton("Pair") { _, _ ->
+                val pin = input.text.toString()
+                if (pin.length == 6 && pin.all { it.isDigit() }) {
+                    try {
+                        val success = device.setPin(pin.toByteArray())
+                        Log.d(TAG, "PIN set result: $success")
+                        if (success) {
+                            runOnUiThread {
+                                Toast.makeText(this, "Pairing...", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            runOnUiThread {
+                                Toast.makeText(this, "Failed to set PIN", Toast.LENGTH_SHORT).show()
+                            }
+                            pairingDevice = null
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error setting PIN", e)
+                        runOnUiThread {
+                            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                        pairingDevice = null
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this, "PIN must be exactly 6 digits", Toast.LENGTH_SHORT).show()
+                    }
+                    pairingDevice = null
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                pairingDevice = null
+                runOnUiThread {
+                    Toast.makeText(this, "Pairing cancelled", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setCancelable(false)  // Force user to choose
+            .show()
+    }
+    
     private lateinit var apiManager: ApiManager
     private lateinit var animationEventHandler: AnimationEventHandler
     private lateinit var profileManager: ProfileManager
@@ -310,6 +414,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         GoDiceSDK.listener = this
 
         setupUiListeners()
+        
+        // Register pairing broadcast receiver
+        val pairingFilter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_PAIRING_REQUEST)
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        }
+        registerReceiver(pairingReceiver, pairingFilter)
         
         // Connect to ESP32 board
         if (!testModeEnabled) {
@@ -474,6 +585,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             } catch (_: Exception) {
             }
         }
+        
+        // Unregister pairing broadcast receiver
+        try {
+            unregisterReceiver(pairingReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering pairing receiver", e)
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -619,6 +737,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun onConnectServerClicked() {
         Log.d(TAG, "onConnectServerClicked called")
+        
+        // Send immediate heartbeat when button is clicked
+        apiManager.sendImmediateHeartbeat()
+        
         // Show instructions dialog
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("🌍 Connect to Large Screen")
@@ -685,7 +807,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 // Update ApiManager with scanned session ID
                 apiManager.setSessionId(sessionId)
                 
-                // Start heartbeat with scanned session ID
+                // Send immediate heartbeat to create session entry
+                apiManager.sendImmediateHeartbeat()
+                
+                // Start periodic heartbeat with scanned session ID
                 apiManager.startHeartbeat()
                 
                 // Push current game state to server with session ID
@@ -701,6 +826,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         "Connected to session: ${sessionId.take(8)}...",
                         Toast.LENGTH_LONG
                     ).show()
+                    
+                    // Send another heartbeat after successful connection
+                    apiManager.sendImmediateHeartbeat()
                     
                     // Re-enable after 2 seconds
                     delay(2000)
@@ -2328,6 +2456,36 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     @SuppressLint("MissingPermission")
     private fun connectToESP32Device(device: BluetoothDevice) {
         Log.d(TAG, "Connecting to ESP32: ${device.address}")
+        
+        // Check bonding state before connecting
+        when (device.bondState) {
+            BluetoothDevice.BOND_BONDED -> {
+                // Already paired, proceed with connection
+                Log.d(TAG, "Device already bonded, connecting...")
+                proceedWithESP32Connection(device)
+            }
+            BluetoothDevice.BOND_NONE -> {
+                // Not paired, initiate pairing
+                Log.d(TAG, "Device not bonded, initiating pairing...")
+                pairingDevice = device
+                runOnUiThread {
+                    Toast.makeText(this, "Pairing with ${device.name}...", Toast.LENGTH_SHORT).show()
+                }
+                device.createBond()
+            }
+            BluetoothDevice.BOND_BONDING -> {
+                // Pairing in progress, wait
+                Log.d(TAG, "Pairing already in progress...")
+                runOnUiThread {
+                    Toast.makeText(this, "Pairing in progress...", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    
+    @SuppressLint("MissingPermission")
+    private fun proceedWithESP32Connection(device: BluetoothDevice) {
+        Log.d(TAG, "Proceeding with ESP32 connection: ${device.address}")
         
         // Save as last connected board
         device.name?.let { boardId ->

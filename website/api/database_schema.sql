@@ -105,7 +105,7 @@ CREATE TABLE player_stats (
     
     -- Ranking
     eloRating INT DEFAULT 1000,  -- ELO rating system
-    rank INT DEFAULT NULL,  -- overall rank position
+    `rank` INT DEFAULT NULL,  -- overall rank position
     
     -- Activity tracking
     lastPlayed DATETIME DEFAULT NULL,
@@ -117,7 +117,7 @@ CREATE TABLE player_stats (
     INDEX idx_elo (eloRating),
     INDEX idx_games_won (gamesWon),
     INDEX idx_win_rate (winRate),
-    INDEX idx_rank (rank),
+    INDEX idx_rank (`rank`),
     INDEX idx_last_played (lastPlayed)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -143,7 +143,7 @@ CREATE TABLE leaderboard_entries (
     eloRating INT DEFAULT 1000,
     
     -- Ranking
-    rank INT NOT NULL,
+    `rank` INT NOT NULL,
     
     -- Metadata
     createdAt DATETIME NOT NULL,
@@ -153,7 +153,7 @@ CREATE TABLE leaderboard_entries (
     
     -- Indexes
     INDEX idx_period (period, periodStart),
-    INDEX idx_rank (rank),
+    INDEX idx_rank (`rank`),
     INDEX idx_player (playerName),
     INDEX idx_elo (eloRating)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
