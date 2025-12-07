@@ -415,6 +415,7 @@
       border-radius: 18px;
       box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
       border: 1px solid rgba(31, 41, 55, 0.9);
+      z-index: 1;
     }
 
     .tiles-grid {
@@ -425,6 +426,7 @@
       grid-template-rows: repeat(7, 1fr);
       gap: 4px;
       transform-style: preserve-3d;
+      z-index: 10;
     }
 
     .tile {
@@ -475,7 +477,7 @@
       inset: 36px;
       transform-style: preserve-3d;
       inset: 36px;
-      z-index: 1000;
+      z-index: 9000;
     }
     .player-token {
       position: absolute;
@@ -486,7 +488,7 @@
       background-repeat: no-repeat;
       filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.6)) drop-shadow(0 2px 12px rgba(0, 0, 0, 0.4));
       transition: all 0.4s ease-out;
-      z-index: 2000;
+      z-index: 5000;
     }
     
     /* Eliminated player styling */
@@ -543,18 +545,20 @@
 
     .player-token-label {
       position: absolute;
-      top: -10px;
+      top: -22px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 0.5rem;
-      background: rgba(15, 23, 42, 0.9);
-      color: var(--text-main);
-      padding: 1px 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: rgba(15, 23, 42, 0.98);
+      color: #ffffff;
+      padding: 3px 8px;
       border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.6);
+      border: 2px solid rgba(148, 163, 184, 0.9);
       white-space: nowrap;
-      z-index: 100;
+      z-index: 99999 !important;
       pointer-events: none;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
     }
 
     .chance-card {
@@ -1861,12 +1865,31 @@
       
       // If token exists, update its color in case it changed
       if (existingToken) {
+        console.log('[ensureToken] Existing token found for', player.id);
         const color = player.color || 'red';
         existingToken.style.backgroundImage = `url("assets/pawns/pawn-${color}.svg")`;
+        
+        // Ensure label exists
+        let label = existingToken.querySelector(".player-token-label");
+        if (!label) {
+          console.log('[ensureToken] Creating label for existing token', player.id);
+          label = document.createElement("div");
+          label.className = "player-token-label";
+          existingToken.appendChild(label);
+        }
+        
+        // Update label content
+        const playerNum = player.id.replace('P', '');
+        const position = player.pos || 1;
+        const drops = player.drops || 10;
+        label.textContent = `P${playerNum}-Pos${position}-💧${drops}`;
+        console.log('[ensureToken] Label updated for', player.id, ':', label.textContent);
+        
         return existingToken;
       }
       
       // Create new token
+      console.log('[ensureToken] Creating NEW token for', player.id);
       const token = document.createElement("div");
       token.className = "player-token";
       token.dataset.player = player.id;
@@ -1882,6 +1905,7 @@
       const position = player.pos || 1;
       const drops = player.drops || 10;
       label.textContent = `P${playerNum}-Pos${position}-💧${drops}`;
+      console.log('[ensureToken] New token created with label:', player.id, label.textContent);
       token.appendChild(label);
       tokensLayer.appendChild(token);
       tokensByPlayerId[player.id] = token;
@@ -1913,8 +1937,8 @@
         return;
       }
 
-      // Immediate positioning (no animation)
-      if (token.parentElement !== tileElem) tileElem.appendChild(token);
+      // Always keep tokens inside the dedicated tokens layer (avoid clipping by tiles)
+      if (token.parentElement !== tokensLayer) tokensLayer.appendChild(token);
 
       // Compute per-player offsets from spinner values (arranged 2x2 around base)
       const baseOffsetX = parseInt(offsetXRange.value, 10) || 0;
@@ -1927,21 +1951,29 @@
       ];
       const off = offsets[offsetIndex % 4] || { dx: 0, dy: 0 };
 
-      // Center token within tile and apply offsets (relative to tile)
-      token.style.left = `calc(50% + ${off.dx}px)`;
-      token.style.top = `calc(50% + ${off.dy}px)`;
+      // Get tile center in board coordinates
+      const tileX = tileElem.offsetLeft + (tileElem.offsetWidth / 2);
+      const tileY = tileElem.offsetTop + (tileElem.offsetHeight / 2);
+
+      // Position token in tokens layer (absolute pixels) and keep centered
+      token.style.left = `${tileX + off.dx}px`;
+      token.style.top = `${tileY + off.dy}px`;
       token.style.transform = is3DView
         ? "translate(-50%, -50%) translateZ(20px)"
         : "translate(-50%, -50%)";
 
-      // Update label to show player-position-drops format
+      // Update label to show player-position-drops format (label already created in ensureTokenForPlayer)
       const label = token.querySelector(".player-token-label");
       if (label) {
         const playerNum = playerId.replace('P', '');
-        // Find player in state to get current drops
-        const player = state?.players?.find(p => p.id === playerId);
-        const drops = player?.drops || 10;
-        label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
+        if (demoMode) {
+          // Find player in demoPlayers to get current drops
+          const player = demoPlayers.find(p => p.id === playerId);
+          const drops = player?.drops || 10;
+          label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
+        } else {
+          label.textContent = `P${playerNum}-Pos${tileIndex}`;
+        }
       }
     }
 
@@ -1951,6 +1983,12 @@
       if (!token) return;
 
       console.debug('[live] animateTokenWalk START', playerId, 'from', fromTileIndex, 'to', toTileIndex, 'offset', offsetIndex);
+
+      // Bring active token (and its label) to the very front during animation
+      const originalZ = token.style.zIndex;
+      token.style.zIndex = '120000';
+      const label = token.querySelector('.player-token-label');
+      if (label) label.style.zIndex = '130000';
 
       // Calculate path (tiles to walk through)
       const path = calculateTilePath(fromTileIndex, toTileIndex);
@@ -1962,8 +2000,12 @@
       function walkNextStep() {
         if (currentStep >= path.length) {
           // Animation complete - position at final tile
+          token.style.transition = '';
           positionToken(playerId, toTileIndex, offsetIndex, false);
           playSound('tile'); // Play tile landing sound
+          // Restore z-index after animation completes
+          token.style.zIndex = originalZ || '5000';
+          if (label) label.style.zIndex = '99999';
           if (typeof onComplete === 'function') {
             try { onComplete(); } catch (err) { console.error(err); }
           }
@@ -1973,15 +2015,19 @@
 
         const currentTile = path[currentStep];
         const tileElem = tilesGrid.querySelector(`.tile[data-tile="${currentTile}"]`);
-        
-        if (tileElem && token.parentElement !== tileElem) {
-          tileElem.appendChild(token);
+        if (!tileElem) {
+          currentStep++;
+          setTimeout(walkNextStep, stepDuration);
+          return;
         }
 
-        // Play movement sound for each step
+        // Keep token in tokens layer (no clipping)
+        if (token.parentElement !== tokensLayer) tokensLayer.appendChild(token);
+
+        // Play movement sound for each step after the first
         if (currentStep > 0) playSound('move');
 
-        // Apply position with transition
+        // Apply position with transition using absolute coords
         const baseOffsetX = parseInt(offsetXRange.value, 10) || 0;
         const baseOffsetY = parseInt(offsetYRange.value, 10) || 0;
         const offsets = [
@@ -1992,9 +2038,12 @@
         ];
         const off = offsets[offsetIndex % 4] || { dx: 0, dy: 0 };
 
-        token.style.transition = `all ${stepDuration}ms ease-in-out`;
-        token.style.left = `calc(50% + ${off.dx}px)`;
-        token.style.top = `calc(50% + ${off.dy}px)`;
+        const tileX = tileElem.offsetLeft + (tileElem.offsetWidth / 2);
+        const tileY = tileElem.offsetTop + (tileElem.offsetHeight / 2);
+
+        token.style.transition = `left ${stepDuration}ms ease-in-out, top ${stepDuration}ms ease-in-out`;
+        token.style.left = `${tileX + off.dx}px`;
+        token.style.top = `${tileY + off.dy}px`;
 
         currentStep++;
         setTimeout(walkNextStep, stepDuration);
@@ -3093,6 +3142,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       
       // Keep button handler for manual restart if needed
       startDemoBtn?.addEventListener('click', () => {
+        console.log('[DEMO] Start button clicked');
         welcomeOverlay.classList.add("hidden");
         
         // Reset demo state completely
@@ -3105,16 +3155,28 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
         connStatus.classList.remove("badge-green");
         connStatus.classList.add("badge-red");
         
+        console.log('[DEMO] Mode set, players:', demoPlayers);
+        
+        // Create ALL tokens immediately with labels
+        console.log('[DEMO] Creating all 4 tokens with labels NOW');
+        demoPlayers.forEach((player, idx) => {
+          const token = ensureTokenForPlayer(player);
+          console.log(`[DEMO] Token created for ${player.id}, has label:`, !!token.querySelector('.player-token-label'));
+        });
+        
         // Initialize all tokens at start position
         const initialState = {
           players: demoPlayers,
           lastEvent: null
         };
+        console.log('[DEMO] Calling updateUIFromState with initialState');
         updateUIFromState(initialState);
         
         // Start demo interval and run first step immediately
+        console.log('[DEMO] Starting interval and first step');
         startDemoInterval();
         runDemoStep();
+        console.log('[DEMO] Demo started successfully');
       });
       
       // Show disclaimer on small screens with modified button
@@ -3507,7 +3569,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsPanel = document.getElementById('settingsPanel');
   const settingsBackdrop = document.getElementById('settingsBackdrop');
-  const closeSettings ument.getElementById('closeSettings');
+  const closeSettings = document.getElementById('closeSettings');
   
   settingsBtn?.addEventListener('click', () => {
     settingsPanel.classList.toggle('hidden');
