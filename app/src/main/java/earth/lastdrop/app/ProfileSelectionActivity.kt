@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -50,6 +51,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
         profileManager = ProfileManager(this)
         
         setupRecyclerView()
+        updateStartButtonState()
         
         // Auto-create Cloudie AI and Guestie profiles
         lifecycleScope.launch {
@@ -127,7 +129,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
                 setTextColor(Color.WHITE)
                 setBackgroundColor(Color.parseColor("#4CAF50"))
                 textSize = 18f
-                isEnabled = false
+                isEnabled = true // keep clickable so we can show validation toasts
                 setOnClickListener { startGame() }
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -225,13 +227,15 @@ class ProfileSelectionActivity : AppCompatActivity() {
     private fun updateStartButtonState() {
         // Require at least 2 players (can include AI)
         val hasMinPlayers = selectedProfiles.size >= 2
-        btnStartGame.isEnabled = hasMinPlayers
-        
-        // Update button text with hint
+
+        // Keep button clickable so we can show toast when under-minimum
+        btnStartGame.isEnabled = true
+
+        // Keep label stable; append count only when valid
         btnStartGame.text = if (hasMinPlayers) {
-            "🎮 Start Game (${selectedProfiles.size} Players)"
+            "🎮 Start Game (${selectedProfiles.size} players)"
         } else {
-            "Select at least 2 players to start"
+            "🎮 Start Game"
         }
     }
 
@@ -240,23 +244,30 @@ class ProfileSelectionActivity : AppCompatActivity() {
             val saved = runCatching { savedGameDao.getLatest() }.getOrNull()
             withContext(Dispatchers.Main) {
                 latestSavedGame = saved
-                btnLoadSavedGame.isEnabled = saved != null
+                btnLoadSavedGame.isEnabled = true // allow click to show toast if none
                 btnLoadSavedGame.text = "📂 Load Saved Game"
             }
         }
     }
 
     private fun openSavedGames() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val hasSaved = runCatching { savedGameDao.getLatest() }.getOrNull() != null
-            withContext(Dispatchers.Main) {
-                if (!hasSaved) {
-                    Toast.makeText(this@ProfileSelectionActivity, "No saved games present", Toast.LENGTH_SHORT).show()
-                } else {
-                    val intent = Intent(this@ProfileSelectionActivity, SavedGamesActivity::class.java)
-                    startActivity(intent)
+        // Use cached latestSavedGame when available for immediate feedback
+        val cached = latestSavedGame
+        if (cached == null) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val hasSaved = runCatching { savedGameDao.getLatest() }.getOrNull() != null
+                withContext(Dispatchers.Main) {
+                    if (!hasSaved) {
+                        Toast.makeText(this@ProfileSelectionActivity, "No saved games present", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val intent = Intent(this@ProfileSelectionActivity, SavedGamesActivity::class.java)
+                        startActivity(intent)
+                    }
                 }
             }
+        } else {
+            val intent = Intent(this, SavedGamesActivity::class.java)
+            startActivity(intent)
         }
     }
     
@@ -426,12 +437,28 @@ class ProfileSelectionActivity : AppCompatActivity() {
     
     private fun startGame() {
         if (selectedProfiles.size < 2) {
-            Toast.makeText(this, "Select at least 2 players to start the game", Toast.LENGTH_SHORT).show()
+            showMinPlayerWarning()
             return
         }
         
         // Show color selection dialog before starting game
         showColorSelectionDialog()
+    }
+
+    private fun showMinPlayerWarning() {
+        btnStartGame.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        Toast.makeText(this@ProfileSelectionActivity, "Select at least 2 players to start the game", Toast.LENGTH_LONG).show()
+        // Quick shake to make the validation obvious
+        btnStartGame.animate()
+            .translationX(18f)
+            .setDuration(70)
+            .withEndAction {
+                btnStartGame.animate()
+                    .translationX(0f)
+                    .setDuration(90)
+                    .start()
+            }
+            .start()
     }
     
     private fun showColorSelectionDialog() {
