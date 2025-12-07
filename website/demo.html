@@ -553,6 +553,8 @@
       border-radius: 999px;
       border: 1px solid rgba(148, 163, 184, 0.6);
       white-space: nowrap;
+      z-index: 100;
+      pointer-events: none;
     }
 
     .chance-card {
@@ -1875,7 +1877,11 @@
 
       const label = document.createElement("div");
       label.className = "player-token-label";
-      label.textContent = player.name || player.id;
+      // Format: P1-Pos1-💧10
+      const playerNum = player.id.replace('P', '');
+      const position = player.pos || 1;
+      const drops = player.drops || 10;
+      label.textContent = `P${playerNum}-Pos${position}-💧${drops}`;
       token.appendChild(label);
       tokensLayer.appendChild(token);
       tokensByPlayerId[player.id] = token;
@@ -1928,9 +1934,15 @@
         ? "translate(-50%, -50%) translateZ(20px)"
         : "translate(-50%, -50%)";
 
-      // Update label to show tile number
+      // Update label to show player-position-drops format
       const label = token.querySelector(".player-token-label");
-      if (label) label.textContent = `Tile ${tileIndex}`;
+      if (label) {
+        const playerNum = playerId.replace('P', '');
+        // Find player in state to get current drops
+        const player = state?.players?.find(p => p.id === playerId);
+        const drops = player?.drops || 10;
+        label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
+      }
     }
 
     // Animate token walking from one tile to another
@@ -2364,14 +2376,17 @@
           }
         }
       } else {
-        eventLog.textContent = "Waiting for first drop...ª";
+        // No lastEvent (initial state or reset) - position all tokens at their current positions
+        console.debug('[live] No lastEvent - positioning all tokens at current positions');
+        updatePlayerPositions();
+        eventLog.textContent = "Waiting for first drop...";
       }
 
       if (state.lastEvent && state.lastEvent.chanceCardId) {
         const id = state.lastEvent.chanceCardId;
         playSound('chance'); // Play chance card sound
         chanceImage.style.backgroundImage = `url('/assets/chance/${id}.jpg')`;
-        chanceTitle.textContent = `Chance Card GÇô ${id}`;
+        chanceTitle.textContent = `Chance Card — ${id}`;
         chanceText.textContent = (state.chanceDescriptions && state.chanceDescriptions[id]) || "Special event triggered by the board.";
         chanceCard.classList.add("visible");
         if (lastChanceTimeout) clearTimeout(lastChanceTimeout);
@@ -2854,12 +2869,24 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
 
     let demoTick = 0;
     let currentPlayerIndex = 0; // Track which player is moving
-    const demoPlayers = [
-      { id: "P1", name: "Player 1", pos: 1, drops: 10, eliminated: false },
-      { id: "P2", name: "Player 2", pos: 1, drops: 10, eliminated: false },
-      { id: "P3", name: "Player 3", pos: 1, drops: 10, eliminated: false },
-      { id: "P4", name: "Player 4", pos: 1, drops: 10, eliminated: false }
+    let demoPlayers = [
+      { id: "P1", name: "Player 1", pos: 1, drops: 10, eliminated: false, color: "red" },
+      { id: "P2", name: "Player 2", pos: 1, drops: 10, eliminated: false, color: "green" },
+      { id: "P3", name: "Player 3", pos: 1, drops: 10, eliminated: false, color: "blue" },
+      { id: "P4", name: "Player 4", pos: 1, drops: 10, eliminated: false, color: "yellow" }
     ];
+    
+    // Function to reset demo state
+    function resetDemoState() {
+      demoTick = 0;
+      currentPlayerIndex = 0;
+      demoPlayers = [
+        { id: "P1", name: "Player 1", pos: 1, drops: 10, eliminated: false, color: "red" },
+        { id: "P2", name: "Player 2", pos: 1, drops: 10, eliminated: false, color: "green" },
+        { id: "P3", name: "Player 3", pos: 1, drops: 10, eliminated: false, color: "blue" },
+        { id: "P4", name: "Player 4", pos: 1, drops: 10, eliminated: false, color: "yellow" }
+      ];
+    }
     // Updated with actual chance card IDs (1-20)
     const demoChanceIds = [null, "1", null, "6", null, "12", null, "17", null, "20", null, "3", null, "14"];
 
@@ -3010,7 +3037,20 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       currentPlayerIndex = (currentPlayerIndex + 1) % demoPlayers.length;
     }
 
-    setInterval(runDemoStep, 5000); // Increased to 5 seconds for walking animation visibility
+    // Demo interval - will be started when user clicks Start Demo
+    let demoInterval = null;
+    
+    function startDemoInterval() {
+      if (demoInterval) clearInterval(demoInterval);
+      demoInterval = setInterval(runDemoStep, 5000);
+    }
+    
+    function stopDemoInterval() {
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        demoInterval = null;
+      }
+    }
 
     window.addEventListener("load", () => {
       // Initialize connection popup elements
@@ -3054,12 +3094,27 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       // Keep button handler for manual restart if needed
       startDemoBtn?.addEventListener('click', () => {
         welcomeOverlay.classList.add("hidden");
+        
+        // Reset demo state completely
+        resetDemoState();
+        
         demoMode = true;
         demoStatus.textContent = "ON";
         modeStatus.textContent = "DEMO";
         connStatus.textContent = "OFFLINE";
         connStatus.classList.remove("badge-green");
         connStatus.classList.add("badge-red");
+        
+        // Initialize all tokens at start position
+        const initialState = {
+          players: demoPlayers,
+          lastEvent: null
+        };
+        updateUIFromState(initialState);
+        
+        // Start demo interval and run first step immediately
+        startDemoInterval();
+        runDemoStep();
       });
       
       // Show disclaimer on small screens with modified button
@@ -3083,7 +3138,10 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       const zoom = parseInt(zoomRange.value, 10) / 100;
       boardWrapper.style.transform = `scale(${zoom})`;
       board3d.style.transform = "rotateX(0deg) rotateY(0deg) rotateZ(0deg)";
-      // Demo will start via interval, don't call runDemoStep() here
+      
+      // Reset demo state on page load
+      resetDemoState();
+      // Demo will start only when user clicks button
       
       // Network health monitoring
       let isOnline = navigator.onLine;
