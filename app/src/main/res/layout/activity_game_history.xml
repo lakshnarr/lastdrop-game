@@ -136,6 +136,85 @@
         </LinearLayout>
     </HorizontalScrollView>
 
+    <!-- Saved Game Card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/savedGameCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#223344"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/filterScroll">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/savedGameTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Resume saved game"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/savedGameSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Saved turns, positions, and scores"
+                android:textColor="#AFC7E3"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnDiscardSavedGame"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:background="#2a2a2a"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="Discard"
+                    android:textAllCaps="false"
+                    android:textColor="#FF6B6B"
+                    android:textSize="13sp" />
+
+                <Space
+                    android:layout_width="8dp"
+                    android:layout_height="0dp" />
+
+                <Button
+                    android:id="@+id/btnResumeSavedGame"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:background="#3a6ad6"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="Resume"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
     <!-- Game List -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/gameList"
@@ -147,7 +226,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/filterScroll" />
+        app:layout_constraintTop_toBottomOf="@id/savedGameCard" />
 
     <!-- Loading Indicator -->
     <ProgressBar

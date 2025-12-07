@@ -2,6 +2,7 @@ package earth.lastdrop.app
 
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
+import org.json.JSONArray
 
 /**
  * Game result data for recording multiplayer games
@@ -33,6 +34,7 @@ class ProfileManager(context: Context) {
     
     private val dao = LastDropDatabase.getInstance(context).playerProfileDao()
     private val gameRecordDao = LastDropDatabase.getInstance(context).gameRecordDao()
+    private val rivalryManager = RivalryManager(context)
     
     companion object {
         const val MAX_PROFILES = 4  // Maximum custom player profiles (not including Cloudie/Guestie)
@@ -101,6 +103,10 @@ class ProfileManager(context: Context) {
         // Check if guest profile already exists
         val existingGuest = dao.getProfileByCode(GUEST_PLAYER_CODE)
         if (existingGuest != null) {
+            if (existingGuest.nickname != "friend") {
+                dao.updateNickname(existingGuest.playerId, "friend")
+                return existingGuest.copy(nickname = "friend")
+            }
             return existingGuest
         }
         
@@ -108,7 +114,7 @@ class ProfileManager(context: Context) {
         val guestProfile = PlayerProfile(
             playerCode = GUEST_PLAYER_CODE,
             name = GUEST_NAME,
-            nickname = GUEST_NAME,
+            nickname = "friend",
             avatarColor = "9E9E9E", // Gray for temporary guest
             isGuest = true
         )
@@ -121,6 +127,10 @@ class ProfileManager(context: Context) {
         // Check if AI profile already exists
         val existingAI = dao.getProfileByCode(AI_PLAYER_CODE)
         if (existingAI != null) {
+            if (existingAI.nickname != "myself") {
+                dao.updateNickname(existingAI.playerId, "myself")
+                return existingAI.copy(nickname = "myself")
+            }
             return existingAI
         }
         
@@ -128,7 +138,7 @@ class ProfileManager(context: Context) {
         val aiProfile = PlayerProfile(
             playerCode = AI_PLAYER_CODE,
             name = AI_NAME,
-            nickname = AI_NAME,
+            nickname = "myself",
             avatarColor = "00D4FF", // Cyan/Sky blue for cloud theme
             isGuest = false,
             isAI = true
@@ -276,22 +286,63 @@ class ProfileManager(context: Context) {
         playerResults: Map<String, GameResult>
     ) {
         // Create game records for AI history
+        val profiles = playerResults.keys.associateWith { dao.getProfile(it) }
+        val totalPlayers = playerResults.size
+
+        // Update rivalry head-to-head before we snapshot nemesis info
+        if (totalPlayers >= 2) {
+            val scoreList = playerResults.map { (id, result) -> id to result.score }
+            for (i in scoreList.indices) {
+                for (j in (i + 1) until scoreList.size) {
+                    val (p1Id, p1Score) = scoreList[i]
+                    val (p2Id, p2Score) = scoreList[j]
+                    when {
+                        p1Score > p2Score -> rivalryManager.recordGameResult(p1Id, p2Id, p1Score, p2Score)
+                        p2Score > p1Score -> rivalryManager.recordGameResult(p2Id, p1Id, p2Score, p1Score)
+                    }
+                }
+            }
+        }
+
+        // Preload nemesis info for each player after rivalry updates
+        val nemesisMap = playerResults.keys.associateWith { profileId ->
+            rivalryManager.getNemesis(profileId)
+        }
+
         val records = playerResults.map { (profileId, result) ->
+            val profile = profiles[profileId]
             val opponentData = playerResults.filterKeys { it != profileId }
             val opponentIdsList = opponentData.keys.toList()
             val opponentNamesList = opponentData.values.map { it.name }
-            
+            val opponentScoresList = opponentData.values.map { it.score }
+            val isWin = result.placement == 1
+
+            // Snapshot cumulative stats after this game
+            val priorWins = profile?.wins ?: 0
+            val priorLosses = profile?.losses ?: 0
+            val priorGames = profile?.totalGames ?: 0
+            val priorStreak = profile?.currentWinStreak ?: 0
+
+            val totalWinsAfterGame = priorWins + if (isWin) 1 else 0
+            val totalGamesAfterGame = priorGames + 1
+            val winStreakAfterGame = if (isWin) priorStreak + 1 else 0
+
             GameRecord(
                 profileId = profileId,
                 gameId = gameId,
                 playedAt = System.currentTimeMillis(),
                 colorUsed = result.color,
-                won = result.placement == 1,
+                playerName = profile?.name ?: result.name,
+                playerNickname = profile?.nickname ?: result.name,
+                won = isWin,
                 finalScore = result.score,
                 finalTile = result.finalTile,
                 placement = result.placement,
-                opponentIds = opponentIdsList.joinToString(","),
-                opponentNames = opponentNamesList.joinToString(","),
+                rank = result.placement,
+                totalPlayers = totalPlayers,
+                opponentIds = JSONArray(opponentIdsList).toString(),
+                opponentNames = JSONArray(opponentNamesList).toString(),
+                opponentScores = JSONArray(opponentScoresList).toString(),
                 chanceCardsDrawn = "[]", // TODO: Track actual chance cards
                 droughtTileHits = result.droughtTileHits,
                 bonusTileHits = result.bonusTileHits,
@@ -299,6 +350,11 @@ class ProfileManager(context: Context) {
                 maxComebackPoints = result.maxComebackPoints,
                 gameTimeMinutes = result.gameTimeMinutes,
                 totalDropsEarned = result.dropsEarned,
+                winStreakAfterGame = winStreakAfterGame,
+                totalWinsAfterGame = totalWinsAfterGame,
+                totalGamesAfterGame = totalGamesAfterGame,
+                nemesisPlayerId = nemesisMap[profileId]?.opponentId,
+                nemesisName = nemesisMap[profileId]?.opponentName,
                 wasEliminated = result.wasEliminated,
                 eliminatedOpponents = result.eliminatedOpponents.joinToString(","),
                 hadPerfectStart = result.hadPerfectStart,

@@ -248,14 +248,25 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
     
     private fun showProfileMenu(profile: PlayerProfile) {
-        // Three-dot menu with edit and delete options
+        // Three-dot menu with edit options
+        val options = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+
+        options += "✏️ Rename"
+        actions += { showRenameProfileDialog(profile) }
+
+        options += "🎯 Change Nickname"
+        actions += { showChangeNicknameDialog(profile) }
+
+        if (!profile.isAI && !profile.isGuest) {
+            options += "🗑️ Delete Profile"
+            actions += { confirmDeleteProfile(profile) }
+        }
+
         AlertDialog.Builder(this)
             .setTitle(profile.name)
-            .setItems(arrayOf("✏️ Edit Profile", "🗑️ Delete Profile")) { _, which ->
-                when (which) {
-                    0 -> showEditProfileDialog(profile)
-                    1 -> confirmDeleteProfile(profile)
-                }
+            .setItems(options.toTypedArray()) { _, which ->
+                actions.getOrNull(which)?.invoke()
             }
             .show()
     }
@@ -276,13 +287,16 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
     
     private fun showProfileOptions(profile: PlayerProfile) {
-        // AI and Guest players cannot be edited or deleted
-        if (profile.isAI) {
-            Toast.makeText(this, "Cloudie is a permanent AI player", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (profile.isGuest) {
-            Toast.makeText(this, "Guestie is a permanent guest profile", Toast.LENGTH_SHORT).show()
+        if (profile.isAI || profile.isGuest) {
+            AlertDialog.Builder(this)
+                .setTitle("${profile.name} (${profile.playerCode})")
+                .setItems(arrayOf("Rename", "Change Nickname")) { _, which ->
+                    when (which) {
+                        0 -> showRenameProfileDialog(profile)
+                        1 -> showChangeNicknameDialog(profile)
+                    }
+                }
+                .show()
             return
         }
         

@@ -175,8 +175,10 @@ class LeaderboardActivity : AppCompatActivity() {
                 else -> Color.parseColor("#FFFFFF")
             })
 
-            // Player color
-            holder.playerColor.setBackgroundColor(Color.parseColor(profile.avatarColor))
+            // Player color with defensive parsing (stored colors omit leading '#')
+            val colorHex = if (profile.avatarColor.startsWith("#")) profile.avatarColor else "#${profile.avatarColor}"
+            val parsedColor = runCatching { Color.parseColor(colorHex) }.getOrDefault(Color.parseColor("#9E9E9E"))
+            holder.playerColor.setBackgroundColor(parsedColor)
 
             // Player name
             holder.playerName.text = profile.name

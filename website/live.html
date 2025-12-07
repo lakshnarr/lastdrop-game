@@ -1705,6 +1705,7 @@
     const tokensByPlayerId = {};
     const playerColors = {}; // Persist last known color per player to avoid fallback swaps
     const playerDrops = {};  // Persist last known drops per player for labels
+    const playerMeta = {};   // Persist display metadata (profile name + nickname)
     let lastChanceTimeout = null;
     let connectionEstablished = false;
 
@@ -1719,9 +1720,8 @@
         positionToken(p.id, 1, idx, false);
         const label = token.querySelector('.player-token-label');
         if (label) {
-          const playerNum = p.id.replace('P', '');
           const drops = p.drops || 10;
-          label.textContent = `P${playerNum}-Pos1-💧${drops}`;
+          label.textContent = formatTokenLabel(p.id, 1, drops);
         }
       });
     }
@@ -1901,6 +1901,25 @@
       return "red"; // default fallback
     }
 
+    function formatPlayerDisplayName(player) {
+      if (!player) return "";
+      const base = player.profileName || player.name || player.id || "";
+      const nick = player.nickname || player.name;
+      if (nick && nick !== base) return `${base} (${nick})`;
+      return base;
+    }
+
+    function formatPlayerNameById(playerId) {
+      const meta = playerMeta[playerId];
+      if (meta) return formatPlayerDisplayName({ ...meta, id: playerId });
+      return playerId || "";
+    }
+
+    function formatTokenLabel(playerId, position, drops) {
+      const displayName = formatPlayerNameById(playerId) || playerId;
+      return `${displayName} - Pos${position}-💧${drops}`;
+    }
+
     function ensureTokenForPlayer(player) {
       const existingToken = tokensByPlayerId[player.id];
       
@@ -1922,10 +1941,9 @@
         }
         
         // Update label content
-        const playerNum = player.id.replace('P', '');
         const position = player.pos || 1;
         const drops = player.drops || 10;
-        label.textContent = `P${playerNum}-Pos${position}-💧${drops}`;
+        label.textContent = formatTokenLabel(player.id, position, drops);
         console.log('[ensureToken] Label updated for', player.id, ':', label.textContent);
         
         return existingToken;
@@ -1945,11 +1963,10 @@
 
       const label = document.createElement("div");
       label.className = "player-token-label";
-      // Format: P1-Pos1-💧10
-      const playerNum = player.id.replace('P', '');
+      // Format: Profile Name (Nickname) - Pos1-💧10
       const position = player.pos || 1;
       const drops = player.drops || 10;
-      label.textContent = `P${playerNum}-Pos${position}-💧${drops}`;
+      label.textContent = formatTokenLabel(player.id, position, drops);
       console.log('[ensureToken] New token created with label:', player.id, label.textContent);
       token.appendChild(label);
       tokensLayer.appendChild(token);
@@ -2010,11 +2027,10 @@
       // Update label to show player-position-drops format (label already created in ensureTokenForPlayer)
       const label = token.querySelector(".player-token-label");
       if (label) {
-        const playerNum = playerId.replace('P', '');
         const drops = demoMode
           ? (demoPlayers.find(p => p.id === playerId)?.drops ?? 10)
           : (playerDrops[playerId] ?? 10);
-        label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
+        label.textContent = formatTokenLabel(playerId, tileIndex, drops);
       }
     }
 
@@ -2137,6 +2153,11 @@
         const normalizedColor = normalizePawnColor(p.color || lastColor);
         if (normalizedColor) playerColors[p.id] = normalizedColor;
         if (p.drops !== undefined) playerDrops[p.id] = p.drops;
+        playerMeta[p.id] = {
+          name: p.name,
+          profileName: p.profileName,
+          nickname: p.nickname
+        };
         return {
           ...p,
           color: normalizedColor,
@@ -2208,7 +2229,7 @@
         dot.style.background = colorToGradient[dotColor] || gradients[p.originalIndex % 4];
         const name = document.createElement("div");
         name.className = "player-name";
-        name.textContent = p.name || p.id;
+        name.textContent = formatPlayerDisplayName(p) || p.id;
         const meta = document.createElement("div");
         meta.className = "player-meta";
         meta.textContent = `Pos: ${p.pos ?? "-"}`;
@@ -2240,7 +2261,7 @@
         tokenIcon.style.backgroundImage = `url('assets/pawns/pawn-${pawnColor}.svg')`;
         
         const name = document.createElement("span");
-        name.textContent = p.name || p.id;
+        name.textContent = formatPlayerDisplayName(p) || p.id;
         
         item.appendChild(rank);
         item.appendChild(tokenIcon);

@@ -197,167 +197,345 @@
         android:textSize="18sp"
         android:textStyle="bold" />
 
+    <TextView
+        android:id="@+id/tvScoreboardHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:text="Tap a row to view history"
+        android:textColor="#9CA3AF"
+        android:textSize="12sp" />
+
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:cardBackgroundColor="#1A2035"
         app:cardCornerRadius="8dp">
 
-        <LinearLayout
-            android:id="@+id/scoreboardContainer"
+        <TableLayout
+            android:id="@+id/scoreboardTable"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:padding="8dp"
+            android:stretchColumns="1,2,3,4,5"
+            android:shrinkColumns="1,2,3,4,5">
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="8dp">
-
-                <TextView
-                    android:id="@+id/tvScoreP1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="4dp"
-                    android:text="P1: 0"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+            <TableRow
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:weightSum="6.0">
 
                 <TextView
-                    android:id="@+id/tvPosP1"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Pos: 0"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvScoreP1"
-                    app:layout_constraintStart_toEndOf="@+id/tvScoreP1"
-                    app:layout_constraintTop_toTopOf="@+id/tvScoreP1" />
+                    android:layout_weight="0.8"
+                    android:text="Rank"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold"
+                    android:gravity="center" />
 
                 <TextView
-                    android:id="@+id/tvTileP1"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Start"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvPosP1"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/tvPosP1" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="8dp">
+                    android:layout_weight="0.8"
+                    android:text="Coin"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/tvScoreP2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:padding="4dp"
-                    android:text="P2: 0"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    android:layout_weight="1.6"
+                    android:text="Profile"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/tvPosP2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Pos: 0"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvScoreP2"
-                    app:layout_constraintStart_toEndOf="@+id/tvScoreP2"
-                    app:layout_constraintTop_toTopOf="@+id/tvScoreP2" />
+                    android:layout_weight="0.9"
+                    android:text="Tile #"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/tvTileP2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Start"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvPosP2"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/tvPosP2" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="8dp">
+                    android:layout_weight="1.4"
+                    android:text="Tile Name"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
 
                 <TextView
-                    android:id="@+id/tvScoreP3"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:padding="4dp"
-                    android:text="P3: 0"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    android:layout_weight="0.5"
+                    android:text="Drops"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold"
+                    android:gravity="end" />
+
+            </TableRow>
+
+            <TableRow
+                android:id="@+id/rowPlayer1"
+                android:foreground="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:weightSum="6.0">
 
                 <TextView
-                    android:id="@+id/tvPosP3"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvRank1"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Pos: 0"
+                    android:layout_weight="0.8"
                     android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvScoreP3"
-                    app:layout_constraintStart_toEndOf="@+id/tvScoreP3"
-                    app:layout_constraintTop_toTopOf="@+id/tvScoreP3" />
+                    android:gravity="center"
+                    android:maxLines="1" />
 
                 <TextView
-                    android:id="@+id/tvTileP3"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvColor1"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Start"
-                    android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvPosP3"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/tvPosP3" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="8dp">
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF" />
 
                 <TextView
-                    android:id="@+id/tvScoreP4"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvName1"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:padding="4dp"
-                    android:text="P4: 0"
+                    android:layout_weight="1.6"
                     android:textColor="#FFFFFF"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    android:lines="2"
+                    android:ellipsize="end" />
 
                 <TextView
-                    android:id="@+id/tvPosP4"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvTileNumber1"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Pos: 0"
+                    android:layout_weight="0.9"
                     android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvScoreP4"
-                    app:layout_constraintStart_toEndOf="@+id/tvScoreP4"
-                    app:layout_constraintTop_toTopOf="@+id/tvScoreP4" />
+                    android:maxLines="1"
+                    android:ellipsize="end" />
 
                 <TextView
-                    android:id="@+id/tvTileP4"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvTileName1"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Start"
+                    android:layout_weight="1.4"
                     android:textColor="#FFFFFF"
-                    app:layout_constraintBottom_toBottomOf="@+id/tvPosP4"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/tvPosP4" />
+                    android:ellipsize="end"
+                    android:maxLines="1" />
 
-            </androidx.constraintlayout.widget.ConstraintLayout>
+                <TextView
+                    android:id="@+id/tvDrops1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:textColor="#FFFFFF"
+                    android:gravity="end"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
 
-        </LinearLayout>
+            </TableRow>
+
+            <TableRow
+                android:id="@+id/rowPlayer2"
+                android:foreground="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:weightSum="6.0">
+
+                <TextView
+                    android:id="@+id/tvRank2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvColor2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tvName2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.6"
+                    android:textColor="#FFFFFF"
+                    android:lines="2"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileNumber2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.9"
+                    android:textColor="#FFFFFF"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileName2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.4"
+                    android:textColor="#FFFFFF"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvDrops2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:textColor="#FFFFFF"
+                    android:gravity="end"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+            </TableRow>
+
+            <TableRow
+                android:id="@+id/rowPlayer3"
+                android:foreground="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:weightSum="6.0">
+
+                <TextView
+                    android:id="@+id/tvRank3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvColor3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tvName3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.6"
+                    android:textColor="#FFFFFF"
+                    android:lines="2"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileNumber3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.9"
+                    android:textColor="#FFFFFF"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileName3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.4"
+                    android:textColor="#FFFFFF"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvDrops3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:textColor="#FFFFFF"
+                    android:gravity="end"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+            </TableRow>
+
+            <TableRow
+                android:id="@+id/rowPlayer4"
+                android:foreground="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:weightSum="6.0">
+
+                <TextView
+                    android:id="@+id/tvRank4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF"
+                    android:gravity="center"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvColor4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tvName4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.6"
+                    android:textColor="#FFFFFF"
+                    android:lines="2"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileNumber4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.9"
+                    android:textColor="#FFFFFF"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvTileName4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.4"
+                    android:textColor="#FFFFFF"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/tvDrops4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:textColor="#FFFFFF"
+                    android:gravity="end"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+            </TableRow>
+
+        </TableLayout>
     </androidx.cardview.widget.CardView>
 
     <TextView
@@ -462,6 +640,20 @@
         android:elevation="4dp"
         android:padding="12dp"
         android:text="  🔄  Reset Game"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnEndGame"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#4CAF50"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:text="  🏁  End Game"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
         android:textSize="16sp"

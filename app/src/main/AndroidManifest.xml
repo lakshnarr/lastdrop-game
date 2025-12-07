@@ -94,6 +94,13 @@
             android:exported="false"
             android:label="Leaderboard"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
+        <!-- Rivalry Details Screen -->
+        <activity
+            android:name=".RivalryDetailActivity"
+            android:exported="false"
+            android:label="Rivalry"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
         
         <!-- QR Scanner with Portrait orientation -->
         <activity

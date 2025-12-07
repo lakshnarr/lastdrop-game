@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [PlayerEntity::class, GameEntity::class, RollEventEntity::class, PlayerProfile::class, GameRecord::class, Achievement::class, RivalryRecord::class],
-    version = 6,
+    entities = [PlayerEntity::class, GameEntity::class, RollEventEntity::class, PlayerProfile::class, GameRecord::class, Achievement::class, RivalryRecord::class, SavedGame::class],
+    version = 10,
     exportSchema = false
 )
 abstract class LastDropDatabase : RoomDatabase() {
@@ -18,6 +18,7 @@ abstract class LastDropDatabase : RoomDatabase() {
     abstract fun gameRecordDao(): GameRecordDao
     abstract fun achievementDao(): AchievementDao
     abstract fun rivalryDao(): RivalryDao
+    abstract fun savedGameDao(): SavedGameDao
 
     companion object {
         @Volatile private var INSTANCE: LastDropDatabase? = null
@@ -189,6 +190,89 @@ abstract class LastDropDatabase : RoomDatabase() {
             }
         }
 
+        // Migration from version 6 to 7 (add richer history fields)
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN playerName TEXT NOT NULL DEFAULT ''
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN playerNickname TEXT NOT NULL DEFAULT ''
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN rank INTEGER NOT NULL DEFAULT 0
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN totalPlayers INTEGER NOT NULL DEFAULT 0
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN winStreakAfterGame INTEGER NOT NULL DEFAULT 0
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN totalWinsAfterGame INTEGER NOT NULL DEFAULT 0
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN totalGamesAfterGame INTEGER NOT NULL DEFAULT 0
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN nemesisPlayerId TEXT
+                """.trimIndent())
+                database.execSQL("""
+                    ALTER TABLE game_records ADD COLUMN nemesisName TEXT
+                """.trimIndent())
+            }
+        }
+
+        // Migration from version 7 to 8 (store opponent scores)
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE game_records ADD COLUMN opponentScores TEXT NOT NULL DEFAULT '[]'"
+                )
+            }
+        }
+
+        // Migration from version 8 to 9 (add saved_games table)
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE saved_games (
+                        savedGameId TEXT PRIMARY KEY NOT NULL,
+                        gameId TEXT,
+                        savedAt INTEGER NOT NULL,
+                        playerCount INTEGER NOT NULL,
+                        currentPlayer INTEGER NOT NULL,
+                        playWithTwoDice INTEGER NOT NULL,
+                        playerNames TEXT NOT NULL,
+                        playerColors TEXT NOT NULL,
+                        currentGameProfileIds TEXT NOT NULL,
+                        playerPositions TEXT NOT NULL,
+                        playerScores TEXT NOT NULL,
+                        lastDice1 INTEGER,
+                        lastDice2 INTEGER,
+                        lastAvg INTEGER,
+                        lastTileName TEXT,
+                        lastTileType TEXT,
+                        lastChanceCardNumber INTEGER,
+                        lastChanceCardText TEXT,
+                        waitingForCoin INTEGER NOT NULL DEFAULT 0,
+                        testModeEnabled INTEGER NOT NULL DEFAULT 0,
+                        testModeType INTEGER NOT NULL DEFAULT 0,
+                        label TEXT NOT NULL DEFAULT ''
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        // Migration from version 9 to 10 (add label to saved_games)
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE saved_games ADD COLUMN label TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): LastDropDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
@@ -197,7 +281,17 @@ abstract class LastDropDatabase : RoomDatabase() {
                     "lastdrop.db"
                 )
                 .fallbackToDestructiveMigration() // For fresh installs, create from scratch
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_8_9,
+                    MIGRATION_9_10
+                )
                 .build().also { INSTANCE = it }
             }
         }

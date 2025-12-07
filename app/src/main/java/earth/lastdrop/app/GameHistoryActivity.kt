@@ -1,5 +1,6 @@
 package earth.lastdrop.app
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -17,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -24,12 +26,23 @@ import java.util.concurrent.TimeUnit
 class GameHistoryActivity : AppCompatActivity() {
 
     private lateinit var database: LastDropDatabase
+    private lateinit var savedGameDao: SavedGameDao
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: GameHistoryAdapter
     private lateinit var emptyState: View
+    private lateinit var savedGameCard: View
+    private lateinit var savedGameTitle: TextView
+    private lateinit var savedGameSubtitle: TextView
+    private lateinit var btnResumeSaved: Button
+    private lateinit var btnDiscardSaved: Button
+    private val selectedProfileId: String?
+        get() = intent.getStringExtra("profileId")
+    private val selectedProfileName: String?
+        get() = intent.getStringExtra("profileName")
     
-    private var allGames = listOf<GameRecordWithProfile>()
+    private var allGames = listOf<GameRecordWithOpponents>()
     private var currentFilter = Filter.ALL
+    private var latestSavedGame: SavedGame? = null
 
     enum class Filter {
         ALL, WINS, LOSSES, TODAY
@@ -40,16 +53,24 @@ class GameHistoryActivity : AppCompatActivity() {
         setContentView(R.layout.activity_game_history)
 
         database = LastDropDatabase.getInstance(this)
+        savedGameDao = database.savedGameDao()
         
         recyclerView = findViewById(R.id.gameList)
         emptyState = findViewById(R.id.emptyState)
+        savedGameCard = findViewById(R.id.savedGameCard)
+        savedGameTitle = findViewById(R.id.savedGameTitle)
+        savedGameSubtitle = findViewById(R.id.savedGameSubtitle)
+        btnResumeSaved = findViewById(R.id.btnResumeSavedGame)
+        btnDiscardSaved = findViewById(R.id.btnDiscardSavedGame)
         
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = GameHistoryAdapter()
         recyclerView.adapter = adapter
 
         setupFilters()
+        setupSavedGameButtons()
         loadGames()
+        loadSavedGameCard()
         
         // Export CSV button
         findViewById<Button>(R.id.btnExportCSV).setOnClickListener {
@@ -95,6 +116,74 @@ class GameHistoryActivity : AppCompatActivity() {
         filterToday.setOnClickListener { applyFilter(Filter.TODAY, filterToday) }
     }
 
+    private fun setupSavedGameButtons() {
+        btnResumeSaved.setOnClickListener {
+            latestSavedGame?.let { saved ->
+                val intent = Intent(this, MainActivity::class.java)
+                intent.putExtra("savedGameId", saved.savedGameId)
+                startActivity(intent)
+            } ?: Toast.makeText(this, "No saved game to resume", Toast.LENGTH_SHORT).show()
+        }
+
+        btnDiscardSaved.setOnClickListener {
+            val toDelete = latestSavedGame ?: run {
+                Toast.makeText(this, "No saved game to discard", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            lifecycleScope.launch(Dispatchers.IO) {
+                runCatching { savedGameDao.deleteById(toDelete.savedGameId) }
+                withContext(Dispatchers.Main) {
+                    latestSavedGame = null
+                    bindSavedGameCard(null)
+                }
+            }
+        }
+    }
+
+    private fun loadSavedGameCard() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val saved = runCatching { savedGameDao.getLatest() }.getOrNull()
+            withContext(Dispatchers.Main) {
+                latestSavedGame = saved
+                bindSavedGameCard(saved)
+            }
+        }
+    }
+
+    private fun bindSavedGameCard(saved: SavedGame?) {
+        if (saved == null) {
+            savedGameCard.visibility = View.GONE
+            return
+        }
+
+        val subtitle = buildString {
+            append("Saved ")
+            append(formatSavedGameTime(saved.savedAt))
+            append(" • ")
+            append(saved.playerCount)
+            append(" players")
+            if (saved.playWithTwoDice) append(" • two dice")
+        }
+        savedGameTitle.text = saved.label.ifBlank { "Resume saved game" }
+        savedGameSubtitle.text = subtitle
+        savedGameCard.visibility = View.VISIBLE
+    }
+
+    private fun formatSavedGameTime(timestamp: Long): String {
+        if (timestamp <= 0) return "just now"
+        val diff = System.currentTimeMillis() - timestamp
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
+        val hours = TimeUnit.MILLISECONDS.toHours(diff)
+        val days = TimeUnit.MILLISECONDS.toDays(diff)
+        return when {
+            minutes < 1 -> "just now"
+            minutes < 60 -> "$minutes min ago"
+            hours < 24 -> "$hours hr ago"
+            days < 7 -> "$days days ago"
+            else -> "${days / 7} weeks ago"
+        }
+    }
+
     private fun applyFilter(filter: Filter, selectedButton: Button) {
         currentFilter = filter
         
@@ -134,11 +223,12 @@ class GameHistoryActivity : AppCompatActivity() {
         adapter.updateGames(filtered)
         
         // Update subtitle
+        val profileLabel = selectedProfileName ?: if (selectedProfileId != null) "Player history" else "All players"
         val subtitle = when (filter) {
-            Filter.ALL -> "${filtered.size} games • All players"
-            Filter.WINS -> "${filtered.size} wins"
-            Filter.LOSSES -> "${filtered.size} losses"
-            Filter.TODAY -> "${filtered.size} games today"
+            Filter.ALL -> "${filtered.size} games • $profileLabel"
+            Filter.WINS -> "${filtered.size} wins • $profileLabel"
+            Filter.LOSSES -> "${filtered.size} losses • $profileLabel"
+            Filter.TODAY -> "${filtered.size} games today • $profileLabel"
         }
         findViewById<TextView>(R.id.historySubtitle).text = subtitle
 
@@ -161,13 +251,28 @@ class GameHistoryActivity : AppCompatActivity() {
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val records = database.gameRecordDao().getAllGameRecords()
+                val records = selectedProfileId?.let { id ->
+                    database.gameRecordDao().getAllGameRecordsForProfile(id)
+                } ?: database.gameRecordDao().getAllGameRecords()
+
                 val profileDao = database.playerProfileDao()
-                
+                val profileMap = profileDao.getAllProfilesList().associateBy { it.playerId }
+
                 val gamesWithProfiles = records.mapNotNull { record ->
-                    val profile = profileDao.getProfile(record.profileId)
+                    val profile = profileMap[record.profileId] ?: profileDao.getProfile(record.profileId)
                     if (profile != null) {
-                        GameRecordWithProfile(record, profile)
+                        val opponentIds = try {
+                            val arr = JSONArray(record.opponentIds)
+                            (0 until arr.length()).mapNotNull { idx -> arr.optString(idx, null) }.filter { it.isNotBlank() }
+                        } catch (e: Exception) {
+                            record.opponentIds.removeSurrounding("[", "]").split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        }
+
+                        val opponentProfiles = opponentIds.mapNotNull { oppId ->
+                            profileMap[oppId] ?: profileDao.getProfile(oppId)
+                        }
+
+                        GameRecordWithOpponents(record, profile, opponentProfiles)
                     } else {
                         null
                     }
@@ -190,9 +295,9 @@ class GameHistoryActivity : AppCompatActivity() {
     // Adapter
     private inner class GameHistoryAdapter : RecyclerView.Adapter<GameHistoryAdapter.ViewHolder>() {
         
-        private var games = listOf<GameRecordWithProfile>()
+        private var games = listOf<GameRecordWithOpponents>()
 
-        fun updateGames(newGames: List<GameRecordWithProfile>) {
+        fun updateGames(newGames: List<GameRecordWithOpponents>) {
             games = newGames
             notifyDataSetChanged()
         }
@@ -210,6 +315,7 @@ class GameHistoryActivity : AppCompatActivity() {
             val colorDots: LinearLayout = view.findViewById(R.id.colorDots)
             val achievementsUnlocked: TextView = view.findViewById(R.id.achievementsUnlocked)
             val btnShare: Button = view.findViewById(R.id.btnShare)
+            val btnNemesis: TextView = view.findViewById(R.id.btnNemesisDetails)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -222,6 +328,7 @@ class GameHistoryActivity : AppCompatActivity() {
             val game = games[position]
             val record = game.record
             val profile = game.profile
+            val opponentProfiles = game.opponents
 
             // Result badge
             if (record.won) {
@@ -234,28 +341,52 @@ class GameHistoryActivity : AppCompatActivity() {
 
             // Game title (player count from opponents + self)
             val opponentCount = try {
-                record.opponentIds.removeSurrounding("[", "]").split(",").filter { it.isNotBlank() }.size
-            } catch (e: Exception) { 0 }
-            val playerCount = opponentCount + 1
-            holder.gameTitle.text = "$playerCount-Player Game"
+                JSONArray(record.opponentIds).length()
+            } catch (e: Exception) {
+                try {
+                    record.opponentIds.removeSurrounding("[", "]").split(",").filter { it.isNotBlank() }.size
+                } catch (_: Exception) { 0 }
+            }
+            val playerCount = if (record.totalPlayers > 0) record.totalPlayers else opponentCount + 1
+            val displayName = (profile.nickname.ifBlank { profile.name })
+            holder.gameTitle.text = "$displayName • ${playerCount}-Player Game"
 
             // Time ago
             holder.gameTime.text = getTimeAgo(record.playedAt)
 
             // Duration
-            holder.gameDuration.text = "Duration: ${record.gameTimeMinutes} min"
+            val winsSummary = if (record.totalGamesAfterGame > 0) {
+                " • W${record.totalWinsAfterGame}/${record.totalGamesAfterGame}"
+            } else {
+                ""
+            }
+            holder.gameDuration.text = "Duration: ${record.gameTimeMinutes} min$winsSummary"
 
             // Score
             holder.finalScore.text = record.finalScore.toString()
 
             // Placement
-            val placementEmoji = when (record.placement) {
+            val rank = if (record.rank > 0) record.rank else record.placement
+            val placementEmoji = when (rank) {
                 1 -> "🥇"
                 2 -> "🥈"
                 3 -> "🥉"
                 else -> "🎲"
             }
-            holder.placement.text = "$placementEmoji ${getOrdinal(record.placement)} Place"
+            val streakText = if (record.winStreakAfterGame > 1) {
+                " • 🔥 ${record.winStreakAfterGame} win streak"
+            } else {
+                ""
+            }
+            holder.placement.text = "$placementEmoji ${getOrdinal(rank)} Place$streakText"
+
+            // Nemesis hint for AI/context
+            if (!record.nemesisName.isNullOrBlank()) {
+                holder.achievementsUnlocked.visibility = View.VISIBLE
+                holder.achievementsUnlocked.text = "👾 Nemesis: ${record.nemesisName}"
+            } else {
+                holder.achievementsUnlocked.visibility = View.GONE
+            }
 
             // Bonus/Drought hits
             holder.bonusHits.text = "💧 ${record.bonusTileHits} bonuses"
@@ -264,14 +395,15 @@ class GameHistoryActivity : AppCompatActivity() {
             // Player color dots
             holder.colorDots.removeAllViews()
             addColorDot(holder.colorDots, record.colorUsed, true) // Player's color (highlighted)
-            
-            // Opponent colors (parse from opponentIds and fetch profiles)
-            // For now, just show placeholder dots
-            val colors = listOf("#FF0000", "#00FF00", "#0000FF", "#FFFF00")
-            for (i in 0 until opponentCount) {
-                if (i < colors.size) {
-                    addColorDot(holder.colorDots, colors[i], false)
+
+            // Opponent colors from stored profiles when available
+            if (opponentProfiles.isNotEmpty()) {
+                opponentProfiles.forEach { opp ->
+                    addColorDot(holder.colorDots, opp.avatarColor, false)
                 }
+            } else {
+                // Fallback: maintain spacing
+                repeat(opponentCount) { addColorDot(holder.colorDots, "666666", false) }
             }
 
             // Achievements (would need to check if any were unlocked in this game)
@@ -286,6 +418,21 @@ class GameHistoryActivity : AppCompatActivity() {
                     score = record.finalScore,
                     totalPlayers = playerCount
                 )
+            }
+
+            // Nemesis details link
+            if (!record.nemesisPlayerId.isNullOrBlank() && !record.nemesisName.isNullOrBlank()) {
+                holder.btnNemesis.visibility = View.VISIBLE
+                holder.btnNemesis.setOnClickListener {
+                    val intent = Intent(this@GameHistoryActivity, RivalryDetailActivity::class.java)
+                    intent.putExtra("playerId", record.profileId)
+                    intent.putExtra("opponentId", record.nemesisPlayerId)
+                    intent.putExtra("opponentName", record.nemesisName)
+                    startActivity(intent)
+                }
+            } else {
+                holder.btnNemesis.visibility = View.GONE
+                holder.btnNemesis.setOnClickListener(null)
             }
         }
 
@@ -346,7 +493,8 @@ class GameHistoryActivity : AppCompatActivity() {
     }
 }
 
-data class GameRecordWithProfile(
+data class GameRecordWithOpponents(
     val record: GameRecord,
-    val profile: PlayerProfile
+    val profile: PlayerProfile,
+    val opponents: List<PlayerProfile>
 )

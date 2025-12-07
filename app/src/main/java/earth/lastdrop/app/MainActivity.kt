@@ -22,6 +22,7 @@ import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -36,7 +37,10 @@ import org.sample.godicesdklib.GoDiceSDK
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.LinkedList
+import java.util.Locale
 import java.util.Queue
 import java.util.Timer
 import java.util.TimerTask
@@ -84,23 +88,24 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvUndoStatus: TextView
     private lateinit var tvCoinTimeout: TextView
     private lateinit var tvCurrentTurn: TextView
-    private lateinit var tvScoreP1: TextView
-    private lateinit var tvScoreP2: TextView
-    private lateinit var tvScoreP3: TextView
-    private lateinit var tvScoreP4: TextView
-    private lateinit var tvPosP1: TextView
-    private lateinit var tvPosP2: TextView
-    private lateinit var tvPosP3: TextView
-    private lateinit var tvPosP4: TextView
-    private lateinit var tvTileP1: TextView
-    private lateinit var tvTileP2: TextView
-    private lateinit var tvTileP3: TextView
-    private lateinit var tvTileP4: TextView
+
+    private data class ScoreboardRow(
+        val container: TableRow,
+        val rank: TextView,
+        val color: TextView,
+        val name: TextView,
+        val tileNumber: TextView,
+        val tileName: TextView,
+        val drops: TextView
+    )
+
+    private lateinit var scoreboardRows: List<ScoreboardRow>
 
     private lateinit var btnConnectDice: Button
     private lateinit var btnConnectBoard: Button
     private lateinit var btnConnectServer: Button
     private lateinit var btnUndo: Button
+    private lateinit var btnEndGame: Button
     private lateinit var btnResetScore: Button
     private lateinit var btnRefreshScoreboard: Button
     private lateinit var btnTestMode: Button
@@ -391,6 +396,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     // Database
     private lateinit var db: LastDropDatabase
+    private lateinit var savedGameDao: SavedGameDao
     private lateinit var dao: LastDropDao
     private var currentGameId: Long = 0L
 
@@ -421,6 +427,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         dao = db.dao()
 
         gameEngine = GameEngine()
+        savedGameDao = db.savedGameDao()
         profileManager = ProfileManager(this)
         achievementEngine = AchievementEngine(this)
         rivalryManager = RivalryManager(this)
@@ -481,6 +488,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Initialize animation event handler
         animationEventHandler = AnimationEventHandler(this)
 
+        registerBackPressHandler()
+
         mainScope.launch(Dispatchers.IO) {
             // start a new game session
             val game = GameEntity(
@@ -491,6 +500,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         GoDiceSDK.listener = this
+
+        val savedGameIdFromIntent = intent.getStringExtra("savedGameId")
 
         setupUiListeners()
         
@@ -508,8 +519,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }, 2000) // Wait 2 seconds after startup
         }
 
-        // Show profile selection screen
-        showProfileSelection()
+        // Show profile selection screen unless resuming a saved game
+        if (savedGameIdFromIntent == null) {
+            showProfileSelection()
+        } else {
+            consumeSavedGameIntent(savedGameIdFromIntent)
+        }
 
         // ping global server on startup
         pingServer()
@@ -534,15 +549,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 if (profileIds.isNotEmpty()) {
                     mainScope.launch {
                         // Load profile data
-                        val profiles = profileIds.mapNotNull { id ->
-                            profileManager.getProfile(id)
-                        }
-                        
+                        val profiles = profileIds.mapNotNull { id -> profileManager.getProfile(id) }
+
                         if (profiles.isNotEmpty()) {
-                            // Map profiles to game state
-                            playerCount = profiles.size
-                            profiles.forEachIndexed { index, profile ->
-                                playerNames[index] = profile.nickname // Use nickname for AI
+                            val displayNames = profiles.mapIndexed { index, profile ->
+                                formatProfileDisplayName(profile.name, profile.nickname, "Player ${index + 1}")
+                            }
+
+                            displayNames.forEachIndexed { index, displayName ->
+                                playerNames[index] = displayName
                                 playerColors[index] = assignedColors.getOrNull(index) ?: ProfileManager.GAME_COLORS[index]
                             }
                             
@@ -552,7 +567,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                             currentGameProfiles.clear()
                             currentGameProfiles.addAll(profiles)
                             
-                            Log.d(TAG, "Game starting with profiles: ${profiles.map { it.nickname }}")
+                            Log.d(TAG, "Game starting with profiles: $displayNames")
                             
                             // Initialize game
                             resetLocalGame()
@@ -560,7 +575,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                             
                             Toast.makeText(
                                 this@MainActivity,
-                                "Welcome ${profiles.joinToString { it.nickname }}!",
+                                "Welcome ${displayNames.joinToString()}!",
                                 Toast.LENGTH_LONG
                             ).show()
                             return@launch
@@ -685,18 +700,45 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvUndoStatus = findViewById(R.id.tvUndoStatus)
         tvCoinTimeout = findViewById(R.id.tvCoinTimeout)
         tvCurrentTurn = findViewById(R.id.tvCurrentTurn)
-        tvScoreP1 = findViewById(R.id.tvScoreP1)
-        tvScoreP2 = findViewById(R.id.tvScoreP2)
-        tvScoreP3 = findViewById(R.id.tvScoreP3)
-        tvScoreP4 = findViewById(R.id.tvScoreP4)
-        tvPosP1 = findViewById(R.id.tvPosP1)
-        tvPosP2 = findViewById(R.id.tvPosP2)
-        tvPosP3 = findViewById(R.id.tvPosP3)
-        tvPosP4 = findViewById(R.id.tvPosP4)
-        tvTileP1 = findViewById(R.id.tvTileP1)
-        tvTileP2 = findViewById(R.id.tvTileP2)
-        tvTileP3 = findViewById(R.id.tvTileP3)
-        tvTileP4 = findViewById(R.id.tvTileP4)
+
+        scoreboardRows = listOf(
+            ScoreboardRow(
+                findViewById(R.id.rowPlayer1),
+                findViewById(R.id.tvRank1),
+                findViewById(R.id.tvColor1),
+                findViewById(R.id.tvName1),
+                findViewById(R.id.tvTileNumber1),
+                findViewById(R.id.tvTileName1),
+                findViewById(R.id.tvDrops1)
+            ),
+            ScoreboardRow(
+                findViewById(R.id.rowPlayer2),
+                findViewById(R.id.tvRank2),
+                findViewById(R.id.tvColor2),
+                findViewById(R.id.tvName2),
+                findViewById(R.id.tvTileNumber2),
+                findViewById(R.id.tvTileName2),
+                findViewById(R.id.tvDrops2)
+            ),
+            ScoreboardRow(
+                findViewById(R.id.rowPlayer3),
+                findViewById(R.id.tvRank3),
+                findViewById(R.id.tvColor3),
+                findViewById(R.id.tvName3),
+                findViewById(R.id.tvTileNumber3),
+                findViewById(R.id.tvTileName3),
+                findViewById(R.id.tvDrops3)
+            ),
+            ScoreboardRow(
+                findViewById(R.id.rowPlayer4),
+                findViewById(R.id.tvRank4),
+                findViewById(R.id.tvColor4),
+                findViewById(R.id.tvName4),
+                findViewById(R.id.tvTileNumber4),
+                findViewById(R.id.tvTileName4),
+                findViewById(R.id.tvDrops4)
+            )
+        )
 
         btnConnectDice = findViewById(R.id.btnConnectDice)
         btnConnectBoard = findViewById(R.id.btnConnectBoard)
@@ -704,6 +746,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnUndo = findViewById(R.id.btnUndo)
         undoProgressBar = findViewById(R.id.undoProgressBar)
         btnResetScore = findViewById(R.id.btnResetScore)
+        btnEndGame = findViewById(R.id.btnEndGame)
         btnRefreshScoreboard = findViewById(R.id.btnRefreshScoreboard)
         btnTestMode = findViewById(R.id.btnTestMode)
         btnShowQR = findViewById(R.id.btnShowQR)
@@ -726,8 +769,6 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvUndoStatus.text = ""
 
         btnConnectDice.text = "Connect Dice"
-        tvScoreP1.text = "P1: 10"
-        tvScoreP2.text = "P2: 10"
         // Initialize test mode UI
         btnTestMode.text = "Production"
         layoutDiceButtons.visibility = View.GONE
@@ -743,7 +784,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         // Menu buttons
         findViewById<Button>(R.id.btnGameHistory)?.setOnClickListener {
-            startActivity(Intent(this, GameHistoryActivity::class.java))
+            val preferredProfile = when {
+                playerCount > 0 -> currentGameProfiles.getOrNull(currentPlayer.coerceIn(0, playerCount - 1))
+                currentGameProfiles.size == 1 -> currentGameProfiles.firstOrNull()
+                else -> null
+            }
+            openHistoryForProfile(
+                profileId = preferredProfile?.playerId,
+                profileName = preferredProfile?.nickname?.ifBlank { preferredProfile.name }
+            )
         }
         findViewById<Button>(R.id.btnLeaderboard)?.setOnClickListener {
             startActivity(Intent(this, LeaderboardActivity::class.java))
@@ -760,6 +809,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
         btnResetScore.setOnClickListener { resetLocalGame() }
+        btnEndGame.setOnClickListener { showEndGameDialog() }
         btnRefreshScoreboard.setOnClickListener { fetchScoreboard() }
         
         btnTestMode.setOnClickListener { toggleTestMode() }
@@ -1958,85 +2008,268 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             } catch (e: Exception) {
                 Log.e(TAG, "Error fetching scoreboard", e)
                 runOnUiThread {
-                    tvScoreP1.text = "Error"
-                    tvScoreP2.text = ""
-                    tvScoreP3.text = ""
-                    tvScoreP4.text = ""
+                    scoreboardRows.forEach { row ->
+                        row.rank.text = "--"
+                        row.color.text = ""
+                        row.name.text = "Error"
+                        row.tileNumber.text = ""
+                        row.tileName.text = ""
+                        row.drops.text = ""
+                        row.container.visibility = View.GONE
+                    }
                 }
             }
         }
     }
 
     private fun updateScoreboard() {
-        val p1Name = playerNames.getOrNull(0) ?: "Player 1"
-        val p2Name = playerNames.getOrNull(1) ?: "Player 2"
-        val p3Name = playerNames.getOrNull(2) ?: "Player 3"
-        val p4Name = playerNames.getOrNull(3) ?: "Player 4"
+        data class RowData(
+            val originalIndex: Int,
+            val displayKey: String,
+            val name: String,
+            val nickname: String?,
+            val color: String,
+            val drops: Int,
+            val position: Int,
+            val tileName: String
+        )
 
-        val s1 = playerScores[p1Name] ?: 0
-        val s2 = playerScores[p2Name] ?: 0
-        val s3 = playerScores[p3Name] ?: 0
-        val s4 = playerScores[p4Name] ?: 0
-
-        val colorEmoji1 = getColorEmoji(playerColors.getOrNull(0) ?: "red")
-        val colorEmoji2 = getColorEmoji(playerColors.getOrNull(1) ?: "green")
-        val colorEmoji3 = getColorEmoji(playerColors.getOrNull(2) ?: "blue")
-        val colorEmoji4 = getColorEmoji(playerColors.getOrNull(3) ?: "yellow")
-
-        tvScoreP1.text = "$colorEmoji1 $p1Name : $s1"
-        tvScoreP2.text = "$colorEmoji2 $p2Name : $s2"
-
-        tvPosP1.text = "Pos: ${playerPositions[p1Name] ?: 0}"
-        tvPosP2.text = "Pos: ${playerPositions[p2Name] ?: 0}"
-
-        // 🔹 Safely build tile label as pure String
-        val tileP1Text: String = gameEngine.tiles
-            .getOrNull((playerPositions[p1Name] ?: 1) - 1)
-            ?.name
-            ?.toString()
-            ?: ""
-
-        val tileP2Text: String = gameEngine.tiles
-            .getOrNull((playerPositions[p2Name] ?: 1) - 1)
-            ?.name
-            ?.toString()
-            ?: ""
-
-        tvTileP1.text = tileP1Text
-        tvTileP2.text = tileP2Text
-
-        if (playerCount >= 3) {
-            tvScoreP3.text = "$colorEmoji3 $p3Name : $s3"
-            tvPosP3.text = "Pos: ${playerPositions[p3Name] ?: 0}"
-
-            val tileP3Text: String = gameEngine.tiles
-                .getOrNull((playerPositions[p3Name] ?: 1) - 1)
-                ?.name
-                ?.toString()
-                ?: ""
-
-            tvTileP3.text = tileP3Text
-        } else {
-            tvScoreP3.text = ""
-            tvPosP3.text = ""
-            tvTileP3.text = ""
+        fun crownForRank(rank: Int): String {
+            return when (rank) {
+                1 -> "👑"
+                2 -> "🥈"
+                3 -> "🥉"
+                else -> "⚠️"
+            }
         }
 
-        if (playerCount >= 4) {
-            tvScoreP4.text = "$colorEmoji4 $p4Name : $s4"
-            tvPosP4.text = "Pos: ${playerPositions[p4Name] ?: 0}"
-
-            val tileP4Text: String = gameEngine.tiles
-                .getOrNull((playerPositions[p4Name] ?: 1) - 1)
+        val rows = (0 until playerCount).map { idx ->
+            val displayKey = playerNames.getOrNull(idx) ?: "Player ${idx + 1}"
+            val profile = currentGameProfiles.getOrNull(idx)
+            val baseName = profile?.name ?: displayKey
+            val nickname = profile?.nickname
+            val drops = playerScores[displayKey] ?: 0
+            val position = playerPositions[displayKey] ?: 1
+            val tileName = gameEngine.tiles
+                .getOrNull((position - 1).coerceAtLeast(0))
                 ?.name
                 ?.toString()
                 ?: ""
+            val color = playerColors.getOrNull(idx) ?: "red"
 
-            tvTileP4.text = tileP4Text
-        } else {
-            tvScoreP4.text = ""
-            tvPosP4.text = ""
-            tvTileP4.text = ""
+            RowData(
+                originalIndex = idx,
+                displayKey = displayKey,
+                name = baseName,
+                nickname = nickname,
+                color = color,
+                drops = drops,
+                position = position,
+                tileName = tileName
+            )
+        }
+            .sortedWith(compareByDescending<RowData> { it.drops }.thenBy { it.originalIndex })
+
+        // Dense ranking: ties share the same rank, next distinct drops get +1
+        var nextRank = 1
+        var lastDrops: Int? = null
+
+        scoreboardRows.forEach { row ->
+            row.container.visibility = View.GONE
+        }
+
+        rows.forEachIndexed { idx, row ->
+            if (idx >= scoreboardRows.size) return@forEachIndexed
+            val viewRow = scoreboardRows[idx]
+
+            val rankToShow = if (lastDrops != null && row.drops == lastDrops) {
+                nextRank - 1
+            } else {
+                nextRank
+            }
+            if (lastDrops == null || row.drops != lastDrops) {
+                nextRank += 1
+            }
+            lastDrops = row.drops
+
+            val nameText = formatNameMultiline(row.name, row.nickname)
+
+            viewRow.rank.text = crownForRank(rankToShow)
+            viewRow.color.text = getColorEmoji(row.color)
+            viewRow.name.text = nameText
+            viewRow.tileNumber.text = "Tile ${row.position}"
+            viewRow.tileName.text = row.tileName.ifBlank { "-" }
+            viewRow.drops.text = row.drops.toString()
+            viewRow.container.visibility = View.VISIBLE
+
+            // Tap a row to open history for that player (if profile is known)
+            val profile = currentGameProfiles.getOrNull(row.originalIndex)
+            viewRow.container.setOnClickListener {
+                if (profile != null) {
+                    openHistoryForProfile(
+                        profileId = profile.playerId,
+                        profileName = profile.nickname.ifBlank { profile.name }
+                    )
+                } else {
+                    Toast.makeText(this, "No profile linked for this player", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    //  Saved game helpers
+    // ------------------------------------------------------------------------
+
+    private fun buildSavedGameSnapshot(label: String): SavedGame? {
+        if (!gameActive || playerCount <= 0) return null
+
+        return runCatching {
+            val namesJson = JSONArray().apply {
+                playerNames.take(playerCount).forEach { put(it) }
+            }
+            val colorsJson = JSONArray().apply {
+                playerColors.take(playerCount).forEach { put(it) }
+            }
+            val profileIdsJson = JSONArray().apply {
+                currentGameProfileIds.take(playerCount).forEach { put(it) }
+            }
+            val positionsJson = JSONObject().apply {
+                playerPositions.forEach { (name, pos) -> put(name, pos) }
+            }
+            val scoresJson = JSONObject().apply {
+                playerScores.forEach { (name, score) -> put(name, score) }
+            }
+
+            SavedGame(
+                gameId = currentGameId.toString(),
+                playerCount = playerCount,
+                currentPlayer = currentPlayer,
+                playWithTwoDice = playWithTwoDice,
+                playerNames = namesJson.toString(),
+                playerColors = colorsJson.toString(),
+                currentGameProfileIds = profileIdsJson.toString(),
+                playerPositions = positionsJson.toString(),
+                playerScores = scoresJson.toString(),
+                lastDice1 = lastDice1,
+                lastDice2 = lastDice2,
+                lastAvg = lastAvg,
+                lastTileName = lastTile?.name,
+                lastTileType = lastTile?.type?.name,
+                lastChanceCardNumber = lastChanceCard?.number,
+                lastChanceCardText = lastChanceCard?.description,
+                waitingForCoin = waitingForCoinPlacement,
+                testModeEnabled = testModeEnabled,
+                testModeType = testModeType,
+                label = label
+            )
+        }.getOrElse {
+            Log.e(TAG, "Failed to build saved game snapshot", it)
+            null
+        }
+    }
+
+    private fun saveCurrentGameSnapshot(reason: String = "manual", labelOverride: String? = null, onDone: (() -> Unit)? = null) {
+        val label = (labelOverride ?: defaultSaveLabel()).ifBlank { defaultSaveLabel() }
+        val snapshot = buildSavedGameSnapshot(label) ?: return
+        mainScope.launch(Dispatchers.IO) {
+            runCatching {
+                savedGameDao.upsert(snapshot)
+            }.onSuccess {
+                Log.d(TAG, "Saved game snapshot (${snapshot.savedGameId}) reason=$reason")
+                withContext(Dispatchers.Main) { onDone?.invoke() }
+            }.onFailure {
+                Log.e(TAG, "Failed to save game snapshot", it)
+                withContext(Dispatchers.Main) { Toast.makeText(this@MainActivity, "Save failed", Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
+
+    private fun loadLatestSavedGame(onLoaded: (SavedGame?) -> Unit) {
+        mainScope.launch(Dispatchers.IO) {
+            val saved = runCatching { savedGameDao.getLatest() }.getOrNull()
+            withContext(Dispatchers.Main) {
+                onLoaded(saved)
+            }
+        }
+    }
+
+    private fun consumeSavedGameIntent(savedGameId: String) {
+        mainScope.launch(Dispatchers.IO) {
+            val saved = runCatching { savedGameDao.getById(savedGameId) }.getOrNull()
+            withContext(Dispatchers.Main) {
+                if (saved != null) {
+                    saved.gameId?.toLongOrNull()?.let { currentGameId = it }
+                    applySavedGame(saved)
+                    mainScope.launch(Dispatchers.IO) { savedGameDao.deleteById(saved.savedGameId) }
+                    Toast.makeText(this@MainActivity, "Saved game restored", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Saved game not found", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun defaultSaveLabel(): String {
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+        val players = playerNames.take(playerCount).joinToString(", ").ifBlank { "Players" }
+        return "$players • $timestamp"
+    }
+
+    private fun applySavedGame(saved: SavedGame) {
+        runCatching {
+            val namesArray = JSONArray(saved.playerNames)
+            val colorsArray = JSONArray(saved.playerColors)
+            val profileIdsArray = JSONArray(saved.currentGameProfileIds)
+            val positionsJson = JSONObject(saved.playerPositions)
+            val scoresJson = JSONObject(saved.playerScores)
+
+            playerNames.clear()
+            repeat(namesArray.length()) { idx ->
+                playerNames.add(namesArray.optString(idx, "Player ${idx + 1}"))
+            }
+
+            playerColors.clear()
+            repeat(colorsArray.length()) { idx ->
+                playerColors.add(colorsArray.optString(idx, "red"))
+            }
+
+            currentGameProfileIds.clear()
+            repeat(profileIdsArray.length()) { idx ->
+                val id = profileIdsArray.optString(idx, "")
+                currentGameProfileIds.add(id)
+            }
+
+            playerPositions.clear()
+            positionsJson.keys().forEach { key ->
+                playerPositions[key] = positionsJson.optInt(key, 1)
+            }
+
+            playerScores.clear()
+            scoresJson.keys().forEach { key ->
+                playerScores[key] = scoresJson.optInt(key, 0)
+            }
+
+            playerCount = playerNames.size
+            currentPlayer = saved.currentPlayer.coerceIn(0, (playerCount - 1).coerceAtLeast(0))
+            playWithTwoDice = saved.playWithTwoDice
+            lastDice1 = saved.lastDice1
+            lastDice2 = saved.lastDice2
+            lastAvg = saved.lastAvg
+            lastTile = gameEngine.tiles.firstOrNull { it.name == saved.lastTileName }
+            lastChanceCard = saved.lastChanceCardNumber?.let { num ->
+                ChanceCard(number = num, description = saved.lastChanceCardText ?: "", effect = 0)
+            }
+            waitingForCoinPlacement = saved.waitingForCoin
+            testModeEnabled = saved.testModeEnabled
+            testModeType = saved.testModeType
+
+            gameActive = true
+            tvLastEvent.text = "Resumed saved game"
+            updateScoreboard()
+        }.onFailure {
+            Log.e(TAG, "Failed to apply saved game", it)
+            Toast.makeText(this, "Could not restore saved game", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2045,6 +2278,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ------------------------------------------------------------------------
     //  Helper functions
     // ------------------------------------------------------------------------
+
+    private fun formatProfileDisplayName(name: String?, nickname: String?, fallback: String): String {
+        val base = name?.takeIf { it.isNotBlank() } ?: fallback
+        val nick = nickname?.takeIf { it.isNotBlank() }
+        return if (nick != null && nick != base) "$base ($nick)" else base
+    }
+
+    private fun formatNameMultiline(name: String?, nickname: String?): String {
+        val base = name?.takeIf { it.isNotBlank() } ?: "Player"
+        val nick = nickname?.takeIf { it.isNotBlank() }
+        return if (nick != null && nick != base) "$base\n($nick)" else base
+    }
 
     private fun getColorEmoji(color: String): String {
         return when (color.uppercase()) {
@@ -2060,6 +2305,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 else -> "⚪"
             }
         }
+    }
+
+    private fun openHistoryForProfile(profileId: String?, profileName: String?) {
+        val intent = Intent(this, GameHistoryActivity::class.java)
+        profileId?.let { intent.putExtra("profileId", it) }
+        profileName?.let { intent.putExtra("profileName", it) }
+        startActivity(intent)
     }
 
     // ------------------------------------------------------------------------
@@ -3212,6 +3464,58 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 .setCancelable(false)
                 .show()
         }
+    }
+
+    private fun registerBackPressHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (gameActive && playerScores.isNotEmpty()) {
+                    showEndGameDialog()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+    }
+
+    private fun showEndGameDialog() {
+        if (!gameActive || playerScores.isEmpty()) {
+            finish()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("End game")
+            .setMessage("Save the current game to resume later, or exit without saving.")
+            .setPositiveButton("Save") { _, _ ->
+                promptForSaveLabel(onSaved = {
+                    finish()
+                })
+            }
+            .setNegativeButton("Exit") { _, _ ->
+                gameActive = false
+                finish()
+            }
+            .setNeutralButton("Cancel", null)
+            .show()
+    }
+
+    private fun promptForSaveLabel(onSaved: () -> Unit) {
+        val input = EditText(this).apply {
+            setText(defaultSaveLabel())
+            setSelection(text.length)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Name this save")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val label = input.text.toString().trim().ifBlank { defaultSaveLabel() }
+                saveCurrentGameSnapshot("end_game", label) { onSaved() }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // Helper to switch to Test Mode 2

@@ -19,16 +19,23 @@ data class GameRecord(
     
     // Player's color this game
     val colorUsed: String, // Hex color (FF0000, 00FF00, 0000FF, FFFF00)
+
+    // Player identity snapshot (stable even if renamed later)
+    val playerName: String = "", // Display name at game time
+    val playerNickname: String = "", // Nickname used for AI/voice
     
     // Game outcome
     val won: Boolean,
     val finalScore: Int,
     val finalTile: Int, // Tile position at game end
-    val placement: Int, // 1st, 2nd, 3rd, or 4th place
+    val placement: Int, // 1st, 2nd, 3rd, or 4th place (legacy)
+    val rank: Int = placement, // Alias for placement to support dense ranking
+    val totalPlayers: Int = 0,
     
     // Opponents (JSON array of profile IDs)
     val opponentIds: String = "[]", // ["uuid1", "uuid2"]
     val opponentNames: String = "[]", // ["Sarah", "Mike"] for quick AI access
+    val opponentScores: String = "[]", // JSON array aligned with opponentIds
     
     // Performance metrics for AI commentary
     val chanceCardsDrawn: String = "[]", // JSON: [3, 7, 12, 15]
@@ -40,6 +47,13 @@ data class GameRecord(
     // Game duration
     val gameTimeMinutes: Int = 0,
     val totalDropsEarned: Int = 0,
+
+    // Post-game cumulative stats snapshot (for history/rivalry)
+    val winStreakAfterGame: Int = 0,
+    val totalWinsAfterGame: Int = 0,
+    val totalGamesAfterGame: Int = 0,
+    val nemesisPlayerId: String? = null,
+    val nemesisName: String? = null,
     
     // Special events (for AI highlights)
     val wasEliminated: Boolean = false, // Ran out of drops
