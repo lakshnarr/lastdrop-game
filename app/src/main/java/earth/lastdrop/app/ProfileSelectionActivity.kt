@@ -247,8 +247,17 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
 
     private fun openSavedGames() {
-        val intent = Intent(this, SavedGamesActivity::class.java)
-        startActivity(intent)
+        lifecycleScope.launch(Dispatchers.IO) {
+            val hasSaved = runCatching { savedGameDao.getLatest() }.getOrNull() != null
+            withContext(Dispatchers.Main) {
+                if (!hasSaved) {
+                    Toast.makeText(this@ProfileSelectionActivity, "No saved games present", Toast.LENGTH_SHORT).show()
+                } else {
+                    val intent = Intent(this@ProfileSelectionActivity, SavedGamesActivity::class.java)
+                    startActivity(intent)
+                }
+            }
+        }
     }
     
     private fun showCreateProfileDialog() {
@@ -416,8 +425,8 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
     
     private fun startGame() {
-        if (selectedProfiles.isEmpty()) {
-            Toast.makeText(this, "Select at least one player", Toast.LENGTH_SHORT).show()
+        if (selectedProfiles.size < 2) {
+            Toast.makeText(this, "Select at least 2 players to start the game", Toast.LENGTH_SHORT).show()
             return
         }
         
