@@ -1703,6 +1703,7 @@
 
     const tileCenters = {};
     const tokensByPlayerId = {};
+    const playerColors = {}; // Persist last known color per player to avoid fallback swaps
     let lastChanceTimeout = null;
     let connectionEstablished = false;
 
@@ -1905,7 +1906,8 @@
       // If token exists, update its color in case it changed
       if (existingToken) {
         console.log('[ensureToken] Existing token found for', player.id);
-        const color = normalizePawnColor(player.color);
+        const color = normalizePawnColor(player.color || playerColors[player.id]);
+        if (color) playerColors[player.id] = color;
         existingToken.style.backgroundImage = `url("assets/pawns/pawn-${color}.svg")`;
         
         // Ensure label exists
@@ -1934,7 +1936,8 @@
       token.dataset.player = player.id;
 
       // Set token color from player object
-      const color = normalizePawnColor(player.color);
+      const color = normalizePawnColor(player.color || playerColors[player.id]);
+      if (color) playerColors[player.id] = color;
       token.style.backgroundImage = `url("assets/pawns/pawn-${color}.svg")`;
 
       const label = document.createElement("div");
@@ -2130,10 +2133,16 @@
       playersList.innerHTML = "";
       eliminatedList.innerHTML = "";
       
-      const players = (state.players || []).map(p => ({
-        ...p,
-        drops: p.score !== undefined ? p.score : (p.drops !== undefined ? p.drops : 10)  // Use score from API as drops, fallback to drops field or 10
-      }));
+      const players = (state.players || []).map(p => {
+        const lastColor = playerColors[p.id];
+        const normalizedColor = normalizePawnColor(p.color || lastColor);
+        if (normalizedColor) playerColors[p.id] = normalizedColor;
+        return {
+          ...p,
+          color: normalizedColor,
+          drops: p.score !== undefined ? p.score : (p.drops !== undefined ? p.drops : 10)  // Use score from API as drops, fallback to drops field or 10
+        };
+      });
       
       // Sort active players by drops (highest first), with original index as tiebreaker
       const activePlayers = players
