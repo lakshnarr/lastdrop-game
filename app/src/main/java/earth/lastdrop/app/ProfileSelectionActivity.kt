@@ -12,9 +12,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Profile Selection Screen
@@ -24,11 +26,15 @@ import kotlinx.coroutines.launch
 class ProfileSelectionActivity : AppCompatActivity() {
     
     private lateinit var profileManager: ProfileManager
+    private lateinit var database: LastDropDatabase
+    private lateinit var savedGameDao: SavedGameDao
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: ProfileAdapter
     private lateinit var btnStartGame: Button
+    private lateinit var btnLoadSavedGame: Button
     private val selectedProfiles = mutableSetOf<String>() // For multiplayer
     private var isCalledFromMainActivity = false // Track where we came from
+    private var latestSavedGame: SavedGame? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +45,8 @@ class ProfileSelectionActivity : AppCompatActivity() {
         // Simple layout (you'll need to create XML)
         setContentView(createLayout())
         
+        database = LastDropDatabase.getInstance(this)
+        savedGameDao = database.savedGameDao()
         profileManager = ProfileManager(this)
         
         setupRecyclerView()
@@ -51,6 +59,14 @@ class ProfileSelectionActivity : AppCompatActivity() {
             profileManager.updateProfileColors()
             loadProfiles()
         }
+
+        refreshSavedGameButton()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-fetch in case a save was created or consumed while this screen was backgrounded
+        refreshSavedGameButton()
     }
     
     override fun onBackPressed() {
@@ -118,10 +134,29 @@ class ProfileSelectionActivity : AppCompatActivity() {
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     topMargin = 16
-                    bottomMargin = 100 // Extra padding for navigation bar
+                    bottomMargin = 12
                 }
             }
             addView(btnStartGame)
+
+            // Load saved game button
+            btnLoadSavedGame = Button(this@ProfileSelectionActivity).apply {
+                text = "📂 Load Saved Game"
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2962FF"))
+                textSize = 16f
+                isEnabled = true
+                visibility = View.VISIBLE
+                setOnClickListener { openSavedGames() }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = 8
+                    bottomMargin = 100 // Extra padding for navigation bar
+                }
+            }
+            addView(btnLoadSavedGame)
         }
     }
     
@@ -198,6 +233,22 @@ class ProfileSelectionActivity : AppCompatActivity() {
         } else {
             "Select at least 2 players to start"
         }
+    }
+
+    private fun refreshSavedGameButton() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val saved = runCatching { savedGameDao.getLatest() }.getOrNull()
+            withContext(Dispatchers.Main) {
+                latestSavedGame = saved
+                btnLoadSavedGame.isEnabled = saved != null
+                btnLoadSavedGame.text = "📂 Load Saved Game"
+            }
+        }
+    }
+
+    private fun openSavedGames() {
+        val intent = Intent(this, SavedGamesActivity::class.java)
+        startActivity(intent)
     }
     
     private fun showCreateProfileDialog() {

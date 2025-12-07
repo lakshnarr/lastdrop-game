@@ -81,6 +81,12 @@
             android:label="Player Stats"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
         
+            <!-- Saved Games Screen -->
+            <activity android:name=".SavedGamesActivity" />
+
+            <!-- AI Home Screen -->
+            <activity android:name=".AIHomeActivity" />
+
         <!-- Game History Screen -->
         <activity
             android:name=".GameHistoryActivity"

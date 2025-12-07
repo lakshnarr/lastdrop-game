@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
         private const val REQUEST_CODE_PROFILES = 1001
+        private const val REQUEST_CODE_AI_HOME = 1003
         private const val REQUEST_CAMERA_PERMISSION = 1002
         
         // Generate unique session ID for multi-device support
@@ -78,6 +79,50 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             // "24:0A:C4:XX:XX:XX"  // Example - Replace with your ESP32's MAC
             // Add more trusted devices as needed
         )
+    }
+
+    private fun startGameWithProfiles(profileIds: List<String>, assignedColors: List<String>) {
+        mainScope.launch {
+            // Load profile data
+            val profiles = profileIds.mapNotNull { id -> profileManager.getProfile(id) }
+
+            if (profiles.isNotEmpty()) {
+                val displayNames = profiles.mapIndexed { index, profile ->
+                    formatProfileDisplayName(profile.name, profile.nickname, "Player ${index + 1}")
+                }
+
+                displayNames.forEachIndexed { index, displayName ->
+                    playerNames[index] = displayName
+                    playerColors[index] = assignedColors.getOrNull(index) ?: ProfileManager.GAME_COLORS.getOrElse(index) { ProfileManager.GAME_COLORS.first() }
+                }
+
+                // Store profile IDs and full profiles for game end recording and AI detection
+                currentGameProfileIds.clear()
+                currentGameProfileIds.addAll(profileIds)
+                currentGameProfiles.clear()
+                currentGameProfiles.addAll(profiles)
+
+                Log.d(TAG, "Game starting with profiles: $displayNames")
+
+                // Initialize game
+                resetLocalGame()
+                updateTurnIndicatorDisplay()
+                aiPresenter.onGameStart(displayNames)
+                aiPresenter.onTurnStart(displayNames.getOrNull(currentPlayer) ?: "Player")
+
+                Toast.makeText(
+                    this@MainActivity,
+                    "Welcome ${displayNames.joinToString()}!",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Failed to load player profiles. Please try again.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     // ---------- UI ----------
@@ -368,6 +413,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     
     private lateinit var apiManager: ApiManager
     private lateinit var animationEventHandler: AnimationEventHandler
+    private lateinit var aiPresenter: LocalAIPresenter
     private lateinit var profileManager: ProfileManager
     private lateinit var achievementEngine: AchievementEngine
     private lateinit var rivalryManager: RivalryManager
@@ -484,6 +530,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             apiKey = API_KEY,
             sessionId = SESSION_ID
         )
+
+        aiPresenter = LocalAIPresenter { line ->
+            runOnUiThread {
+                tvLastEvent.text = line
+                appendTestLog("🤖 $line")
+            }
+        }
         
         // Initialize animation event handler
         animationEventHandler = AnimationEventHandler(this)
@@ -520,10 +573,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         // Show profile selection screen unless resuming a saved game
-        if (savedGameIdFromIntent == null) {
-            showProfileSelection()
-        } else {
+        if (!savedGameIdFromIntent.isNullOrBlank()) {
             consumeSavedGameIntent(savedGameIdFromIntent)
+        } else {
+            showProfileSelection()
         }
 
         // ping global server on startup
@@ -542,59 +595,33 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Handle profile selection result
         if (requestCode == REQUEST_CODE_PROFILES) {
             if (resultCode == RESULT_OK && data != null) {
-                isInitialLaunch = false // Mark that initial launch is complete
                 val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
                 val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
-                
+
                 if (profileIds.isNotEmpty()) {
-                    mainScope.launch {
-                        // Load profile data
-                        val profiles = profileIds.mapNotNull { id -> profileManager.getProfile(id) }
-
-                        if (profiles.isNotEmpty()) {
-                            val displayNames = profiles.mapIndexed { index, profile ->
-                                formatProfileDisplayName(profile.name, profile.nickname, "Player ${index + 1}")
-                            }
-
-                            displayNames.forEachIndexed { index, displayName ->
-                                playerNames[index] = displayName
-                                playerColors[index] = assignedColors.getOrNull(index) ?: ProfileManager.GAME_COLORS[index]
-                            }
-                            
-                            // Store profile IDs and full profiles for game end recording and AI detection
-                            currentGameProfileIds.clear()
-                            currentGameProfileIds.addAll(profileIds)
-                            currentGameProfiles.clear()
-                            currentGameProfiles.addAll(profiles)
-                            
-                            Log.d(TAG, "Game starting with profiles: $displayNames")
-                            
-                            // Initialize game
-                            resetLocalGame()
-                            updateTurnIndicatorDisplay()
-                            
-                            Toast.makeText(
-                                this@MainActivity,
-                                "Welcome ${displayNames.joinToString()}!",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@launch
-                        } else {
-                            // No valid profiles loaded
-                            Toast.makeText(
-                                this@MainActivity,
-                                "Failed to load player profiles. Please try again.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
+                    // Route to AI home screen for intro
+                    val aiIntent = Intent(this, AIHomeActivity::class.java).apply {
+                        putStringArrayListExtra("selected_profiles", ArrayList(profileIds))
+                        putStringArrayListExtra("assigned_colors", ArrayList(assignedColors))
                     }
+                    startActivityForResult(aiIntent, REQUEST_CODE_AI_HOME)
                 } else {
-                    // No profiles selected
                     Toast.makeText(
                         this@MainActivity,
                         "No players selected. Please select profiles to start.",
                         Toast.LENGTH_SHORT
                     ).show()
+                }
+            }
+            return
+        }
+
+        if (requestCode == REQUEST_CODE_AI_HOME) {
+            if (resultCode == RESULT_OK && data != null) {
+                val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
+                val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+                if (profileIds.isNotEmpty()) {
+                    startGameWithProfiles(profileIds, assignedColors)
                 }
             }
             return
@@ -1547,6 +1574,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 val playerName = playerNames[currentPlayer]
                 val playerColor = playerColors[currentPlayer]
                 uiUpdateManager.updateTurnIndicator(tvCurrentTurn, playerName, playerColor)
+                aiPresenter.onTurnStart(playerName)
                 tvCurrentTurn.visibility = View.VISIBLE
             } else {
                 tvCurrentTurn.visibility = View.GONE
@@ -1658,6 +1686,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             eventText += "\nDrew card: ${turnResult.chanceCard.description}"
         }
         tvLastEvent.text = eventText
+        aiPresenter.onTurnResult(playerName, turnResult.tile.name, turnResult.scoreChange)
 
         Log.d(TAG, "Stable roll $value by $playerName")
         
@@ -2122,17 +2151,26 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ------------------------------------------------------------------------
 
     private fun buildSavedGameSnapshot(label: String): SavedGame? {
-        if (!gameActive || playerCount <= 0) return null
+        // Allow saving even if gameActive flag dropped, as long as we have players/scores
+        val hasPlayers = playerCount > 0 && playerNames.isNotEmpty()
+        val hasScores = playerScores.isNotEmpty()
+        if (!hasPlayers && !hasScores) return null
+
+        val inferredCount = when {
+            playerCount > 0 -> playerCount
+            playerNames.isNotEmpty() -> playerNames.size
+            else -> playerScores.size
+        }
 
         return runCatching {
             val namesJson = JSONArray().apply {
-                playerNames.take(playerCount).forEach { put(it) }
+                playerNames.take(inferredCount).forEach { put(it) }
             }
             val colorsJson = JSONArray().apply {
-                playerColors.take(playerCount).forEach { put(it) }
+                playerColors.take(inferredCount).forEach { put(it) }
             }
             val profileIdsJson = JSONArray().apply {
-                currentGameProfileIds.take(playerCount).forEach { put(it) }
+                currentGameProfileIds.take(inferredCount).forEach { put(it) }
             }
             val positionsJson = JSONObject().apply {
                 playerPositions.forEach { (name, pos) -> put(name, pos) }
@@ -2143,7 +2181,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
             SavedGame(
                 gameId = currentGameId.toString(),
-                playerCount = playerCount,
+                playerCount = inferredCount,
                 currentPlayer = currentPlayer,
                 playWithTwoDice = playWithTwoDice,
                 playerNames = namesJson.toString(),
@@ -3401,6 +3439,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                                 esp32ErrorHandler.setWinnerAnimationInProgress(false)
                                 animationEventHandler.clearAnimationStatus(tvDiceStatus)
                                 tvDiceStatus.text = "🏆 $winnerName wins the game!"
+                                aiPresenter.onGameEnd(winnerName)
                                 
                                 // Push final state to live.html
                                 pushLiveStateToBoard()
@@ -3480,25 +3519,32 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun showEndGameDialog() {
-        if (!gameActive || playerScores.isEmpty()) {
-            finish()
-            return
-        }
+        // Consider either flag or non-empty scores as an active game to avoid false negatives
+        val hasActiveGame = gameActive || playerScores.isNotEmpty()
 
-        AlertDialog.Builder(this)
-            .setTitle("End game")
-            .setMessage("Save the current game to resume later, or exit without saving.")
-            .setPositiveButton("Save") { _, _ ->
-                promptForSaveLabel(onSaved = {
+        if (hasActiveGame) {
+            AlertDialog.Builder(this)
+                .setTitle("End game")
+                .setMessage("Save the current game to resume later, or exit without saving.")
+                .setPositiveButton("Save") { _, _ ->
+                    promptForSaveLabel(onSaved = {
+                        finish()
+                    })
+                }
+                .setNegativeButton("Exit") { _, _ ->
+                    gameActive = false
                     finish()
-                })
-            }
-            .setNegativeButton("Exit") { _, _ ->
-                gameActive = false
-                finish()
-            }
-            .setNeutralButton("Cancel", null)
-            .show()
+                }
+                .setNeutralButton("Cancel", null)
+                .show()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Exit app")
+                .setMessage("There is no active game to save. Do you want to close the app?")
+                .setPositiveButton("Exit") { _, _ -> finish() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
 
     private fun promptForSaveLabel(onSaved: () -> Unit) {

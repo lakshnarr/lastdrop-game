@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#0b1020">
+
+    <TextView
+        android:id="@+id/titleSavedGames"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Saved Games"
+        android:textSize="22sp"
+        android:textColor="#FFFFFF"
+        android:paddingBottom="12dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/savedGamesList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnDeleteAllSaves"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delete All Saved"
+        android:textColor="#FFFFFF"
+        android:background="#B71C1C"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnCloseSavedGames"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Back"
+        android:textColor="#FFFFFF"
+        android:background="#424242" />
+
+</LinearLayout>
