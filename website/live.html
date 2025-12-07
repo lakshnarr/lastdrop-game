@@ -1704,6 +1704,7 @@
     const tileCenters = {};
     const tokensByPlayerId = {};
     const playerColors = {}; // Persist last known color per player to avoid fallback swaps
+    const playerDrops = {};  // Persist last known drops per player for labels
     let lastChanceTimeout = null;
     let connectionEstablished = false;
 
@@ -1908,6 +1909,7 @@
         console.log('[ensureToken] Existing token found for', player.id);
         const color = normalizePawnColor(player.color || playerColors[player.id]);
         if (color) playerColors[player.id] = color;
+        if (player.drops !== undefined) playerDrops[player.id] = player.drops;
         existingToken.style.backgroundImage = `url("assets/pawns/pawn-${color}.svg")`;
         
         // Ensure label exists
@@ -1938,6 +1940,7 @@
       // Set token color from player object
       const color = normalizePawnColor(player.color || playerColors[player.id]);
       if (color) playerColors[player.id] = color;
+      if (player.drops !== undefined) playerDrops[player.id] = player.drops;
       token.style.backgroundImage = `url("assets/pawns/pawn-${color}.svg")`;
 
       const label = document.createElement("div");
@@ -2008,14 +2011,10 @@
       const label = token.querySelector(".player-token-label");
       if (label) {
         const playerNum = playerId.replace('P', '');
-        if (demoMode) {
-          // Find player in demoPlayers to get current drops
-          const player = demoPlayers.find(p => p.id === playerId);
-          const drops = player?.drops || 10;
-          label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
-        } else {
-          label.textContent = `P${playerNum}-Pos${tileIndex}`;
-        }
+        const drops = demoMode
+          ? (demoPlayers.find(p => p.id === playerId)?.drops ?? 10)
+          : (playerDrops[playerId] ?? 10);
+        label.textContent = `P${playerNum}-Pos${tileIndex}-💧${drops}`;
       }
     }
 
@@ -2137,6 +2136,7 @@
         const lastColor = playerColors[p.id];
         const normalizedColor = normalizePawnColor(p.color || lastColor);
         if (normalizedColor) playerColors[p.id] = normalizedColor;
+        if (p.drops !== undefined) playerDrops[p.id] = p.drops;
         return {
           ...p,
           color: normalizedColor,
