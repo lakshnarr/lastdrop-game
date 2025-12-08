@@ -84,8 +84,11 @@
             <!-- Saved Games Screen -->
             <activity android:name=".SavedGamesActivity" />
 
-            <!-- AI Home Screen -->
+            <!-- AI Home Screen (legacy) -->
             <activity android:name=".AIHomeActivity" />
+
+            <!-- Intro AI Screen (Cloudie intro) -->
+            <activity android:name=".ui.intro.IntroAiActivity" />
 
         <!-- Game History Screen -->
         <activity

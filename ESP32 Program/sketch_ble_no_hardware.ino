@@ -46,11 +46,11 @@
 
 // ==================== PAIRING PASSWORD ====================
 #define BOARD_PASSWORD "654321"  // Default PIN
-#define PAIRING_REQUIRED true     // Password protection enabled
+#define PAIRING_REQUIRED false    // Password protection disabled for no-hardware mode
 
 // ==================== SECURITY CONFIGURATION ====================
-#define BLE_PAIRING_ENABLED true    // PIN pairing enabled
-#define BLE_PAIRING_PIN 654321      // Default PIN: 654321
+#define BLE_PAIRING_ENABLED false   // Disable BLE pairing for no-hardware testing
+#define BLE_PAIRING_PIN 654321      // Default PIN: 654321 (ignored when pairing disabled)
 #define MAC_FILTERING_ENABLED false // Set true to enable MAC whitelist
 
 // Android device MAC address whitelist

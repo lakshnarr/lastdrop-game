@@ -30,6 +30,18 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.zxing.integration.android.IntentIntegrator
 import com.google.zxing.integration.android.IntentResult
+import earth.lastdrop.app.GameEngine
+import earth.lastdrop.app.TileType
+import earth.lastdrop.app.ai.cloudie.CloudieBrain
+import earth.lastdrop.app.ai.cloudie.CloudieEventType
+import earth.lastdrop.app.ai.cloudie.CloudieRequest
+import earth.lastdrop.app.game.session.GameSessionManager
+import earth.lastdrop.app.game.session.PlayerInfo
+import earth.lastdrop.app.game.session.TileType as SessionTileType
+import earth.lastdrop.app.voice.NoOpVoiceService
+import earth.lastdrop.app.voice.TextToSpeechVoiceService
+import earth.lastdrop.app.voice.VoiceService
+import earth.lastdrop.app.ui.intro.IntroAiActivity
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -58,8 +70,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
         private const val REQUEST_CODE_PROFILES = 1001
-        private const val REQUEST_CODE_AI_HOME = 1003
         private const val REQUEST_CAMERA_PERMISSION = 1002
+        private const val REQUEST_CODE_INTRO_AI = 1003
         
         // Generate unique session ID for multi-device support
         private val SESSION_ID = java.util.UUID.randomUUID().toString()
@@ -71,6 +83,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val ESP32_CHAR_RX_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
         val ESP32_CHAR_TX_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
         val CCCDUUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+        private const val ESP32_PAIR_PIN = "654321"       // Default board PIN
         
         // MAC Address Whitelist - Add your ESP32's MAC address for security
         // Leave empty to accept any LASTDROP-ESP32 device
@@ -87,6 +100,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             val profiles = profileIds.mapNotNull { id -> profileManager.getProfile(id) }
 
             if (profiles.isNotEmpty()) {
+                playerCount = profiles.size
                 val displayNames = profiles.mapIndexed { index, profile ->
                     formatProfileDisplayName(profile.name, profile.nickname, "Player ${index + 1}")
                 }
@@ -109,6 +123,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 updateTurnIndicatorDisplay()
                 aiPresenter.onGameStart(displayNames)
                 aiPresenter.onTurnStart(displayNames.getOrNull(currentPlayer) ?: "Player")
+                syncSessionState()
+                emitCloudieLine(CloudieEventType.GAME_START, null)
+                emitCloudieLine(CloudieEventType.TURN_PROMPT, null)
 
                 Toast.makeText(
                     this@MainActivity,
@@ -133,6 +150,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvUndoStatus: TextView
     private lateinit var tvCoinTimeout: TextView
     private lateinit var tvCurrentTurn: TextView
+    private lateinit var tvCloudieBanner: TextView
+    private lateinit var switchCloudieVoice: Switch
+    private var lastCloudieLine: String? = null
+    private var lastCloudieTimestampMs: Long = 0L
 
     private data class ScoreboardRow(
         val container: TableRow,
@@ -192,6 +213,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private val playerPositions = mutableMapOf<String, Int>()
     private val playerScores = mutableMapOf<String, Int>()
+    private val playerStreaks = mutableMapOf<String, Int>()
 
     private var undoTimer: Job? = null
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -230,6 +252,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
     private lateinit var esp32StateValidator: ESP32StateValidator
     private lateinit var stateSyncManager: StateSyncManager
+    private lateinit var cloudieBrain: CloudieBrain
+    private lateinit var sessionManager: GameSessionManager
+    private var voiceService: VoiceService? = null
+    private var voiceEnabled: Boolean = true
     
     // ---------- Pairing Support ----------
     private var pairingDevice: BluetoothDevice? = null
@@ -473,10 +499,26 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         dao = db.dao()
 
         gameEngine = GameEngine()
+        cloudieBrain = CloudieBrain()
+        sessionManager = GameSessionManager(emptyList())
         savedGameDao = db.savedGameDao()
         profileManager = ProfileManager(this)
         achievementEngine = AchievementEngine(this)
         rivalryManager = RivalryManager(this)
+        voiceService = runCatching {
+            TextToSpeechVoiceService(
+                context = this,
+                onReady = { appendTestLog("🔊 Cloudie voice ready") },
+                onError = { appendTestLog("⚠️ TTS error: $it") }
+            )
+        }.getOrElse {
+            appendTestLog("⚠️ Falling back to silent Cloudie (TTS unavailable)")
+            NoOpVoiceService(this)
+        }
+        switchCloudieVoice.setOnCheckedChangeListener { _, isChecked ->
+            voiceEnabled = isChecked
+            appendTestLog(if (isChecked) "🔊 Cloudie voice ON" else "🤫 Cloudie voice OFF")
+        }
         
         // Initialize board preferences manager
         boardPreferencesManager = BoardPreferencesManager(this)
@@ -599,12 +641,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
 
                 if (profileIds.isNotEmpty()) {
-                    // Route to AI home screen for intro
-                    val aiIntent = Intent(this, AIHomeActivity::class.java).apply {
+                    // Route to intro AI screen before the main board
+                    val introIntent = Intent(this, IntroAiActivity::class.java).apply {
                         putStringArrayListExtra("selected_profiles", ArrayList(profileIds))
                         putStringArrayListExtra("assigned_colors", ArrayList(assignedColors))
                     }
-                    startActivityForResult(aiIntent, REQUEST_CODE_AI_HOME)
+                    startActivityForResult(introIntent, REQUEST_CODE_INTRO_AI)
                 } else {
                     Toast.makeText(
                         this@MainActivity,
@@ -616,7 +658,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
 
-        if (requestCode == REQUEST_CODE_AI_HOME) {
+        if (requestCode == REQUEST_CODE_INTRO_AI) {
             if (resultCode == RESULT_OK && data != null) {
                 val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
                 val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
@@ -697,6 +739,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         stateSyncManager.cleanup()  // Cleanup sync manager
         apiManager.cleanup()  // Cleanup API manager
         animationEventHandler.cleanup()  // Cleanup animation handler
+        (voiceService as? TextToSpeechVoiceService)?.shutdown()
         stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -727,6 +770,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvUndoStatus = findViewById(R.id.tvUndoStatus)
         tvCoinTimeout = findViewById(R.id.tvCoinTimeout)
         tvCurrentTurn = findViewById(R.id.tvCurrentTurn)
+        tvCloudieBanner = findViewById(R.id.tvCloudieBanner)
+        switchCloudieVoice = findViewById(R.id.switchCloudieVoice)
 
         scoreboardRows = listOf(
             ScoreboardRow(
@@ -794,6 +839,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvBattery.text = "Battery: --"
         tvLastEvent.text = "No events yet."
         tvUndoStatus.text = ""
+        tvCloudieBanner.text = "Cloudie is warming up…"
 
         btnConnectDice.text = "Connect Dice"
         // Initialize test mode UI
@@ -1576,6 +1622,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 uiUpdateManager.updateTurnIndicator(tvCurrentTurn, playerName, playerColor)
                 aiPresenter.onTurnStart(playerName)
                 tvCurrentTurn.visibility = View.VISIBLE
+                emitCloudieLine(CloudieEventType.TURN_PROMPT, null)
             } else {
                 tvCurrentTurn.visibility = View.GONE
             }
@@ -1675,6 +1722,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         playerPositions[playerName] = turnResult.newPosition
         playerScores[playerName] = (playerScores[playerName] ?: 0) + turnResult.scoreChange
+        playerStreaks[playerName] = if (turnResult.scoreChange > 0) {
+            (playerStreaks[playerName] ?: 0) + 1
+        } else {
+            0
+        }
 
         // track for live board
         lastTile = turnResult.tile
@@ -1694,7 +1746,20 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         sendRollToESP32(safeIndex, value, currentPos, turnResult.newPosition)
 
         // advance turn 0..playerCount-1
-        currentPlayer = (currentPlayer + 1) % playerCount
+        val sessionTileType = mapTileTypeForSession(turnResult.tile.type, turnResult.tile.index >= gameEngine.tiles.size)
+        val moveCtx = buildMoveContextForIndex(
+            playerIndex = safeIndex,
+            fromPosition = previousPosition,
+            toPosition = turnResult.newPosition,
+            dice = value,
+            tileType = sessionTileType
+        )
+
+        val nextPlayerIndex = (currentPlayer + 1) % playerCount
+        currentPlayer = nextPlayerIndex
+        updateSessionAfterMove(safeIndex, turnResult.newPosition, nextPlayerIndex)
+        emitCloudieLine(CloudieEventType.DICE_ROLL, moveCtx)
+        emitCloudieLine(CloudieEventType.LANDED_TILE, moveCtx)
         
         // Update turn indicator
         updateTurnIndicatorDisplay()
@@ -1717,6 +1782,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         mainScope.launch(Dispatchers.IO) {
             playerPositions.clear()
             playerScores.clear()
+            playerStreaks.clear()
             (0 until playerCount).forEach {
                 playerScores[playerNames[it]] = 10
                 playerPositions[playerNames[it]] = 1  // Start position is tile 1
@@ -1740,6 +1806,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 modeTwoDice = playWithTwoDice // will be updated once player chooses mode
             )
             currentGameId = dao.insertGame(game)
+            syncSessionState()
             
             // Send reset command to ESP32
             withContext(Dispatchers.Main) {
@@ -1755,6 +1822,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             withContext(Dispatchers.Main) {
                 updateScoreboard()
                 tvLastEvent.text = "Game reset - ${playerNames[0]}'s turn"
+                showCloudieLine("Game reset — ${playerNames[0]}'s turn. Let's roll!")
             }
         }
     }
@@ -2072,7 +2140,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
 
-        val rows = (0 until playerCount).map { idx ->
+        // Determine how many rows to render using whichever source is largest (profiles, names, or count)
+        val inferredCount = maxOf(
+            playerCount,
+            currentGameProfiles.size,
+            playerNames.size,
+            playerScores.size
+        ).coerceAtMost(scoreboardRows.size)
+
+        val rows = (0 until inferredCount).map { idx ->
             val displayKey = playerNames.getOrNull(idx) ?: "Player ${idx + 1}"
             val profile = currentGameProfiles.getOrNull(idx)
             val baseName = profile?.name ?: displayKey
@@ -2156,11 +2232,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val hasScores = playerScores.isNotEmpty()
         if (!hasPlayers && !hasScores) return null
 
-        val inferredCount = when {
-            playerCount > 0 -> playerCount
-            playerNames.isNotEmpty() -> playerNames.size
-            else -> playerScores.size
-        }
+        val inferredCount = listOf(
+            playerCount,
+            currentGameProfileIds.size,
+            currentGameProfiles.size,
+            playerScores.size,
+            playerPositions.size
+        ).maxOrNull()?.coerceIn(1, playerNames.size) ?: playerNames.size
 
         return runCatching {
             val namesJson = JSONArray().apply {
@@ -2239,8 +2317,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 if (saved != null) {
                     saved.gameId?.toLongOrNull()?.let { currentGameId = it }
                     applySavedGame(saved)
-                    mainScope.launch(Dispatchers.IO) { savedGameDao.deleteById(saved.savedGameId) }
-                    Toast.makeText(this@MainActivity, "Saved game restored", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Saved game loaded", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this@MainActivity, "Saved game not found", Toast.LENGTH_SHORT).show()
                 }
@@ -2263,6 +2340,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             val scoresJson = JSONObject(saved.playerScores)
 
             playerNames.clear()
+            playerStreaks.clear()
             repeat(namesArray.length()) { idx ->
                 playerNames.add(namesArray.optString(idx, "Player ${idx + 1}"))
             }
@@ -2305,10 +2383,179 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             gameActive = true
             tvLastEvent.text = "Resumed saved game"
             updateScoreboard()
+            syncSessionState()
         }.onFailure {
             Log.e(TAG, "Failed to apply saved game", it)
             Toast.makeText(this, "Could not restore saved game", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // ------------------------------------------------------------------------
+    //  Session + Cloudie helpers (non-Android modules)
+    // ------------------------------------------------------------------------
+
+    private fun mapTileTypeForSession(engineType: earth.lastdrop.app.TileType, isFinish: Boolean): SessionTileType {
+        if (isFinish) return SessionTileType.FINISH
+        return when (engineType) {
+            TileType.START -> SessionTileType.START
+            TileType.NORMAL -> SessionTileType.SAFE
+            TileType.CHANCE -> SessionTileType.SAFE
+            TileType.BONUS -> SessionTileType.BONUS
+            TileType.PENALTY -> SessionTileType.DANGER
+            TileType.DISASTER -> SessionTileType.DANGER
+            TileType.WATER_DOCK -> SessionTileType.WATER
+            TileType.SUPER_DOCK -> SessionTileType.WATER
+            else -> SessionTileType.SAFE
+        }
+    }
+
+    private fun buildSessionTiles(): List<SessionTileType> {
+        val tiles = gameEngine.tiles
+        val lastIndex = tiles.lastIndex
+        return tiles.mapIndexed { idx, tile -> mapTileTypeForSession(tile.type, idx == lastIndex) }
+    }
+
+    private fun playerIdForIndex(index: Int): String {
+        return currentGameProfileIds.getOrNull(index)?.takeIf { it.isNotBlank() }
+            ?: playerNames.getOrNull(index)?.takeIf { it.isNotBlank() }
+            ?: "player_$index"
+    }
+
+    private fun playerIdForName(name: String): String {
+        val idx = playerNames.indexOfFirst { it == name }
+        return if (idx >= 0) playerIdForIndex(idx) else name
+    }
+
+    private fun buildSessionPlayers(): List<PlayerInfo> {
+        val count = playerCount.coerceAtLeast(playerNames.size)
+        return (0 until count).map { idx ->
+            val profile = currentGameProfiles.getOrNull(idx)
+            PlayerInfo(
+                id = profile?.playerId ?: playerIdForIndex(idx),
+                name = profile?.name ?: playerNames.getOrNull(idx) ?: "Player ${idx + 1}",
+                nickname = profile?.nickname,
+                colorHex = playerColors.getOrNull(idx) ?: profile?.avatarColor ?: "00D4FF",
+                isAI = profile?.isAI == true,
+                isGuest = profile?.isGuest == true
+            )
+        }
+    }
+
+    private fun syncSessionState() {
+        val tiles = buildSessionTiles()
+        sessionManager = GameSessionManager(tiles)
+        val players = buildSessionPlayers()
+        sessionManager.setPlayers(players)
+        players.forEachIndexed { idx, p ->
+            val pos1Based = playerPositions[playerNames.getOrNull(idx) ?: p.name] ?: 1
+            sessionManager.setPosition(p.id, (pos1Based - 1).coerceAtLeast(0))
+        }
+        sessionManager.setCurrentPlayerIndex(currentPlayer.coerceIn(0, (players.size - 1).coerceAtLeast(0)))
+    }
+
+    private fun updateSessionAfterMove(playerIndex: Int, newPosition: Int, nextPlayerIndex: Int) {
+        if (!::sessionManager.isInitialized) return
+        val playerId = playerIdForIndex(playerIndex)
+        sessionManager.setPosition(playerId, (newPosition - 1).coerceAtLeast(0))
+        sessionManager.setCurrentPlayerIndex(nextPlayerIndex)
+    }
+
+    private fun updateSessionAfterUndo(playerIndex: Int, position: Int) {
+        if (!::sessionManager.isInitialized) return
+        val playerId = playerIdForIndex(playerIndex)
+        sessionManager.setPosition(playerId, (position - 1).coerceAtLeast(0))
+        sessionManager.setCurrentPlayerIndex(playerIndex)
+    }
+
+    private fun buildMoveContextForIndex(playerIndex: Int, fromPosition: Int, toPosition: Int, dice: Int, tileType: SessionTileType): earth.lastdrop.app.game.session.MoveContext? {
+        if (!::sessionManager.isInitialized) return null
+        val state = sessionManager.currentState()
+        val player = state.players.getOrNull(playerIndex) ?: return null
+        return earth.lastdrop.app.game.session.MoveContext(
+            player = player,
+            fromTile = (fromPosition - 1).coerceAtLeast(0),
+            toTile = (toPosition - 1).coerceAtLeast(0),
+            diceValue = dice,
+            tileType = tileType
+        )
+    }
+
+    private fun emitCloudieLine(eventType: CloudieEventType, moveContext: earth.lastdrop.app.game.session.MoveContext?) {
+        if (!::cloudieBrain.isInitialized || !::sessionManager.isInitialized) return
+        val state = buildCloudieState() ?: return
+        val line = cloudieBrain.generate(CloudieRequest(eventType, state, moveContext)).line
+        showCloudieLine(line)
+    }
+
+    private fun buildCloudieState(): earth.lastdrop.app.game.session.GameState? {
+        if (!::sessionManager.isInitialized) return null
+        val base = sessionManager.currentState()
+        return base.copy(
+            scoreLeaderIds = computeScoreLeaderIds(),
+            hotStreakPlayerIds = computeHotStreakIds(),
+            trailingIds = computeTrailingIds(),
+            comebackPlayerIds = computeComebackIds(),
+            scoreGaps = computeScoreGaps()
+        )
+    }
+
+    private fun computeScoreLeaderIds(): List<String> {
+        if (playerScores.isEmpty()) return emptyList()
+        val maxScore = playerScores.values.maxOrNull() ?: return emptyList()
+        return playerScores.filter { it.value == maxScore }
+            .keys
+            .map { name -> playerIdForName(name) }
+    }
+
+    private fun computeHotStreakIds(): List<String> {
+        val hot = playerStreaks.filterValues { it >= 2 }.keys
+        return hot.map { name -> playerIdForName(name) }
+    }
+
+    private fun computeTrailingIds(): List<String> {
+        if (playerScores.isEmpty()) return emptyList()
+        val minScore = playerScores.values.minOrNull() ?: return emptyList()
+        return playerScores.filter { it.value == minScore }
+            .keys
+            .map { name -> playerIdForName(name) }
+    }
+
+    private fun computeScoreGaps(): Map<String, Int> {
+        if (playerScores.isEmpty()) return emptyMap()
+        val maxScore = playerScores.values.maxOrNull() ?: return emptyMap()
+        return playerScores.mapValues { (_, score) -> maxScore - score }
+            .mapKeys { (name, _) -> playerIdForName(name) }
+    }
+
+    private fun computeComebackIds(): List<String> {
+        val gaps = computeScoreGaps()
+        if (gaps.isEmpty()) return emptyList()
+        val recentGainers = playerStreaks.filterValues { it >= 1 }.keys.map { playerIdForName(it) }
+        return recentGainers.filter { gaps[it] != null && gaps[it]!! in 1..5 }
+    }
+
+    private fun showCloudieLine(line: String) {
+        val now = System.currentTimeMillis()
+        val isDuplicate = line == lastCloudieLine && (now - lastCloudieTimestampMs) < 4000
+        if (isDuplicate) return
+
+        lastCloudieLine = line
+        lastCloudieTimestampMs = now
+
+        runOnUiThread {
+            tvCloudieBanner.text = line
+            tvCloudieBanner.visibility = View.VISIBLE
+            runCatching {
+                val fade = android.view.animation.AnimationUtils.loadAnimation(this, R.anim.cloudie_fade_in)
+                val pulse = android.view.animation.AnimationUtils.loadAnimation(this, R.anim.cloudie_pulse)
+                tvCloudieBanner.startAnimation(fade)
+                tvCloudieBanner.startAnimation(pulse)
+            }
+        }
+        if (voiceEnabled) {
+            voiceService?.speak(line)
+        }
+        appendTestLog("☁️ $line")
     }
 
 
@@ -2410,9 +2657,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Revert position and score
         playerPositions[playerName] = previousPosition
         playerScores[playerName] = previousScore
+        playerStreaks[playerName] = 0
 
         // Set current player back to the one who just rolled (so they play again)
         currentPlayer = previousPlayerIndex
+        updateSessionAfterUndo(previousPlayerIndex, previousPosition)
         
         // Update turn indicator
         updateTurnIndicatorDisplay()
@@ -2455,6 +2704,19 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         // Push undo state to server (with cleared roll data)
         pushUndoStateToServer()
+
+        val undoCtx = buildMoveContextForIndex(
+            playerIndex = previousPlayerIndex,
+            fromPosition = previousPosition,
+            toPosition = previousPosition,
+            dice = prev,
+            tileType = mapTileTypeForSession(
+                gameEngine.tiles.getOrNull((previousPosition - 1).coerceAtLeast(0))?.type
+                    ?: TileType.NORMAL,
+                previousPosition > gameEngine.tiles.size
+            )
+        )
+        emitCloudieLine(CloudieEventType.UNDO, undoCtx)
     }
 
     private fun pushUndoStateToServer() {
@@ -2955,6 +3217,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Log.d(TAG, "ESP32 ready for communication")
                     runOnUiThread {
                         Toast.makeText(this@MainActivity, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                        sendPairCommandToESP32()
                         sendConfigToESP32()
                     }
                 }
@@ -2980,6 +3243,22 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         Log.d(TAG, "ESP32 → $jsonString")
         esp32RxCharacteristic?.value = jsonString.toByteArray(Charsets.UTF_8)
         esp32Gatt?.writeCharacteristic(esp32RxCharacteristic)
+    }
+
+    private fun sendPairCommandToESP32() {
+        if (testModeEnabled) return // Skip when board is bypassed
+        if (!esp32Connected || esp32Gatt == null || esp32RxCharacteristic == null) {
+            Log.w(TAG, "ESP32 not ready for pairing command")
+            return
+        }
+
+        val pairPayload = JSONObject().apply {
+            put("command", "pair")
+            put("password", ESP32_PAIR_PIN)
+        }
+
+        appendTestLog("🔐 Sending pair command to board")
+        sendToESP32(pairPayload.toString())
     }
 
     private fun sendConfigToESP32() {
@@ -3279,6 +3558,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin placement timeout - continuing anyway", Toast.LENGTH_SHORT).show()
                         pushLiveStateToBoard()
+                        emitCloudieLine(CloudieEventType.WARNING_TIMEOUT, null)
                     }
                 }
                 
@@ -3343,6 +3623,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                             .setMessage("Please fix:\n" + errorList.joinToString("\n") { "Tile ${it.tile}: ${it.issue}" })
                             .setPositiveButton("OK", null)
                             .show()
+                        emitCloudieLine(CloudieEventType.WARNING_MISPLACEMENT, null)
                     }
                 }
 
@@ -3424,6 +3705,20 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     
                     // Record game results to player profiles
                     recordGameResults(winnerId)
+                    updateSessionAfterUndo(winnerId, playerPositions[winnerName] ?: 1)
+                    emitCloudieLine(CloudieEventType.WIN_ANIMATION, null)
+                    val winCtx = buildMoveContextForIndex(
+                        playerIndex = winnerId,
+                        fromPosition = playerPositions[winnerName] ?: 1,
+                        toPosition = playerPositions[winnerName] ?: 1,
+                        dice = lastAvg ?: lastRoll ?: 0,
+                        tileType = mapTileTypeForSession(
+                            gameEngine.tiles.getOrNull((playerPositions[winnerName] ?: 1) - 1)?.type
+                                ?: TileType.NORMAL,
+                            (playerPositions[winnerName] ?: 1) > gameEngine.tiles.size
+                        )
+                    )
+                    emitCloudieLine(CloudieEventType.WIN, winCtx)
                     
                     // Disable coin timeout during winner animation
                     esp32ErrorHandler.setWinnerAnimationInProgress(true)

@@ -29,6 +29,45 @@
         android:gravity="center"
         android:textAlignment="center" />
 
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="#1F2937"
+        app:cardCornerRadius="10dp"
+        app:cardElevation="4dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvCloudieBanner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Cloudie is warming up…"
+                android:textColor="#E0F2FE"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:ellipsize="end"
+                android:maxLines="3" />
+
+            <Switch
+                android:id="@+id/switchCloudieVoice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Voice"
+                android:textColor="#E0F2FE"
+                android:checked="true"
+                android:textSize="12sp"
+                android:paddingStart="8dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
     <!-- Menu Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -177,6 +216,36 @@
         android:textColor="#FFA726"
         android:textSize="14sp"
         android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvCloudieTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:paddingBottom="4dp"
+        android:text="Cloudie Host"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardBackgroundColor="#12273D"
+        app:cardCornerRadius="10dp"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tvCloudieBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="Cloudie is warming up…"
+            android:textColor="#E0F7FA"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+    </androidx.cardview.widget.CardView>
 
     <TextView
         android:id="@+id/tvESP32Status"
