@@ -3,11 +3,6 @@ package earth.lastdrop.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.*
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
-import android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -15,8 +10,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.ParcelUuid
 import android.text.InputType
 import android.util.Log
@@ -28,13 +21,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.zxing.integration.android.IntentIntegrator
-import com.google.zxing.integration.android.IntentResult
 import earth.lastdrop.app.GameEngine
 import earth.lastdrop.app.TileType
 import earth.lastdrop.app.ai.cloudie.CloudieBrain
 import earth.lastdrop.app.ai.cloudie.CloudieEventType
 import earth.lastdrop.app.ai.cloudie.CloudieRequest
+import earth.lastdrop.app.DiceConnectionController
+import earth.lastdrop.app.PlayerConfigUiHelper
 import earth.lastdrop.app.game.session.GameSessionManager
 import earth.lastdrop.app.game.session.PlayerInfo
 import earth.lastdrop.app.game.session.TileType as SessionTileType
@@ -47,6 +40,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.sample.godicesdklib.GoDiceSDK
 import java.net.HttpURLConnection
+import earth.lastdrop.app.BoardConnectionController
+import earth.lastdrop.app.LiveServerUiHelper
 import java.net.URL
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
@@ -221,12 +216,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     // ---------- BLE / BLDice ----------
     private var bluetoothAdapter: BluetoothAdapter? = null
-    private var isScanning = false
-    private var scanCallback: ScanCallback? = null
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var diceConnectionController: DiceConnectionController
 
-    private val dices = HashMap<String, Dice>()
-    private val diceIds = LinkedList<String>() // index = diceId used for GoDiceSDK callbacks
     private val diceColorMap = HashMap<Int, String>() // diceId -> color name
 
     // ---------- ESP32 Auto-Reconnection ----------
@@ -253,6 +244,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
     private lateinit var esp32StateValidator: ESP32StateValidator
     private lateinit var stateSyncManager: StateSyncManager
+    private lateinit var boardConnectionController: BoardConnectionController
     private lateinit var cloudieBrain: CloudieBrain
     private lateinit var sessionManager: GameSessionManager
     private var voiceService: VoiceService? = null
@@ -276,14 +268,27 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                             BluetoothDevice.PAIRING_VARIANT_PIN -> {
                                 // User needs to enter PIN
                                 Log.d(TAG, "PIN pairing variant")
-                                device?.let { showPinEntryDialog(it) }
+                                device?.let { dev ->
+                                    BoardPairingDialogs.showPinEntryDialog(
+                                        activity = this@MainActivity,
+                                        device = dev,
+                                        onClearPairing = { pairingDevice = null }
+                                    )
+                                }
                                 abortBroadcast()
                             }
                             BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION -> {
                                 // ESP32 displays passkey, user confirms
                                 val passkey = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_KEY, -1)
                                 Log.d(TAG, "Passkey confirmation variant: $passkey")
-                                device?.let { showPasskeyConfirmationDialog(it, passkey) }
+                                device?.let { dev ->
+                                    BoardPairingDialogs.showPasskeyConfirmationDialog(
+                                        activity = this@MainActivity,
+                                        device = dev,
+                                        passkey = passkey,
+                                        onClearPairing = { pairingDevice = null }
+                                    )
+                                }
                                 abortBroadcast()
                             }
                             0 -> {
@@ -445,12 +450,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var profileManager: ProfileManager
     private lateinit var achievementEngine: AchievementEngine
     private lateinit var rivalryManager: RivalryManager
+    private lateinit var liveStatePusher: LiveStatePusher
     
     // ---------- ESP32 BLE (Legacy - will be phased out) ----------
     private var esp32Connected: Boolean = false
-    private var esp32Gatt: BluetoothGatt? = null
-    private var esp32TxCharacteristic: BluetoothGattCharacteristic? = null
-    private var esp32RxCharacteristic: BluetoothGattCharacteristic? = null
     private var waitingForCoinPlacement: Boolean = false
     
     // Board management (multi-board support)
@@ -548,6 +551,92 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         // Configure MAC whitelist if needed
         BoardScanManager.TRUSTED_ADDRESSES = TRUSTED_ESP32_ADDRESSES
+
+        // Initialize dice connection controller
+        diceConnectionController = DiceConnectionController(
+            context = this,
+            bluetoothAdapter = bluetoothAdapter,
+            playWithTwoDice = { playWithTwoDice },
+            onStatus = { status -> runOnUiThread { tvDiceStatus.text = status } },
+            onLog = { msg -> appendTestLog(msg) },
+            onDiceConnected = { _, dieName ->
+                runOnUiThread {
+                    diceConnected = true
+                    btnConnectDice.text = "Disconnect Dice"
+                    tvDiceStatus.text = "Connected to ${dieName ?: "BLDice"}"
+                }
+            },
+            onDiceDisconnected = {
+                runOnUiThread {
+                    diceConnected = false
+                    btnConnectDice.text = "Connect Dice"
+                    tvDiceStatus.text = "Dice disconnected"
+                }
+            }
+        )
+
+        boardConnectionController = BoardConnectionController(
+            context = this,
+            scope = mainScope,
+            serviceUuid = ESP32_SERVICE_UUID,
+            txUuid = ESP32_CHAR_TX_UUID,
+            rxUuid = ESP32_CHAR_RX_UUID,
+            cccdUuid = CCCDUUID,
+            onLog = { message -> appendTestLog(message) },
+            onConnected = { device ->
+                esp32Connected = true
+                esp32ReconnectAttempts = 0
+                esp32ErrorHandler.startHeartbeatMonitoring()
+                stateSyncManager.startSyncMonitoring()
+                gameActive = true
+
+                // Save as last connected board
+                device.name?.let { boardId ->
+                    boardPreferencesManager.saveLastBoard(boardId, device.address)
+                    boardPreferencesManager.updateBoardConnection(boardId)
+                }
+
+                runOnUiThread {
+                    btnConnectBoard.text = "🎮  Disconnect Board"
+                    btnConnectBoard.isEnabled = true
+                }
+            },
+            onDisconnected = { _ ->
+                esp32Connected = false
+                esp32ErrorHandler.stopHeartbeatMonitoring()
+                stateSyncManager.stopSyncMonitoring()
+                gameActive = false
+
+                if (!watchdogReconnectInProgress) {
+                    runOnUiThread {
+                        Toast.makeText(this, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
+                        btnConnectBoard.text = "🎮  Connect Board"
+                        btnConnectBoard.isEnabled = true
+                    }
+                }
+
+                if (!watchdogReconnectInProgress && gameActive && esp32ReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    esp32ReconnectAttempts++
+                    appendTestLog("🔄 Attempting reconnect (${esp32ReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...")
+                    reconnectJob?.cancel()
+                    reconnectJob = mainScope.launch {
+                        delay(2000)
+                        connectESP32()
+                    }
+                } else if (!watchdogReconnectInProgress && esp32ReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                    appendTestLog("⚠️ Max reconnect attempts reached")
+                    showReconnectDialog()
+                }
+            },
+            onMessage = { message -> handleESP32Event(message) },
+            onServicesReady = {
+                runOnUiThread {
+                    Toast.makeText(this, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                }
+                sendPairCommandToESP32()
+                sendConfigToESP32()
+            }
+        )
         
         // Initialize helper classes
         uiUpdateManager = UIUpdateManager()
@@ -582,6 +671,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             apiKey = API_KEY,
             sessionId = SESSION_ID
         )
+        liveStatePusher = LiveStatePusher(apiManager)
 
         aiPresenter = LocalAIPresenter { line ->
             runOnUiThread {
@@ -619,9 +709,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         // Connect to ESP32 board
         if (!testModeEnabled) {
-            handler.postDelayed({
+            mainScope.launch {
+                delay(2000)
                 connectESP32()
-            }, 2000) // Wait 2 seconds after startup
+            }
         }
 
         // Show profile selection screen unless resuming a saved game
@@ -679,45 +770,31 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
         
-        // Handle QR code scan result
-        val result: IntentResult? = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
-        if (result != null) {
-            if (result.contents != null) {
-                val scannedContent = result.contents
-                
-                // Check if it's a session URL (e.g., https://lastdrop.earth/live.html?session=abc123)
-                val sessionId = extractSessionIdFromUrl(scannedContent)
-                if (sessionId != null) {
-                    connectToLiveServer(sessionId)
-                    return
-                }
-                
-                // Otherwise, parse as board QR code
-                val qrData = QRCodeHelper.parseQRResult(scannedContent)
-                if (qrData != null && QRCodeHelper.isValidBoardQR(qrData)) {
-                    appendTestLog("📷 QR Scanned: ${qrData.boardId}")
-                    
-                    // Save board with nickname and password
-                    boardPreferencesManager.saveBoard(
-                        boardId = qrData.boardId,
-                        macAddress = qrData.macAddress,
-                        nickname = qrData.nickname,
-                        password = qrData.password
-                    )
-                    
-                    Toast.makeText(this, "Board saved: ${qrData.nickname ?: qrData.boardId}", Toast.LENGTH_SHORT).show()
-                    
-                    // Auto-connect to scanned board
-                    connectESP32()
-                } else {
-                    Toast.makeText(this, "Invalid QR code format", Toast.LENGTH_LONG).show()
-                    appendTestLog("❌ Invalid QR code")
-                }
-            } else {
-                // Cancelled
-                appendTestLog("📷 QR scan cancelled")
-            }
-        } else {
+        val handled = LiveServerUiHelper.handleQrActivityResult(
+            activity = this,
+            requestCode = requestCode,
+            resultCode = resultCode,
+            data = data,
+            onSessionId = { sessionId -> connectToLiveServer(sessionId) },
+            onBoardQr = { qrData ->
+                appendTestLog("📷 QR Scanned: ${qrData.boardId}")
+                boardPreferencesManager.saveBoard(
+                    boardId = qrData.boardId,
+                    macAddress = qrData.macAddress,
+                    nickname = qrData.nickname,
+                    password = qrData.password
+                )
+                Toast.makeText(this, "Board saved: ${qrData.nickname ?: qrData.boardId}", Toast.LENGTH_SHORT).show()
+                connectESP32()
+            },
+            onInvalid = {
+                Toast.makeText(this, "Invalid QR code format", Toast.LENGTH_LONG).show()
+                appendTestLog("❌ Invalid QR code")
+            },
+            onCancel = { appendTestLog("📷 QR scan cancelled") }
+        )
+
+        if (!handled) {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
@@ -750,15 +827,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         apiManager.cleanup()  // Cleanup API manager
         animationEventHandler.cleanup()  // Cleanup animation handler
         (voiceService as? TextToSpeechVoiceService)?.shutdown()
-        stopScan()
+        diceConnectionController.stopScan()
         disconnectESP32()
         stopESP32Scan()
-        dices.values.forEach { dice ->
-            try {
-                dice.gatt?.close()
-            } catch (_: Exception) {
-            }
-        }
+        disconnectAllDice()
         
         // Unregister pairing broadcast receiver
         try {
@@ -954,59 +1026,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         apiManager.sendImmediateHeartbeat()
         
         // Show instructions dialog
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("🌍 Connect to Large Screen")
-            .setMessage(
-                "To experience the game on a large screen:\n\n" +
-                "1. Visit https://lastdrop.earth/ on your computer or TV\n\n" +
-                "2. Click 'Join a Live Game'\n\n" +
-                "3. A QR code will appear\n\n" +
-                "4. Click 'Scan QR Code' below to connect\n\n" +
-                "Your game will be displayed live on the big screen!"
+        LiveServerUiHelper.showConnectDialog(this) {
+            Log.d(TAG, "Scan QR Code button clicked in dialog")
+            LiveServerUiHelper.checkCameraPermissionAndScan(
+                activity = this,
+                requestCode = REQUEST_CAMERA_PERMISSION
             )
-            .setPositiveButton("Scan QR Code") { _, _ ->
-                Log.d(TAG, "Scan QR Code button clicked in dialog")
-                // Check camera permission when user clicks Scan
-                checkCameraPermissionAndScan()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun checkCameraPermissionAndScan() {
-        val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        Log.d(TAG, "checkCameraPermissionAndScan: hasPermission=$hasPermission")
-        
-        if (hasPermission) {
-            // Permission granted - launch QR scanner
-            launchQRScanner()
-        } else {
-            // Request camera permission
-            Log.d(TAG, "Requesting camera permission")
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.CAMERA),
-                REQUEST_CAMERA_PERMISSION
-            )
-        }
-    }
-
-    private fun launchQRScanner() {
-        val integrator = IntentIntegrator(this)
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-        integrator.setPrompt("Scan QR code from lastdrop.earth")
-        integrator.setOrientationLocked(true)
-        integrator.setBeepEnabled(true)
-        integrator.setCaptureActivity(CaptureActivityPortrait::class.java)
-        integrator.initiateScan()
-    }
-
-    private fun extractSessionIdFromUrl(url: String): String? {
-        return try {
-            val uri = android.net.Uri.parse(url)
-            uri.getQueryParameter("session")
-        } catch (e: Exception) {
-            null
         }
     }
 
@@ -1080,23 +1105,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
      * Fallback: Old player configuration flow (kept for backward compatibility)
      */
     private fun configurePlayers() {
-        val options = arrayOf("2 players", "3 players", "4 players")
-
-        var chosenIndex = 0 // default = 2 players
-
-        AlertDialog.Builder(this)
-            .setTitle("How many players?")
-            .setSingleChoiceItems(options, chosenIndex) { _, which ->
-                chosenIndex = which
-            }
-            .setPositiveButton("OK") { dialog, _ ->
-                playerCount = chosenIndex + 2 // 0->2,1->3,2->4
-                selectedColors.clear() // Reset selected colors for new game
-                dialog.dismiss()
-                askPlayerName(0)
-            }
-            .setCancelable(false)
-            .show()
+        PlayerConfigUiHelper.showPlayerCountDialog(
+            activity = this,
+            defaultIndex = 0
+        ) { count ->
+            playerCount = count
+            selectedColors.clear()
+            askPlayerName(0)
+        }
     }
 
     private fun askPlayerName(index: Int) {
@@ -1113,36 +1129,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
 
-        // Create custom dialog layout
-        val dialogView = layoutInflater.inflate(android.R.layout.select_dialog_item, null)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(50, 40, 50, 20)
-        }
-
-        // Name input
-        val nameLabel = TextView(this).apply {
-            text = "Player ${index + 1} Name:"
-            textSize = 14f
-            setPadding(0, 0, 0, 8)
-        }
-        val editText = EditText(this).apply {
-            hint = "Enter name"
-            inputType = InputType.TYPE_CLASS_TEXT
-            setPadding(20, 20, 20, 20)
-        }
-
-        // Color selection
-        val colorLabel = TextView(this).apply {
-            text = "Choose Token Color:"
-            textSize = 14f
-            setPadding(0, 24, 0, 8)
-        }
-
         val allColors = listOf("red", "green", "blue", "yellow")
         val allColorNames = listOf("Red 🔴", "Green 🟢", "Blue 🔵", "Yellow 🟡")
 
-        // Filter out already selected colors
         val availableColors = mutableListOf<String>()
         val availableColorNames = mutableListOf<String>()
         allColors.forEachIndexed { idx, color ->
@@ -1152,50 +1141,23 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
 
-        // If all colors taken (shouldn't happen with max 4 players), fallback to all colors
         if (availableColors.isEmpty()) {
             availableColors.addAll(allColors)
             availableColorNames.addAll(allColorNames)
         }
 
-        val colorSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(
-                this@MainActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                availableColorNames
-            )
-            // Default selection is first available color
-            setSelection(0)
+        PlayerConfigUiHelper.showPlayerSetupDialog(
+            activity = this,
+            playerIndex = index,
+            availableColorNames = availableColorNames,
+            availableColors = availableColors
+        ) { name, color ->
+            playerNames[index] = if (name.isNotEmpty()) name else "Player ${index + 1}"
+            playerColors[index] = color
+            selectedColors.add(color)
+            Log.d(TAG, "Player ${index + 1}: ${playerNames[index]}, Color: ${playerColors[index]}")
+            askPlayerName(index + 1)
         }
-
-        // Add views to container
-        container.addView(nameLabel)
-        container.addView(editText)
-        container.addView(colorLabel)
-        container.addView(colorSpinner)
-
-        AlertDialog.Builder(this)
-            .setTitle("Player ${index + 1} Setup")
-            .setView(container)
-            .setPositiveButton("OK") { dialog, _ ->
-                val name = editText.text.toString().trim()
-                playerNames[index] = if (name.isNotEmpty()) name else "Player ${index + 1}"
-
-                // Get selected color from available colors list
-                val selectedColorIndex = colorSpinner.selectedItemPosition
-                val selectedColor = availableColors[selectedColorIndex]
-                playerColors[index] = selectedColor
-
-                // Mark this color as selected
-                selectedColors.add(selectedColor)
-
-                Log.d(TAG, "Player ${index + 1}: ${playerNames[index]}, Color: ${playerColors[index]}")
-
-                dialog.dismiss()
-                askPlayerName(index + 1)
-            }
-            .setCancelable(false)
-            .show()
     }
 
     // ------------------------------------------------------------------------
@@ -1233,95 +1195,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
         if (!ensureBlePermissions()) return
 
-        if (isScanning) {
-            tvDiceStatus.text = "Already scanning…"
-            return
-        }
-
-        tvDiceStatus.text = if (playWithTwoDice) {
-            "Scanning for 2 BLDice…"
-        } else {
-            "Scanning for BLDice…"
-        }
-
-        startScan()
-    }
-
-    private fun startScan() {
-        val adapter = bluetoothAdapter ?: return
-        val scanner = adapter.bluetoothLeScanner ?: return
-
-        val filters = LinkedList<ScanFilter>()
-        filters.add(
-            ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(Dice.serviceUUID))
-                .build()
-        )
-
-        val scanSettings = ScanSettings.Builder()
-            .setScanMode(SCAN_MODE_LOW_LATENCY)
-            .build()
-
-        val activity = this
-
-        scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                super.onScanResult(callbackType, result)
-                activity.runOnUiThread {
-                    activity.handleScanResult(result)
-                }
-            }
-
-            override fun onBatchScanResults(results: MutableList<ScanResult>) {
-                super.onBatchScanResults(results)
-                activity.runOnUiThread {
-                    results.forEach { activity.handleScanResult(it) }
-                }
-            }
-
-            override fun onScanFailed(errorCode: Int) {
-                super.onScanFailed(errorCode)
-                runOnUiThread {
-                    tvDiceStatus.text = "Scan failed: $errorCode"
-                    isScanning = false
-                }
-            }
-        }
-
-        isScanning = true
-        scanner.startScan(filters, scanSettings, scanCallback)
-
-        // auto-stop scanning after 15s
-        handler.postDelayed({
-            if (isScanning) {
-                stopScan()
-                tvDiceStatus.text = "Scan timeout. No BLDice found."
-            }
-        }, 15_000)
-    }
-
-    private fun stopScan() {
-        if (!isScanning) return
-        val adapter = bluetoothAdapter ?: return
-        val scanner = adapter.bluetoothLeScanner ?: return
-        scanCallback?.let { scanner.stopScan(it) }
-        isScanning = false
+        diceConnectionController.startScan()
     }
 
     private fun disconnectAllDice() {
-        try {
-            stopScan()
-        } catch (_: Exception) { }
-
-        dices.values.forEach { dice ->
-            try {
-                dice.gatt?.disconnect()
-                dice.gatt?.close()
-            } catch (_: Exception) { }
-        }
-
-        dices.clear()
-        diceIds.clear()
+        diceConnectionController.disconnectAll()
         diceResults.clear()
         diceBatteryLevels.clear()
         diceColorMap.clear()
@@ -1334,104 +1212,6 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             tvDiceStatus.text = "Dice disconnected"
             tvBattery.text = "Battery: --"
         }
-    }
-
-    private fun handleScanResult(result: ScanResult) {
-        val device = result.device ?: return
-
-        val name = device.name
-        Log.d(TAG, "Scan result: addr=${device.address}, name=$name, rssi=${result.rssi}")
-
-        if (name == null) return
-        if (!name.contains("GoDice")) return
-
-        if (dices.containsKey(device.address)) return
-
-        // Assign diceId
-        var diceId = diceIds.indexOf(device.address)
-        if (diceId < 0) {
-            diceId = diceIds.size
-            diceIds.add(device.address)
-        }
-
-        val dice = Dice(diceId, device)
-        dices[device.address] = dice
-
-        // LED blink + queries
-        dice.scheduleWrite(GoDiceSDK.openLedsPacket(0xff0000, 0x00ff00))
-        Timer().schedule(object : TimerTask() {
-            override fun run() {
-                dice.scheduleWrite(GoDiceSDK.closeToggleLedsPacket())
-            }
-        }, 3000)
-
-        dice.scheduleWrite(GoDiceSDK.getColorPacket())
-        dice.scheduleWrite(GoDiceSDK.getChargeLevelPacket())
-
-        tvDiceStatus.text = "Connecting to ${device.name}…"
-
-        // Stop scanning after we have enough dice:
-        val neededDice = if (playWithTwoDice) 2 else 1
-        if (dices.size >= neededDice) {
-            stopScan()
-        }
-
-        dice.gatt = device.connectGatt(this, true, object : BluetoothGattCallback() {
-            override fun onConnectionStateChange(
-                gatt: BluetoothGatt?,
-                status: Int,
-                newState: Int
-            ) {
-                super.onConnectionStateChange(gatt, status, newState)
-                if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    runOnUiThread {
-                        diceConnected = true
-                        btnConnectDice.text = "Disconnect Dice"
-                        tvDiceStatus.text = "Connected to ${dice.getDieName() ?: "BLDice"}"
-                        Log.d(TAG, "BLDice connected (id=$diceId)")
-                    }
-                    dice.onConnected()
-                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    runOnUiThread {
-                        diceConnected = false
-                        btnConnectDice.text = "Connect Dice"
-                        tvDiceStatus.text = "Dice disconnected"
-                    }
-                }
-            }
-
-            override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
-                super.onServicesDiscovered(gatt, status)
-                dice.onServicesDiscovered()
-            }
-
-            @Deprecated("Use onCharacteristicChanged(gatt, characteristic, value) instead")
-            override fun onCharacteristicChanged(
-                gatt: BluetoothGatt?,
-                characteristic: BluetoothGattCharacteristic?
-            ) {
-                super.onCharacteristicChanged(gatt, characteristic)
-                dice.onEvent()
-            }
-
-            override fun onDescriptorWrite(
-                gatt: BluetoothGatt?,
-                descriptor: BluetoothGattDescriptor?,
-                status: Int
-            ) {
-                super.onDescriptorWrite(gatt, descriptor, status)
-                dice.nextWrite()
-            }
-
-            override fun onCharacteristicWrite(
-                gatt: BluetoothGatt?,
-                characteristic: BluetoothGattCharacteristic?,
-                status: Int
-            ) {
-                super.onCharacteristicWrite(gatt, characteristic, status)
-                dice.nextWrite()
-            }
-        })
     }
 
     // ------------------------------------------------------------------------
@@ -1843,7 +1623,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun pushResetStateToServer() {
-        apiManager.pushResetState(
+        liveStatePusher.pushResetState(
             playerNames = playerNames,
             playerColors = playerColors,
             playerCount = playerCount
@@ -2051,20 +1831,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
      * Send rolling status while dice is tumbling
      */
     private fun pushRollingStatusToApi() {
-        apiManager.pushRollingStatus(
-            playerNames = playerNames,
-            playerColors = playerColors,
-            playerPositions = playerPositions,
-            playerScores = playerScores,
-            playerCount = playerCount,
-            currentPlayer = currentPlayer,
-            playWithTwoDice = playWithTwoDice,
-            diceColorMap = diceColorMap,
-            diceRollingStatus = diceRollingStatus,
-            lastDice1 = lastDice1,
-            lastDice2 = lastDice2,
-            lastAvg = lastAvg
-        )
+        liveStatePusher.pushRollingStatus(buildRollingSnapshot())
     }
 
     private fun pushLiveStateToBoard(
@@ -2072,15 +1839,46 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         eventType: String? = null,
         eventMessage: String? = null
     ) {
-        apiManager.pushLiveState(
-            playerNames = playerNames,
-            playerColors = playerColors,
-            playerPositions = playerPositions,
-            playerScores = playerScores,
+        liveStatePusher.pushLiveState(
+            buildLiveStateSnapshot(
+                rolling = rolling,
+                eventType = eventType,
+                eventMessage = eventMessage
+            )
+        )
+    }
+
+    private fun buildRollingSnapshot(): RollingStateSnapshot {
+        return RollingStateSnapshot(
+            playerNames = playerNames.toList(),
+            playerColors = playerColors.toList(),
+            playerPositions = playerPositions.toMap(),
+            playerScores = playerScores.toMap(),
             playerCount = playerCount,
             currentPlayer = currentPlayer,
             playWithTwoDice = playWithTwoDice,
-            diceColorMap = diceColorMap,
+            diceColorMap = diceColorMap.toMap(),
+            diceRollingStatus = diceRollingStatus.toMap(),
+            lastDice1 = lastDice1,
+            lastDice2 = lastDice2,
+            lastAvg = lastAvg
+        )
+    }
+
+    private fun buildLiveStateSnapshot(
+        rolling: Boolean = false,
+        eventType: String? = null,
+        eventMessage: String? = null
+    ): LiveStateSnapshot {
+        return LiveStateSnapshot(
+            playerNames = playerNames.toList(),
+            playerColors = playerColors.toList(),
+            playerPositions = playerPositions.toMap(),
+            playerScores = playerScores.toMap(),
+            playerCount = playerCount,
+            currentPlayer = currentPlayer,
+            playWithTwoDice = playWithTwoDice,
+            diceColorMap = diceColorMap.toMap(),
             lastDice1 = lastDice1,
             lastDice2 = lastDice2,
             lastAvg = lastAvg,
@@ -2824,22 +2622,16 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Toast.LENGTH_LONG
                 ).show()
             }
-        } else if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            Log.d(TAG, "onRequestPermissionsResult: CAMERA - grantResults size=${grantResults.size}, result=${if (grantResults.isNotEmpty()) grantResults[0] else "empty"}")
-            
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Camera permission granted - launch QR scanner
-                Log.d(TAG, "Camera permission granted, launching scanner")
-                launchQRScanner()
-            } else {
-                // Permission denied
-                Log.d(TAG, "Camera permission denied")
-                Toast.makeText(
-                    this,
-                    "Camera permission is required to scan QR codes",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+        } else if (
+            LiveServerUiHelper.handleCameraPermissionResult(
+                activity = this,
+                requestCode = requestCode,
+                expectedRequestCode = REQUEST_CAMERA_PERMISSION,
+                grantResults = grantResults,
+                onGranted = { LiveServerUiHelper.launchQrScanner(this) }
+            )
+        ) {
+            // handled in helper
         }
     }
 
@@ -2950,7 +2742,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
      * Displays session ID and board ID (if connected to ESP32)
      */
     private fun showSpectatorQR() {
-        val boardId = esp32Gatt?.device?.name
+        val boardId = boardConnectionController.connectedDevice?.name
         
         LiveQRGenerator.showQRCodeDialog(
             context = this,
@@ -3196,130 +2988,23 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     @SuppressLint("MissingPermission")
     private fun proceedWithESP32Connection(device: BluetoothDevice) {
         Log.d(TAG, "Proceeding with ESP32 connection: ${device.address}")
-        
-        // Save as last connected board
-        device.name?.let { boardId ->
-            boardPreferencesManager.saveLastBoard(boardId, device.address)
-            boardPreferencesManager.updateBoardConnection(boardId)
-        }
-        
-        esp32Gatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
-            override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-                when (newState) {
-                    BluetoothProfile.STATE_CONNECTED -> {
-                        Log.d(TAG, "ESP32 connected, discovering services...")
-                        esp32Connected = true
-                        esp32ReconnectAttempts = 0  // Reset counter on successful connection
-                        esp32ScanJob?.cancel()  // Cancel timeout timer
-                        gameActive = true
-                        
-                        // Start heartbeat monitoring
-                        esp32ErrorHandler.startHeartbeatMonitoring()
-                        
-                        // P4.2: Start state sync monitoring
-                        stateSyncManager.startSyncMonitoring()
-                        
-                        appendTestLog("✅ ESP32 Connected")
-                        
-                        // Update Connect Board button
-                        runOnUiThread {
-                            btnConnectBoard.text = "🎮  Disconnect Board"
-                            btnConnectBoard.isEnabled = true
-                        }
-                        
-                        gatt?.discoverServices()
-                    }
-                    BluetoothProfile.STATE_DISCONNECTED -> {
-                        Log.d(TAG, "ESP32 disconnected")
-                        esp32Connected = false
-                        esp32Gatt?.close()
-                        esp32Gatt = null
-                        
-                        // Stop heartbeat monitoring
-                        esp32ErrorHandler.stopHeartbeatMonitoring()
-                        
-                        // P4.2: Stop state sync monitoring
-                        stateSyncManager.stopSyncMonitoring()
-                        
-                        appendTestLog("❌ ESP32 Disconnected")
-                        if (!watchdogReconnectInProgress) {
-                            runOnUiThread {
-                                Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
-                                btnConnectBoard.text = "🎮  Connect Board"
-                                btnConnectBoard.isEnabled = true
-                            }
-                        }
-                        
-                        // Auto-reconnect if game is active
-                        if (watchdogReconnectInProgress) {
-                            return
-                        }
-
-                        if (gameActive && esp32ReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                            esp32ReconnectAttempts++
-                            appendTestLog("🔄 Attempting reconnect (${esp32ReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...")
-                            
-                            reconnectJob?.cancel()
-                            reconnectJob = mainScope.launch {
-                                delay(2000)  // Wait 2 seconds before retry
-                                connectESP32()
-                            }
-                        } else if (esp32ReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-                            appendTestLog("⚠️ Max reconnect attempts reached")
-                            showReconnectDialog()
-                        }
-                    }
-                }
-            }
-
-            override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
-                if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
-                    val service = gatt.getService(ESP32_SERVICE_UUID)
-                    esp32TxCharacteristic = service?.getCharacteristic(ESP32_CHAR_TX_UUID)
-                    esp32RxCharacteristic = service?.getCharacteristic(ESP32_CHAR_RX_UUID)
-
-                    esp32TxCharacteristic?.let { char ->
-                        gatt.setCharacteristicNotification(char, true)
-                        val descriptor = char.getDescriptor(CCCDUUID)
-                        descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        gatt.writeDescriptor(descriptor)
-                    }
-
-                    esp32Connected = true
-                    Log.d(TAG, "ESP32 ready for communication")
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
-                        sendPairCommandToESP32()
-                        sendConfigToESP32()
-                    }
-                }
-            }
-
-            override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
-                characteristic?.value?.let { data ->
-                    val message = String(data, Charsets.UTF_8)
-                    Log.d(TAG, "ESP32 ← $message")
-                    handleESP32Event(message)
-                }
-            }
-        })
+        boardConnectionController.connect(device)
     }
 
     @SuppressLint("MissingPermission")
     private fun sendToESP32(jsonString: String) {
-        if (!esp32Connected || esp32Gatt == null || esp32RxCharacteristic == null) {
+        if (!esp32Connected) {
             Log.w(TAG, "ESP32 not connected, cannot send: $jsonString")
             return
         }
 
         Log.d(TAG, "ESP32 → $jsonString")
-        esp32RxCharacteristic?.value = jsonString.toByteArray(Charsets.UTF_8)
-        esp32Gatt?.writeCharacteristic(esp32RxCharacteristic)
+        boardConnectionController.send(jsonString)
     }
 
     private fun sendPairCommandToESP32() {
         if (testModeEnabled) return // Skip when board is bypassed
-        if (!esp32Connected || esp32Gatt == null || esp32RxCharacteristic == null) {
+        if (!esp32Connected) {
             Log.w(TAG, "ESP32 not ready for pairing command")
             return
         }
@@ -3364,7 +3049,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
         
-        esp32Gatt?.device?.let { device ->
+        boardConnectionController.connectedDevice?.let { device ->
             val boardId = device.name ?: "Unknown Board"
             val savedBoard = boardPreferencesManager.getSavedBoard(boardId)
             val currentNickname = savedBoard?.nickname ?: boardId
@@ -3727,7 +3412,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     Log.d(TAG, "ESP32 settings updated - Nickname: $newNickname, Restart: $restartRequired")
                     
                     // Save updated settings to preferences
-                    esp32Gatt?.device?.let { device ->
+                    boardConnectionController.connectedDevice?.let { device ->
                         device.name?.let { boardId ->
                             newNickname?.let { nickname ->
                                 boardPreferencesManager.updateBoardNickname(boardId, nickname)
@@ -3857,12 +3542,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         uiUpdateManager.cancelCountdown()  // Cancel coin timeout countdown
         esp32ErrorHandler.stopHeartbeatMonitoring()
         stateSyncManager.stopSyncMonitoring()
-        esp32Gatt?.disconnect()
-        esp32Gatt?.close()
-        esp32Gatt = null
+        boardConnectionController.disconnect()
         esp32Connected = false
-        esp32TxCharacteristic = null
-        esp32RxCharacteristic = null
         waitingForCoinPlacement = false
         gameActive = false  // Mark game as inactive
         
