@@ -49,7 +49,13 @@ class GameSessionManager(
         val rawTo = from + steps
         val clampedTo = rawTo.coerceAtMost(tiles.lastIndex)
         val tileType = tiles.getOrElse(clampedTo) { TileType.FINISH }
-        val ctx = MoveContext(player, from, clampedTo, steps, tileType)
+        val ctx = MoveContext(
+            player = player,
+            fromTile = from,
+            toTile = clampedTo,
+            diceValue = steps,
+            tileType = tileType
+        )
         positions[player.id] = clampedTo
         history.addLast(ctx)
         advanceTurn()

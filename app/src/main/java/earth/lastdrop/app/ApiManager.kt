@@ -362,7 +362,9 @@ class ApiManager(
         lastTileType: String?,
         lastChanceCardNumber: Int?,
         lastChanceCardText: String?,
-        rolling: Boolean = false
+        rolling: Boolean = false,
+        eventType: String? = null,
+        eventMessage: String? = null
     ) {
         scope.launch {
             try {
@@ -423,6 +425,8 @@ class ApiManager(
                     if (diceColor2 != null) {
                         put("diceColor2", diceColor2)
                     }
+                        if (eventType != null) put("eventType", eventType) else put("eventType", JSONObject.NULL)
+                        if (eventMessage != null) put("eventMessage", eventMessage) else put("eventMessage", JSONObject.NULL)
                 }
 
                 // 3) Wrap into root JSON

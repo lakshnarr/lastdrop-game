@@ -1,5 +1,7 @@
 package earth.lastdrop.app.game.session
 
+import earth.lastdrop.app.TileType as EngineTileType
+
 /**
  * Lightweight game/session data models (no Android deps) feeding Cloudie and intro screens.
  */
@@ -28,7 +30,12 @@ data class MoveContext(
     val fromTile: Int,
     val toTile: Int,
     val diceValue: Int,
-    val tileType: TileType
+    val tileType: TileType,
+    val engineTileType: EngineTileType? = null,
+    val tileName: String? = null,
+    val scoreDelta: Int? = null,
+    val chanceCardDescription: String? = null,
+    val chanceCardEffect: Int? = null
 )
 
 data class GameState(

@@ -234,6 +234,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private val MAX_RECONNECT_ATTEMPTS = 3
     private var reconnectJob: Job? = null
     private var gameActive = false  // Track if game is in progress
+    private var watchdogReconnectInProgress = false  // True when heartbeat watchdog is forcing a reconnect
     
     // ---------- ESP32 Connection Timeout ----------
     private var esp32ScanJob: Job? = null
@@ -256,6 +257,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var sessionManager: GameSessionManager
     private var voiceService: VoiceService? = null
     private var voiceEnabled: Boolean = true
+    private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
     
     // ---------- Pairing Support ----------
     private var pairingDevice: BluetoothDevice? = null
@@ -505,19 +507,30 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         profileManager = ProfileManager(this)
         achievementEngine = AchievementEngine(this)
         rivalryManager = RivalryManager(this)
+        voiceEnabled = cloudiePrefs.getBoolean("cloudie_voice_enabled", true)
         voiceService = runCatching {
             TextToSpeechVoiceService(
                 context = this,
                 onReady = { appendTestLog("🔊 Cloudie voice ready") },
-                onError = { appendTestLog("⚠️ TTS error: $it") }
+                onError = {
+                    appendTestLog("⚠️ TTS error: $it")
+                    runOnUiThread {
+                        Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
+                    }
+                }
             )
         }.getOrElse {
             appendTestLog("⚠️ Falling back to silent Cloudie (TTS unavailable)")
+            runOnUiThread {
+                Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
+            }
             NoOpVoiceService(this)
         }
+        switchCloudieVoice.isChecked = voiceEnabled
         switchCloudieVoice.setOnCheckedChangeListener { _, isChecked ->
             voiceEnabled = isChecked
             appendTestLog(if (isChecked) "🔊 Cloudie voice ON" else "🤫 Cloudie voice OFF")
+            cloudiePrefs.edit().putBoolean("cloudie_voice_enabled", isChecked).apply()
         }
         
         // Initialize board preferences manager
@@ -550,10 +563,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             },
             onHeartbeatLost = {
-                // Handle heartbeat loss - try reconnect
-                runOnUiThread {
-                    Toast.makeText(this, "ESP32 connection lost", Toast.LENGTH_LONG).show()
-                }
+                handleHeartbeatLoss()
             }
         )
         esp32StateValidator = ESP32StateValidator(
@@ -1752,7 +1762,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             fromPosition = previousPosition,
             toPosition = turnResult.newPosition,
             dice = value,
-            tileType = sessionTileType
+            tileType = sessionTileType,
+            engineTileType = turnResult.tile.type,
+            tileName = turnResult.tile.name,
+            scoreDelta = turnResult.scoreChange,
+            chanceCardDescription = turnResult.chanceCard?.description,
+            chanceCardEffect = turnResult.chanceCard?.effect
         )
 
         val nextPlayerIndex = (currentPlayer + 1) % playerCount
@@ -2052,7 +2067,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         )
     }
 
-    private fun pushLiveStateToBoard(rolling: Boolean = false) {
+    private fun pushLiveStateToBoard(
+        rolling: Boolean = false,
+        eventType: String? = null,
+        eventMessage: String? = null
+    ) {
         apiManager.pushLiveState(
             playerNames = playerNames,
             playerColors = playerColors,
@@ -2069,7 +2088,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             lastTileType = lastTile?.type?.name,
             lastChanceCardNumber = lastChanceCard?.number,
             lastChanceCardText = lastChanceCard?.description,
-            rolling = rolling
+            rolling = rolling,
+            eventType = eventType,
+            eventMessage = eventMessage
         )
     }
 
@@ -2467,7 +2488,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         sessionManager.setCurrentPlayerIndex(playerIndex)
     }
 
-    private fun buildMoveContextForIndex(playerIndex: Int, fromPosition: Int, toPosition: Int, dice: Int, tileType: SessionTileType): earth.lastdrop.app.game.session.MoveContext? {
+    private fun buildMoveContextForIndex(
+        playerIndex: Int,
+        fromPosition: Int,
+        toPosition: Int,
+        dice: Int,
+        tileType: SessionTileType,
+        engineTileType: TileType? = null,
+        tileName: String? = null,
+        scoreDelta: Int? = null,
+        chanceCardDescription: String? = null,
+        chanceCardEffect: Int? = null
+    ): earth.lastdrop.app.game.session.MoveContext? {
         if (!::sessionManager.isInitialized) return null
         val state = sessionManager.currentState()
         val player = state.players.getOrNull(playerIndex) ?: return null
@@ -2476,7 +2508,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             fromTile = (fromPosition - 1).coerceAtLeast(0),
             toTile = (toPosition - 1).coerceAtLeast(0),
             diceValue = dice,
-            tileType = tileType
+            tileType = tileType,
+            engineTileType = engineTileType,
+            tileName = tileName,
+            scoreDelta = scoreDelta,
+            chanceCardDescription = chanceCardDescription,
+            chanceCardEffect = chanceCardEffect
         )
     }
 
@@ -2714,7 +2751,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 gameEngine.tiles.getOrNull((previousPosition - 1).coerceAtLeast(0))?.type
                     ?: TileType.NORMAL,
                 previousPosition > gameEngine.tiles.size
-            )
+            ),
+            engineTileType = gameEngine.tiles.getOrNull((previousPosition - 1).coerceAtLeast(0))?.type,
+            tileName = gameEngine.tiles.getOrNull((previousPosition - 1).coerceAtLeast(0))?.name,
+            scoreDelta = null
         )
         emitCloudieLine(CloudieEventType.UNDO, undoCtx)
     }
@@ -3026,6 +3066,32 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Use BoardScanManager
         boardScanManager.stopScan()
     }
+
+    /**
+     * Watchdog handler for heartbeat loss. Cleans up GATT, suppresses duplicate UI noise,
+     * and kicks off a fresh scan after a short delay.
+     */
+    private fun handleHeartbeatLoss() {
+        appendTestLog("💔 Board heartbeat lost - reconnecting")
+
+        watchdogReconnectInProgress = true
+        esp32ReconnectAttempts = 0
+
+        runOnUiThread {
+            Toast.makeText(this, "Board unresponsive. Reconnecting...", Toast.LENGTH_LONG).show()
+            btnConnectBoard.text = "🎮  Reconnecting..."
+            btnConnectBoard.isEnabled = false
+        }
+
+        disconnectESP32()
+
+        // Give BLE stack a moment before resuming discovery
+        mainScope.launch {
+            delay(1000)
+            connectESP32()
+            watchdogReconnectInProgress = false
+        }
+    }
     
     /**
      * Show board selection dialog when multiple boards are found
@@ -3176,13 +3242,19 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         stateSyncManager.stopSyncMonitoring()
                         
                         appendTestLog("❌ ESP32 Disconnected")
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
-                            btnConnectBoard.text = "🎮  Connect Board"
-                            btnConnectBoard.isEnabled = true
+                        if (!watchdogReconnectInProgress) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
+                                btnConnectBoard.text = "🎮  Connect Board"
+                                btnConnectBoard.isEnabled = true
+                            }
                         }
                         
                         // Auto-reconnect if game is active
+                        if (watchdogReconnectInProgress) {
+                            return
+                        }
+
                         if (gameActive && esp32ReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                             esp32ReconnectAttempts++
                             appendTestLog("🔄 Attempting reconnect (${esp32ReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...")
@@ -3536,9 +3608,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         Toast.makeText(this, "Coin detected at tile $tile", Toast.LENGTH_SHORT).show()
                         
                         appendTestLog("✅ Coin placed at tile $tile")
-                        
+
                         // Trigger live.html update
-                        pushLiveStateToBoard()
+                        pushLiveStateToBoard(
+                            eventType = "coin_placed",
+                            eventMessage = "Coin placed at tile $tile"
+                        )
                     }
                 }
 
@@ -3557,7 +3632,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvCoinTimeout.visibility = View.GONE
                         tvCoinTimeout.text = ""
                         Toast.makeText(this, "Coin placement timeout - continuing anyway", Toast.LENGTH_SHORT).show()
-                        pushLiveStateToBoard()
+                        pushLiveStateToBoard(
+                            eventType = "coin_timeout",
+                            eventMessage = "Coin placement timeout at tile $tile"
+                        )
                         emitCloudieLine(CloudieEventType.WARNING_TIMEOUT, null)
                     }
                 }
@@ -3618,12 +3696,17 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     val validation = esp32StateValidator.validateMisplacementReport(errorList)
 
                     runOnUiThread {
+                        val message = "Please fix:\n" + errorList.joinToString("\n") { "Tile ${it.tile}: ${it.issue}" }
                         AlertDialog.Builder(this)
                             .setTitle("Coin Misplacement Detected")
-                            .setMessage("Please fix:\n" + errorList.joinToString("\n") { "Tile ${it.tile}: ${it.issue}" })
+                            .setMessage(message)
                             .setPositiveButton("OK", null)
                             .show()
                         emitCloudieLine(CloudieEventType.WARNING_MISPLACEMENT, null)
+                        pushLiveStateToBoard(
+                            eventType = "misplacement",
+                            eventMessage = message
+                        )
                     }
                 }
 
@@ -3637,8 +3720,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
                 "settings_updated" -> {
                     esp32ErrorHandler.updateHeartbeat()
-                    val newPassword = json.optString("password", null)
-                    val newNickname = json.optString("nickname", null)
+                    val newPassword = json.optString("password", "").takeIf { it.isNotEmpty() }
+                    val newNickname = json.optString("nickname", "").takeIf { it.isNotEmpty() }
                     val restartRequired = json.optBoolean("restartRequired", false)
                     
                     Log.d(TAG, "ESP32 settings updated - Nickname: $newNickname, Restart: $restartRequired")
@@ -3646,8 +3729,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     // Save updated settings to preferences
                     esp32Gatt?.device?.let { device ->
                         device.name?.let { boardId ->
-                            if (newNickname != null) {
-                                boardPreferencesManager.updateBoardNickname(boardId, newNickname)
+                            newNickname?.let { nickname ->
+                                boardPreferencesManager.updateBoardNickname(boardId, nickname)
                             }
                             if (newPassword != null) {
                                 boardPreferencesManager.saveBoard(boardId, device.address, newNickname, newPassword)
@@ -3724,6 +3807,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     esp32ErrorHandler.setWinnerAnimationInProgress(true)
                     
                     runOnUiThread {
+                        pushLiveStateToBoard(
+                            eventType = "win_animation",
+                            eventMessage = "$winnerName celebrating"
+                        )
                         // Show winner celebration
                         animationEventHandler.showWinnerCelebration(
                             winnerId = winnerId,
@@ -3737,7 +3824,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                                 aiPresenter.onGameEnd(winnerName)
                                 
                                 // Push final state to live.html
-                                pushLiveStateToBoard()
+                                pushLiveStateToBoard(
+                                    eventType = "winner",
+                                    eventMessage = "$winnerName wins"
+                                )
                             }
                         )
                         
@@ -3745,7 +3835,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         animationEventHandler.updateAnimationStatus(tvDiceStatus, "winner")
                         
                         // Push state to live.html to show winner
-                        pushLiveStateToBoard()
+                        pushLiveStateToBoard(
+                            eventType = "win_animation",
+                            eventMessage = "$winnerName celebrating"
+                        )
                     }
                 }
 
@@ -3762,6 +3855,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun disconnectESP32() {
         reconnectJob?.cancel()  // Cancel any pending reconnect attempts
         uiUpdateManager.cancelCountdown()  // Cancel coin timeout countdown
+        esp32ErrorHandler.stopHeartbeatMonitoring()
+        stateSyncManager.stopSyncMonitoring()
         esp32Gatt?.disconnect()
         esp32Gatt?.close()
         esp32Gatt = null

@@ -33,20 +33,36 @@ class IntroAiActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnSkip: Button
     private lateinit var voiceService: VoiceService
+    private var voiceEnabled: Boolean = true
+    private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_intro_ai)
 
         profileManager = ProfileManager(this)
-        voiceService = runCatching {
-            TextToSpeechVoiceService(
-                context = this,
-                onReady = { appendDebug("🔊 Cloudie voice ready") },
-                onError = { appendDebug("⚠️ TTS error: $it") }
-            )
-        }.getOrElse {
-            appendDebug("⚠️ Falling back to silent Cloudie (TTS unavailable)")
+        voiceEnabled = cloudiePrefs.getBoolean("cloudie_voice_enabled", true)
+        voiceService = if (voiceEnabled) {
+            runCatching {
+                TextToSpeechVoiceService(
+                    context = this,
+                    onReady = { appendDebug("🔊 Cloudie voice ready") },
+                    onError = {
+                        appendDebug("⚠️ TTS error: $it")
+                        runOnUiThread {
+                            android.widget.Toast.makeText(this, "Cloudie voice unavailable", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }.getOrElse {
+                appendDebug("⚠️ Falling back to silent Cloudie (TTS unavailable)")
+                runOnUiThread {
+                    android.widget.Toast.makeText(this, "Cloudie voice unavailable", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                NoOpVoiceService(this)
+            }
+        } else {
+            appendDebug("🤫 Cloudie voice disabled from main screen")
             NoOpVoiceService(this)
         }
         cloudieImage = findViewById(R.id.cloudieImage)
@@ -84,7 +100,9 @@ class IntroAiActivity : AppCompatActivity() {
 
     private fun speakLine(line: String) {
         dialogue.text = line
-        voiceService.speak(line)
+        if (voiceEnabled) {
+            voiceService.speak(line)
+        }
     }
 
     private fun appendDebug(message: String) {

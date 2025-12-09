@@ -2,6 +2,7 @@ package earth.lastdrop.app.ai.cloudie
 
 import earth.lastdrop.app.game.session.GameState
 import earth.lastdrop.app.game.session.MoveContext
+import earth.lastdrop.app.TileType as EngineTileType
 import kotlin.random.Random
 
 /**
@@ -59,15 +60,29 @@ class CloudieBrain(
 
     private fun landedTile(move: MoveContext?): String {
         move ?: return "Landed!"
-        val base = "${name(move.player)} landed on tile ${move.toTile}"
-        return when (move.tileType) {
-            earth.lastdrop.app.game.session.TileType.SAFE -> "$base — safe skies ahead."
-            earth.lastdrop.app.game.session.TileType.BONUS -> "$base — jackpot puddles!"
-            earth.lastdrop.app.game.session.TileType.DANGER -> "$base — watch the drought cracks!"
-            earth.lastdrop.app.game.session.TileType.WATER -> "$base — secret fountain found!"
-            earth.lastdrop.app.game.session.TileType.SKIP -> "$base — wind pause, skip next turn."
-            earth.lastdrop.app.game.session.TileType.START -> "$base — back at base camp."
-            earth.lastdrop.app.game.session.TileType.FINISH -> "$base — finish line glow!"
+        val tileLabel = move.tileName?.let { "$it (tile ${move.toTile + 1})" } ?: "tile ${move.toTile + 1}"
+        val deltaText = move.scoreDelta?.let {
+            when {
+                it > 0 -> "+$it"
+                it < 0 -> "$it"
+                else -> "no change"
+            }
+        }
+        val chanceText = move.chanceCardDescription?.let { desc ->
+            val effect = move.chanceCardEffect
+            val effectText = effect?.let { eff -> if (eff > 0) "+$eff" else if (eff < 0) "$eff" else "special" }
+            "Chance card: $desc" + (effectText?.let { " ($it)" } ?: "")
+        }
+
+        return when (move.engineTileType) {
+            EngineTileType.CHANCE -> chanceText?.let { "$tileLabel — $it." } ?: "$tileLabel — chance card drawn."
+            EngineTileType.BONUS -> "$tileLabel — bonus breeze! ${deltaText ?: "Score boost"}."
+            EngineTileType.PENALTY -> "$tileLabel — light penalty, ${deltaText ?: "watch your step"}."
+            EngineTileType.DISASTER -> "$tileLabel — big hit! ${deltaText ?: "Score dropped"}."
+            EngineTileType.WATER_DOCK -> "$tileLabel — refilled at the dock ${deltaText?.let { "($it)" } ?: ""}."
+            EngineTileType.SUPER_DOCK -> "$tileLabel — mega refill! ${deltaText ?: "Hydration jackpot"}."
+            EngineTileType.START -> "${name(move.player)} landed on $tileLabel — back at base camp."
+            EngineTileType.NORMAL, null -> "${name(move.player)} landed on $tileLabel — safe skies ahead."
         }
     }
 

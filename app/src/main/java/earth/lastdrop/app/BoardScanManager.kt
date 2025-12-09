@@ -30,6 +30,7 @@ class BoardScanManager(
     companion object {
         private const val TAG = "BoardScanManager"
         private const val SCAN_TIMEOUT_MS = 60000L  // 60 seconds
+        private const val SCAN_DEBOUNCE_MS = 3000L  // Minimum gap between scan requests
         const val BOARD_PREFIX = "LASTDROP-"
         
         // MAC address whitelist (optional security)
@@ -40,12 +41,23 @@ class BoardScanManager(
     private var scanJob: Job? = null
     private val discoveredBoards = mutableListOf<BluetoothDevice>()
     private var isScanning = false
+    private var lastScanStartedAt = 0L
     
     /**
      * Start scanning for all LASTDROP-* boards
      */
     @SuppressLint("MissingPermission")
     fun startScan() {
+        val now = System.currentTimeMillis()
+        val sinceLastScan = now - lastScanStartedAt
+
+        if (sinceLastScan in 0 until SCAN_DEBOUNCE_MS) {
+            val remaining = (SCAN_DEBOUNCE_MS - sinceLastScan) / 1000
+            Log.d(TAG, "Scan request debounced (${remaining}s remaining)")
+            onLogMessage("⏳ Please wait ${remaining + 1}s before scanning again")
+            return
+        }
+
         if (isScanning) {
             Log.d(TAG, "Scan already in progress")
             return
@@ -59,6 +71,7 @@ class BoardScanManager(
         
         discoveredBoards.clear()
         isScanning = true
+        lastScanStartedAt = now
         
         Log.d(TAG, "Starting board scan (looking for $BOARD_PREFIX*)")
         onLogMessage("🔍 Scanning for LASTDROP boards...")
