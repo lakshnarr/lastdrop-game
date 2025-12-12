@@ -47,6 +47,9 @@ interface PlayerProfileDao {
     
     @Query("UPDATE player_profiles SET nickname = :newNickname WHERE playerId = :id")
     suspend fun updateNickname(id: String, newNickname: String)
+
+    @Query("UPDATE player_profiles SET aiPersonality = :persona WHERE playerId = :id")
+    suspend fun updatePersona(id: String, persona: String)
     
     @Delete
     suspend fun deleteProfile(profile: PlayerProfile)

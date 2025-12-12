@@ -25,6 +25,7 @@ import earth.lastdrop.app.GameEngine
 import earth.lastdrop.app.TileType
 import earth.lastdrop.app.ai.cloudie.CloudieBrain
 import earth.lastdrop.app.ai.cloudie.CloudieEventType
+import earth.lastdrop.app.ai.cloudie.CloudiePhraseBook
 import earth.lastdrop.app.ai.cloudie.CloudieRequest
 import earth.lastdrop.app.DiceConnectionController
 import earth.lastdrop.app.PlayerConfigUiHelper
@@ -34,6 +35,7 @@ import earth.lastdrop.app.game.session.TileType as SessionTileType
 import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.TextToSpeechVoiceService
 import earth.lastdrop.app.voice.VoiceService
+import kotlinx.coroutines.delay
 import earth.lastdrop.app.ui.intro.IntroAiActivity
 import kotlinx.coroutines.*
 import org.json.JSONArray
@@ -79,6 +81,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val ESP32_CHAR_TX_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
         val CCCDUUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
         private const val ESP32_PAIR_PIN = "654321"       // Default board PIN
+        private const val SKIP_PAIRING = true              // TESTING: Skip pairing for unpaired ESP32 connection
         
         // MAC Address Whitelist - Add your ESP32's MAC address for security
         // Leave empty to accept any LASTDROP-ESP32 device
@@ -149,6 +152,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var switchCloudieVoice: Switch
     private var lastCloudieLine: String? = null
     private var lastCloudieTimestampMs: Long = 0L
+    private val cloudieQueue: ArrayDeque<String> = ArrayDeque()
+    private var cloudieSpeaking = false
+    private var cloudieLastSpokenAtMs: Long = 0L
+    private val cloudieMinGapMs: Long = 2_000L
+    private val cloudieMaxDupWindowMs: Long = 4_000L
+    private val cloudieMaxQueue: Int = 6
+    private var cloudiePersona: String = "cloudie"
+    private var cloudiePhraseBook: CloudiePhraseBook? = null
+    private var cloudieLinesEnqueued: Int = 0
+    private var cloudieLinesDropped: Int = 0
+    private var cloudieLinesSpoken: Int = 0
+    private var cloudieSpeakErrors: Int = 0
 
     private data class ScoreboardRow(
         val container: TableRow,
@@ -230,6 +245,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ---------- ESP32 Connection Timeout ----------
     private var esp32ScanJob: Job? = null
     private val ESP32_SCAN_TIMEOUT_MS = 10000L  // 10 seconds
+    
+    // ---------- ESP32 PIN Authentication ----------
+    private var pendingPinDevice: BluetoothDevice? = null  // Device awaiting PIN validation
+    private var esp32Paired: Boolean = false  // True when PIN validated successfully
 
     private var diceConnected: Boolean = false
 
@@ -238,7 +257,6 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private val diceResults: MutableMap<Int, Int> = HashMap()
     
     // ---------- Helper Classes ----------
-    private lateinit var esp32Manager: ESP32ConnectionManager
     private lateinit var uiUpdateManager: UIUpdateManager
     private lateinit var batteryMonitor: BatteryMonitor
     private lateinit var esp32ErrorHandler: ESP32ErrorHandler
@@ -343,60 +361,6 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
         }
-    }
-    
-    // Show PIN entry dialog for ESP32 pairing
-    @SuppressLint("MissingPermission")
-    private fun showPinEntryDialog(device: BluetoothDevice) {
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER
-            hint = "Enter 6-digit PIN"
-            setText("654321")  // Pre-fill with default PIN
-            selectAll()  // Select all text for easy override
-        }
-        
-        AlertDialog.Builder(this)
-            .setTitle("Pair with ${device.name ?: device.address}")
-            .setMessage("Enter the PIN code for this board\n(Default: 654321)")
-            .setView(input)
-            .setPositiveButton("Pair") { _, _ ->
-                val pin = input.text.toString()
-                if (pin.length == 6 && pin.all { it.isDigit() }) {
-                    try {
-                        val success = device.setPin(pin.toByteArray())
-                        Log.d(TAG, "PIN set result: $success")
-                        if (success) {
-                            runOnUiThread {
-                                Toast.makeText(this, "Pairing...", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            runOnUiThread {
-                                Toast.makeText(this, "Failed to set PIN", Toast.LENGTH_SHORT).show()
-                            }
-                            pairingDevice = null
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error setting PIN", e)
-                        runOnUiThread {
-                            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                        pairingDevice = null
-                    }
-                } else {
-                    runOnUiThread {
-                        Toast.makeText(this, "PIN must be exactly 6 digits", Toast.LENGTH_SHORT).show()
-                    }
-                    pairingDevice = null
-                }
-            }
-            .setNegativeButton("Cancel") { _, _ ->
-                pairingDevice = null
-                runOnUiThread {
-                    Toast.makeText(this, "Pairing cancelled", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setCancelable(false)  // Force user to choose
-            .show()
     }
     
     // Show passkey confirmation dialog for ESP32 pairing
@@ -535,6 +499,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             appendTestLog(if (isChecked) "🔊 Cloudie voice ON" else "🤫 Cloudie voice OFF")
             cloudiePrefs.edit().putBoolean("cloudie_voice_enabled", isChecked).apply()
         }
+        cloudiePersona = cloudiePrefs.getString("cloudie_persona", "cloudie") ?: "cloudie"
+        cloudiePhraseBook = runCatching {
+            CloudiePhraseBook.load(resources, R.raw.ai_phrases_v1)
+        }.getOrElse {
+            appendTestLog("⚠️ Cloudie phrasebook unavailable: ${it.message}")
+            null
+        }
         
         // Initialize board preferences manager
         boardPreferencesManager = BoardPreferencesManager(this)
@@ -545,7 +516,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             bluetoothAdapter = bluetoothAdapter,
             scope = mainScope,
             onBoardFound = { boards -> showBoardSelectionDialog(boards) },
-            onBoardSelected = { device -> connectToESP32Device(device) },
+            onBoardSelected = { device -> showPinEntryDialog(device) },
             onLogMessage = { msg -> appendTestLog(msg) }
         )
         
@@ -707,13 +678,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
         registerReceiver(pairingReceiver, pairingFilter)
         
-        // Connect to ESP32 board
-        if (!testModeEnabled) {
-            mainScope.launch {
-                delay(2000)
-                connectESP32()
-            }
-        }
+        // DISABLED: Auto ESP32 connection removed per user request
+        // Board connection now only happens when user taps "Connect Board" button
+        // if (!testModeEnabled) {
+        //     mainScope.launch {
+        //         delay(2000)
+        //         connectESP32()
+        //     }
+        // }
 
         // Show profile selection screen unless resuming a saved game
         if (!savedGameIdFromIntent.isNullOrBlank()) {
@@ -727,8 +699,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         fetchScoreboard()
         
-        // Try auto-reconnect to last board if exists
-        tryAutoReconnect()
+        // DISABLED: Auto-reconnect removed per user request
+        // Board discovery now only happens when user taps "Connect Board" button
+        // tryAutoReconnect()
     }
     
     /**
@@ -815,6 +788,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        cloudieQueue.clear()
+        cloudieSpeaking = false
+        cloudieLastSpokenAtMs = System.currentTimeMillis()
+        appendTestLog("Cloudie queue cleared on pause")
     }
 
     override fun onDestroy() {
@@ -993,22 +974,47 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun onConnectBoardClicked() {
         if (!esp32Connected) {
-            // Not connected → start scanning for boards
+            // Not connected → Show dialog immediately and start scanning inside it
             btnConnectBoard.text = "🎮  Scanning..."
             btnConnectBoard.isEnabled = false
             
-            boardScanManager.startScan()
-            
-            // Re-enable button after scan timeout
-            mainScope.launch {
-                delay(60000)  // 60 second scan timeout
-                if (!esp32Connected) {
+            // Show live scan dialog immediately
+            val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
+                context = this,
+                preferencesManager = boardPreferencesManager,
+                onBoardSelected = { device ->
+                    // User selected a board → show PIN entry
+                    showPinEntryDialog(device)
+                },
+                onCancel = {
+                    // User cancelled → stop scan and reset button
+                    boardScanManager.stopScan()
                     runOnUiThread {
                         btnConnectBoard.text = "🎮  Connect Board"
                         btnConnectBoard.isEnabled = true
                     }
                 }
-            }
+            )
+            
+            // Set up real-time board discovery
+            boardScanManager.setDiscoveryCallback(
+                onDiscovered = { device ->
+                    runOnUiThread {
+                        liveScanDialog.addBoard(device)
+                    }
+                },
+                onComplete = {
+                    runOnUiThread {
+                        liveScanDialog.onScanComplete()
+                        btnConnectBoard.text = "🎮  Connect Board"
+                        btnConnectBoard.isEnabled = true
+                    }
+                }
+            )
+            
+            // Start scanning (boards will appear in dialog as discovered)
+            boardScanManager.startScan()
+            
         } else {
             // Already connected → disconnect
             disconnectESP32()
@@ -1959,13 +1965,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
 
-        // Determine how many rows to render using whichever source is largest (profiles, names, or count)
-        val inferredCount = maxOf(
-            playerCount,
-            currentGameProfiles.size,
-            playerNames.size,
-            playerScores.size
-        ).coerceAtMost(scoreboardRows.size)
+        // Render only active players; prefer explicit playerCount, else fall back to current profiles, else names
+        val inferredCount = when {
+            playerCount > 0 -> playerCount
+            currentGameProfiles.isNotEmpty() -> currentGameProfiles.size
+            playerNames.isNotEmpty() -> playerNames.size
+            else -> 0
+        }.coerceAtMost(scoreboardRows.size)
 
         val rows = (0 until inferredCount).map { idx ->
             val displayKey = playerNames.getOrNull(idx) ?: "Player ${idx + 1}"
@@ -2317,9 +2323,20 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun emitCloudieLine(eventType: CloudieEventType, moveContext: earth.lastdrop.app.game.session.MoveContext?) {
         if (!::cloudieBrain.isInitialized || !::sessionManager.isInitialized) return
+        if (!shouldSpeakCloudie(eventType)) return
+
         val state = buildCloudieState() ?: return
-        val line = cloudieBrain.generate(CloudieRequest(eventType, state, moveContext)).line
-        showCloudieLine(line)
+        val contextMap = buildCloudieTemplateContext(moveContext)
+        val bookLine = cloudiePhraseBook?.lineFor(cloudiePersona, eventType, contextMap).orEmpty()
+        val aiLine = cloudieBrain.generate(CloudieRequest(eventType, state, moveContext)).line
+        val personaLine = personaFallbackLine(eventType, moveContext)
+
+        val line = when {
+            bookLine.isNotBlank() -> bookLine
+            aiLine.isNotBlank() -> aiLine
+            else -> personaLine
+        }
+        enqueueCloudieLine(line)
     }
 
     private fun buildCloudieState(): earth.lastdrop.app.game.session.GameState? {
@@ -2369,13 +2386,118 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         return recentGainers.filter { gaps[it] != null && gaps[it]!! in 1..5 }
     }
 
-    private fun showCloudieLine(line: String) {
+    private fun personaFallbackLine(eventType: CloudieEventType, moveContext: earth.lastdrop.app.game.session.MoveContext?): String {
+        return when (eventType) {
+            CloudieEventType.WIN -> "Crowns up! ${moveContext?.player?.nickname ?: "Our winner"} just wrapped the game."
+            CloudieEventType.WARNING_MISPLACEMENT -> "Coin looks off—pop it back on its tile and we’ll keep flying."
+            CloudieEventType.WARNING_TIMEOUT -> "Clock nudging us forward—rolling to the next turn."
+            CloudieEventType.UNDO -> "Rolling back that step. ${moveContext?.player?.nickname ?: "Player"} rewound to safety."
+            else -> ""
+        }
+    }
+
+    private fun shouldSpeakCloudie(eventType: CloudieEventType): Boolean {
         val now = System.currentTimeMillis()
-        val isDuplicate = line == lastCloudieLine && (now - lastCloudieTimestampMs) < 4000
+        val sinceLast = now - lastCloudieTimestampMs
+        val cooldownMs = when (eventType) {
+            CloudieEventType.DICE_ROLL -> 3_500L
+            CloudieEventType.LANDED_TILE -> 3_000L
+            CloudieEventType.TURN_PROMPT -> 5_000L
+            else -> 0L
+        }
+        val critical = eventType in setOf(
+            CloudieEventType.WIN,
+            CloudieEventType.WIN_ANIMATION,
+            CloudieEventType.WARNING_MISPLACEMENT,
+            CloudieEventType.WARNING_TIMEOUT,
+            CloudieEventType.UNDO
+        )
+        if (!critical && cooldownMs > 0 && sinceLast < cooldownMs) return false
+
+        val probability = when (eventType) {
+            CloudieEventType.DICE_ROLL -> 0.55
+            CloudieEventType.LANDED_TILE -> 0.65
+            CloudieEventType.TURN_PROMPT -> 0.5
+            else -> 1.0
+        }
+        return Random.nextDouble() < probability
+    }
+
+    private fun buildCloudieTemplateContext(moveContext: earth.lastdrop.app.game.session.MoveContext?): Map<String, String> {
+        val state = sessionManager.currentState()
+        val leaderId = computeScoreLeaderIds().firstOrNull()
+        val leaderName = leaderId?.let { id -> state.players.firstOrNull { it.id == id }?.nickname ?: state.players.firstOrNull { it.id == id }?.name }
+        val playerName = moveContext?.player?.nickname?.takeIf { it.isNotBlank() }
+            ?: moveContext?.player?.name?.takeIf { it.isNotBlank() }
+            ?: leaderName
+            ?: "Player"
+        val tileName = moveContext?.tileName?.takeIf { it.isNotBlank() }
+            ?: moveContext?.toTile?.let { tile -> "tile ${tile + 1}" }
+            ?: "tile"
+        val delta = moveContext?.scoreDelta?.let {
+            when {
+                it > 0 -> "+$it"
+                it < 0 -> "$it"
+                else -> "0"
+            }
+        } ?: "0"
+        val dice = moveContext?.diceValue?.toString() ?: ""
+
+        return mapOf(
+            "player" to playerName,
+            "tile" to tileName,
+            "delta" to delta,
+            "dice" to dice,
+            "leader" to (leaderName ?: "")
+        )
+    }
+
+    private fun enqueueCloudieLine(line: String) {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        val isDuplicate = trimmed == lastCloudieLine && (now - lastCloudieTimestampMs) < cloudieMaxDupWindowMs
         if (isDuplicate) return
 
+        if (cloudieQueue.size >= cloudieMaxQueue) {
+            cloudieQueue.removeFirst()
+            cloudieLinesDropped += 1
+            appendTestLog("Cloudie queue full, dropping oldest line")
+        }
+
+        cloudieLinesEnqueued += 1
+        cloudieQueue.addLast(trimmed)
+        if (!cloudieSpeaking) {
+            processCloudieQueue()
+        }
+    }
+
+    private fun processCloudieQueue() {
+        if (cloudieSpeaking) return
+        val next = cloudieQueue.removeFirstOrNull() ?: return
+        cloudieSpeaking = true
+
+        mainScope.launch {
+            val now = System.currentTimeMillis()
+            val sinceLast = now - cloudieLastSpokenAtMs
+            if (sinceLast < cloudieMinGapMs) {
+                delay(cloudieMinGapMs - sinceLast)
+            }
+
+            showCloudieLine(next)
+            cloudieLastSpokenAtMs = System.currentTimeMillis()
+            cloudieSpeaking = false
+            if (cloudieQueue.isNotEmpty()) {
+                processCloudieQueue()
+            }
+        }
+    }
+
+    private fun showCloudieLine(line: String) {
         lastCloudieLine = line
-        lastCloudieTimestampMs = now
+        lastCloudieTimestampMs = System.currentTimeMillis()
+        cloudieLinesSpoken += 1
 
         runOnUiThread {
             tvCloudieBanner.text = line
@@ -2388,7 +2510,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
         if (voiceEnabled) {
-            voiceService?.speak(line)
+            runCatching { voiceService?.speak(line) }
+                .onFailure {
+                    cloudieSpeakErrors += 1
+                    appendTestLog("⚠️ Cloudie voice error: ${it.message}")
+                }
         }
         appendTestLog("☁️ $line")
     }
@@ -2670,12 +2796,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvTestLog.text = ""
                         
                         appendTestLog("🔴 Production Mode - Using BLDice + ESP32")
+                        appendTestLog("ℹ️ Press 'Connect Board' and 'Connect Dice' buttons")
                         Toast.makeText(this, "Production Mode: BLDice + ESP32 + live.html", Toast.LENGTH_SHORT).show()
-                        
-                        // Try to connect ESP32
-                        if (!esp32Connected) {
-                            connectESP32()
-                        }
                     }
                     1 -> {
                         // Test Mode 1: Virtual Dice + ESP32
@@ -2695,12 +2817,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvTestLog.text = ""
                         
                         appendTestLog("🟠 Test Mode 1 - Virtual Dice + ESP32 Board")
+                        appendTestLog("ℹ️ Press 'Connect Board' button to connect ESP32")
                         Toast.makeText(this, "Test Mode 1: Simulated dice with ESP32 board", Toast.LENGTH_LONG).show()
-                        
-                        // Try to connect ESP32
-                        if (!esp32Connected) {
-                            connectESP32()
-                        }
                     }
                     2 -> {
                         // Test Mode 2: Android + live.html only (no ESP32)
@@ -2849,7 +2967,40 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         Log.d(TAG, "Starting board scan...")
         appendTestLog("🔍 Scanning for boards...")
         
-        // Use new BoardScanManager for multi-board support
+        // Show live scanning dialog immediately
+        val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
+            context = this,
+            preferencesManager = boardPreferencesManager,
+            onBoardSelected = { device ->
+                appendTestLog("✅ Selected: ${device.name}")
+                boardScanManager.stopScan()  // Stop scan when board selected
+                showPinEntryDialog(device)
+            },
+            onCancel = {
+                appendTestLog("❌ Scan cancelled")
+                boardScanManager.stopScan()
+                btnConnectBoard.isEnabled = true
+                btnConnectBoard.text = "🎮  Connect ESP32 Board"
+            }
+        )
+        
+        // Set up real-time callbacks for board discovery
+        boardScanManager.setDiscoveryCallback(
+            onDiscovered = { device ->
+                runOnUiThread {
+                    liveScanDialog.addBoard(device)
+                }
+            },
+            onComplete = {
+                runOnUiThread {
+                    if (boardScanManager.getDiscoveredBoards().isEmpty()) {
+                        liveScanDialog.showNoBoards()
+                    }
+                }
+            }
+        )
+        
+        // Start scanning
         boardScanManager.startScan()
     }
 
@@ -2896,7 +3047,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 preferencesManager = boardPreferencesManager,
                 onBoardSelected = { device ->
                     appendTestLog("✅ Selected: ${device.name}")
-                    connectToESP32Device(device)
+                    // Show PIN dialog before connecting
+                    showPinEntryDialog(device)
                 },
                 onRescan = {
                     appendTestLog("🔄 Rescanning...")
@@ -2942,6 +3094,157 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         )
     }
 
+    /**
+     * Show PIN entry dialog for selected board
+     */
+    @SuppressLint("MissingPermission")
+    private fun showPinEntryDialog(device: BluetoothDevice) {
+        pendingPinDevice = device
+        val boardId = device.name ?: "Unknown"
+        
+        runOnUiThread {
+            PinEntryDialog.show(
+                context = this,
+                device = device,
+                boardId = boardId,
+                preferencesManager = boardPreferencesManager,
+                onPinEntered = { pin, rememberPin ->
+                    appendTestLog("🔑 PIN entered, validating...")
+                    
+                    // Save PIN if requested
+                    if (rememberPin) {
+                        boardPreferencesManager.saveBoardPin(boardId, pin)
+                        appendTestLog("💾 PIN saved for $boardId")
+                    }
+                    
+                    // Connect and validate PIN with ESP32
+                    validatePinAndConnect(device, pin, rememberPin)
+                },
+                onCancel = {
+                    appendTestLog("❌ PIN entry cancelled")
+                    pendingPinDevice = null
+                    runOnUiThread {
+                        btnConnectBoard.isEnabled = true
+                        btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                    }
+                }
+            )
+        }
+    }
+    
+    /**
+     * Connect to ESP32 and validate PIN
+     */
+    @SuppressLint("MissingPermission")
+    private fun validatePinAndConnect(device: BluetoothDevice, pin: String, rememberPin: Boolean) {
+        val boardId = device.name ?: "Unknown"
+        
+        // Prevent multiple simultaneous connection attempts
+        if (esp32Connected) {
+            appendTestLog("⚠️ Already connected, ignoring duplicate request")
+            return
+        }
+        
+        appendTestLog("🔌 Connecting to $boardId...")
+        
+        // Connect using BoardConnectionController (proper flow with MTU negotiation)
+        val connectionController = BoardConnectionController(
+            context = this,
+            scope = mainScope,
+            serviceUuid = ESP32_SERVICE_UUID,
+            txUuid = ESP32_CHAR_TX_UUID,
+            rxUuid = ESP32_CHAR_RX_UUID,
+            cccdUuid = CCCDUUID,
+            onLog = { msg -> appendTestLog(msg) },
+            onConnected = { connectedDevice ->
+                appendTestLog("✓ BLE connected to ${connectedDevice.name}")
+                esp32Connected = true
+            },
+            onDisconnected = { disconnectedDevice ->
+                runOnUiThread {
+                    esp32Connected = false
+                    esp32Paired = false
+                    btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                }
+                appendTestLog("🔌 Board disconnected")
+            },
+            onMessage = { data ->
+                handleESP32Event(data)
+            },
+            onServicesReady = {
+                appendTestLog("✓ ESP32 services ready")
+                
+                // NOW send PIN validation command (services are ready)
+                mainScope.launch {
+                    delay(500)  // Small delay to ensure everything is stable
+                    appendTestLog("📤 Sending PIN validation to ESP32...")
+                    
+                    val pairCommand = JSONObject().apply {
+                        put("command", "pair")
+                        put("password", pin)
+                    }
+                    
+                    boardConnectionController?.send(pairCommand.toString())
+                    
+                    // Wait for pair_success or pair_failed response
+                    delay(3000)  // Give ESP32 time to respond
+                    
+                    // Check if pairing succeeded
+                    if (esp32Paired) {
+                        appendTestLog("✅ PIN validated successfully")
+                        
+                        // Save board with PIN if remember is checked
+                        if (rememberPin) {
+                            boardPreferencesManager.saveBoard(
+                                boardId = boardId,
+                                macAddress = device.address,
+                                password = pin
+                            )
+                            appendTestLog("💾 PIN saved for $boardId")
+                        }
+                        
+                        runOnUiThread {
+                            btnConnectBoard.text = "🔌 Disconnect Board"
+                            Toast.makeText(this@MainActivity, "Connected to $boardId", Toast.LENGTH_SHORT).show()
+                            
+                            PinEntryDialog.showValidationResult(
+                                context = this@MainActivity,
+                                success = true,
+                                boardId = boardId,
+                                onRetry = { },
+                                onCancel = {
+                                    pendingPinDevice = null
+                                }
+                            )
+                        }
+                    } else {
+                        // Pairing failed
+                        appendTestLog("❌ PIN validation failed")
+                        runOnUiThread {
+                            boardConnectionController?.disconnect()
+                            esp32Connected = false
+                            btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                            
+                            PinEntryDialog.showValidationResult(
+                                context = this@MainActivity,
+                                success = false,
+                                boardId = boardId,
+                                onRetry = { showPinEntryDialog(device) },
+                                onCancel = {
+                                    pendingPinDevice = null
+                                    btnConnectBoard.isEnabled = true
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        )
+        
+        boardConnectionController = connectionController
+        connectionController.connect(device)
+    }
+
     @SuppressLint("MissingPermission")
     private fun connectToESP32Device(device: BluetoothDevice) {
         Log.d(TAG, "Connecting to ESP32: ${device.name} (${device.address})")
@@ -2956,21 +3259,31 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 proceedWithESP32Connection(device)
             }
             BluetoothDevice.BOND_NONE -> {
-                // Not paired, initiate pairing
-                Log.d(TAG, "Device not bonded, initiating pairing...")
-                appendTestLog("🔐 Initiating pairing...")
-                pairingDevice = device
-                runOnUiThread {
-                    Toast.makeText(this, "Pairing with ${device.name}...", Toast.LENGTH_SHORT).show()
-                }
-                val bondResult = device.createBond()
-                Log.d(TAG, "createBond() result: $bondResult")
-                if (!bondResult) {
-                    appendTestLog("❌ Failed to start pairing")
+                if (SKIP_PAIRING) {
+                    // TESTING: Skip pairing and connect directly (ESP32 has pairing disabled)
+                    Log.d(TAG, "Device not bonded, but SKIP_PAIRING enabled - connecting without pairing")
+                    appendTestLog("🚀 Connecting without pairing (TEST MODE)...")
                     runOnUiThread {
-                        Toast.makeText(this, "Failed to start pairing", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Connecting without pairing...", Toast.LENGTH_SHORT).show()
                     }
-                    pairingDevice = null
+                    proceedWithESP32Connection(device)
+                } else {
+                    // Not paired, initiate pairing
+                    Log.d(TAG, "Device not bonded, initiating pairing...")
+                    appendTestLog("🔐 Initiating pairing...")
+                    pairingDevice = device
+                    runOnUiThread {
+                        Toast.makeText(this, "Pairing with ${device.name}...", Toast.LENGTH_SHORT).show()
+                    }
+                    val bondResult = device.createBond()
+                    Log.d(TAG, "createBond() result: $bondResult")
+                    if (!bondResult) {
+                        appendTestLog("❌ Failed to start pairing")
+                        runOnUiThread {
+                            Toast.makeText(this, "Failed to start pairing", Toast.LENGTH_SHORT).show()
+                        }
+                        pairingDevice = null
+                    }
                 }
             }
             BluetoothDevice.BOND_BONDING -> {
@@ -3402,6 +3715,31 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         Toast.makeText(this, "ESP32 configured with $playerCount players", Toast.LENGTH_SHORT).show()
                     }
                 }
+                
+                "heartbeat" -> {
+                    // ESP32 sends heartbeat every 5 seconds while waiting for coin
+                    esp32ErrorHandler.updateHeartbeat()
+                    
+                    if (json.has("waiting")) {
+                        val waiting = json.getJSONObject("waiting")
+                        val waitingForCoin = waiting.optBoolean("forCoin", false)
+                        val playerId = waiting.optInt("playerId", -1)
+                        val tile = waiting.optInt("tile", -1)
+                        val elapsed = waiting.optInt("elapsed", 0)
+                        val remaining = waiting.optInt("remaining", 0)
+                        
+                        // Silently update heartbeat - don't log every beat to reduce spam
+                        // Only log if waiting status changes or in verbose mode
+                        if (waitingForCoin) {
+                            // Update countdown UI if needed
+                            runOnUiThread {
+                                if (remaining > 0 && remaining <= 30) {
+                                    tvCoinTimeout.text = "⏳ Place coin: ${remaining}s"
+                                }
+                            }
+                        }
+                    }
+                }
 
                 "settings_updated" -> {
                     esp32ErrorHandler.updateHeartbeat()
@@ -3437,6 +3775,37 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     esp32ErrorHandler.updateHeartbeat()
                     val message = json.optString("message", "ESP32 Ready")
                     Log.d(TAG, "ESP32: $message")
+                }
+                
+                "pair_success" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    
+                    // Only process the first pair_success to avoid spam from repeated events
+                    if (!esp32Paired) {
+                        esp32Paired = true
+                        val message = json.optString("message", "Paired successfully")
+                        val boardId = json.optString("boardId", "Unknown")
+                        Log.d(TAG, "PIN validation successful for $boardId: $message")
+                        
+                        runOnUiThread {
+                            appendTestLog("✅ PIN validated: $message")
+                            Toast.makeText(this, "✅ $message", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    // Silently process subsequent pair_success events (ESP32 compatibility)
+                }
+                
+                "pair_failed" -> {
+                    esp32ErrorHandler.updateHeartbeat()
+                    esp32Paired = false
+                    val message = json.optString("message", "Incorrect PIN")
+                    val boardId = json.optString("boardId", "Unknown")
+                    Log.w(TAG, "PIN validation failed for $boardId: $message")
+                    
+                    runOnUiThread {
+                        appendTestLog("❌ PIN validation failed: $message")
+                        Toast.makeText(this, "❌ $message", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 
                 "player_eliminated" -> {
@@ -3543,6 +3912,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         esp32ErrorHandler.stopHeartbeatMonitoring()
         stateSyncManager.stopSyncMonitoring()
         boardConnectionController.disconnect()
+        esp32Paired = false  // Reset paired flag
         esp32Connected = false
         waitingForCoinPlacement = false
         gameActive = false  // Mark game as inactive

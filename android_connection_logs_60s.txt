@@ -1,0 +1,150 @@
+﻿12-11 22:45:59.321 I/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:765 stop_scan: Scanning already stopped, return!
+12-11 22:45:59.321 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:732 start_scan: start_scan
+12-11 22:45:59.321 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:735 start_scan: Register address manager
+12-11 22:45:59.321 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:650 register_scanner: register_scanner
+12-11 22:45:59.322 I/bluetooth( 4274): system/gd/hci/le_address_manager.cc:263 register_client: Client registered
+12-11 22:45:59.323 D/BluetoothLeScanner(12330): onScannerRegistered() - status=0 scannerId=4 mScannerId=0
+12-11 22:45:59.328 I/bt_shim_scanner( 4274): system/main/shim/le_scanning_manager.cc:260 ScanFilterEnable: in shim layer
+12-11 22:45:59.331 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:716 scan: address_manager_registered_
+12-11 22:45:59.331 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:768 stop_scan: stop_scan
+12-11 22:45:59.331 I/bluetooth( 4274): system/gd/hci/le_address_manager.cc:278 unregister_client: Client unregistered
+12-11 22:45:59.331 I/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:765 stop_scan: Scanning already stopped, return!
+12-11 22:45:59.331 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:732 start_scan: start_scan
+12-11 22:45:59.331 W/bluetooth( 4274): system/gd/hci/le_scanning_manager.cc:735 start_scan: Register address manager
+12-11 22:45:59.331 I/bluetooth( 4274): system/gd/hci/le_address_manager.cc:263 register_client: Client registered
+12-11 22:45:59.376 E/BluetoothRemoteDevices( 4274): Remote class is UNCATEGORIZED
+12-11 22:45:59.415 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.416 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.416 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.494 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.512 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.512 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.596 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.597 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.597 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.640 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.647 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.647 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.695 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.697 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.697 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.738 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.742 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.743 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.819 D/DeviceStorageMonitorService( 2566): Available File Node Number is [10915716]
+12-11 22:45:59.826 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.832 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.832 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:45:59.919 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:45:59.927 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:45:59.927 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.000 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.011 D/QSClock ( 3993): StatusBar clock=10:46 notifyTimeChanged(QSClockBellSound - TimeText:10:46, TimeContentDescription:10:46ΓÇ»pm, DateText:Thu, 11 December, ShortDateText:Thu, 11 Dec, Demo:false) clockVisibleByPolicy=true, clockVisibleByUser=true, visible=true, parent=android.widget.LinearLayout{17147b2 V.E...... ......ID 0,0-68,45 #7f0a069b app:id/left_clock_container} caller=com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment.animateShow:52 com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment.updateStatusBarVisibilitiesInner:230 com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment.updateStatusBarVisibilities:65 com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment$$ExternalSyntheticLambda0.onStatusBarWindowStateChanged:6 com.android.systemui.statusbar.window.StatusBarWindowStateController$commandQueueCallback$1.setWindowState:39  
+12-11 22:46:00.017 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.017 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.021 D/{OngoingChipAdapter}( 3993): updateEnableMaxWidth : 218 -:> 217
+12-11 22:46:00.024 W/RefactorFlag( 3993): New code path expects SceneContainerFlag to be enabled.
+12-11 22:46:00.059 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.104 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.104 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.146 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.152 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.152 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.237 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.243 D/SatelliteController( 3958): isInCarrierRoamingNbIotNtn: satellite is disabled
+12-11 22:46:00.271 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.272 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.314 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.335 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): DeviceSleep: TX Awake, Sending SLEEP_IND
+12-11 22:46:00.336 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.367 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.367 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.367 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.449 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.449 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.456 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.456 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.456 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.546 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.546 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.547 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.547 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.547 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.619 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.619 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.641 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.641 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.641 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.727 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.728 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.728 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.728 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.728 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.770 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.771 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.779 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.779 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.779 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.820 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.820 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.821 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.821 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.821 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.862 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.862 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.868 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.868 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.868 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.909 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.909 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.918 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.918 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.918 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:00.962 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:00.963 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:00.963 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:00.964 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:00.964 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.048 D/SemInsManager( 2566): {"bssid": "2b59b94d5180","rssi": -60.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": false,"outage_log": "Unreliable statistics: -60.0 / 0 / 0 / 0 / 0 || 2b59b94d5180: 0.000 / 0.000 / @ || N N / 0 0 / N 103.0 / N X 2 / 33300029 0 || 2025-12-11 22:46:00  / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+12-11 22:46:01.048 I/HoneySpace.StatusIconTracker( 4457): invokeEvent() called with: event = Wifi(visible=true, resId=2131236018, activityId=2131236053)
+12-11 22:46:01.048 D/Tile.WifiTile( 3993): handleUpdateState isTransient=false transientEnabling =false cb.isTransient=false state.state = 2 mStateBeforeClick.value =true enabled =true
+12-11 22:46:01.050 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.050 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.056 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.056 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.056 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.140 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.140 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.145 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.145 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.145 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.187 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.188 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.192 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.192 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.192 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.235 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.235 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.290 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.290 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.290 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.375 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.375 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.376 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.376 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.376 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.457 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.457 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.500 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.500 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.500 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.591 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.592 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.597 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.597 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.597 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK
+12-11 22:46:01.679 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+12-11 22:46:01.679 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK OFF
+12-11 22:46:01.683 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+12-11 22:46:01.684 D/vendor.qti.bluetooth@1.1-ibs_handler( 1617): SerialClockVote: vote for UART CLK ON
+12-11 22:46:01.684 I/vendor.qti.bluetooth@1.1-ibs_handler( 1617): ProcessIbsCmd: Writing IBS_WAKE_ACK

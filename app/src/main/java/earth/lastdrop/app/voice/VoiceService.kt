@@ -68,7 +68,8 @@ class TextToSpeechVoiceService(
 
     private fun speakInternal(text: String) {
         runCatching {
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "cloudie-${System.currentTimeMillis()}")
+            // QUEUE_ADD prevents cutting off previous lines; intros and dialogs often enqueue multiple lines.
+            tts.speak(text, TextToSpeech.QUEUE_ADD, null, "cloudie-${System.currentTimeMillis()}")
         }.onFailure { error ->
             Log.e("VoiceService", "TTS speak failed", error)
             onError?.invoke("TTS speak failed: ${error.message}")

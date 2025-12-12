@@ -4,9 +4,9 @@ import android.app.AlertDialog
 import android.content.Context
 import android.text.InputType
 import android.view.LayoutInflater
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.*
+import earth.lastdrop.app.voice.NoOpVoiceService
+import earth.lastdrop.app.voice.TextToSpeechVoiceService
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -16,10 +16,10 @@ import kotlin.coroutines.resume
 object ProfileDialogs {
     
     /**
-     * Show create profile dialog with name and nickname inputs
-     * @return Pair<name, nickname> or null if cancelled
+     * Show create profile dialog with name, nickname, and voice persona selection (with sample play).
+     * @return CreateProfileResult or null if cancelled
      */
-    suspend fun showCreateProfileDialog(context: Context): Pair<String, String>? {
+    suspend fun showCreateProfileDialog(context: Context): CreateProfileResult? {
         return suspendCancellableCoroutine { continuation ->
             val layout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -47,11 +47,50 @@ object ProfileDialogs {
                 hint = "e.g., Champion, Boss, Sarah"
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             }
+
+            // Persona selector
+            val personaLabel = TextView(context).apply {
+                text = "Pick your voice style"
+                textSize = 14f
+                setPadding(0, 24, 0, 8)
+            }
+            val personas = listOf(
+                "cloudie" to "Cloudie (friendly)",
+                "coach" to "Coach (sporty)",
+                "jester" to "Jester (silly)",
+                "wizard" to "Wizard (magic)",
+                "bot" to "Bot (robot)"
+            )
+            val personaNames = personas.map { it.second }
+            val personaKeys = personas.map { it.first }
+            val personaSpinner = Spinner(context).apply {
+                adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, personaNames)
+                setSelection(0)
+            }
+
+            // Sample button
+            var ttsService: TextToSpeechVoiceService? = null
+            val sampleButton = Button(context).apply {
+                text = "▶️ Play Sample"
+                setOnClickListener {
+                    val personaKey = personaKeys[personaSpinner.selectedItemPosition]
+                    val sampleLine = sampleLines[personaKey] ?: sampleLines["cloudie"]!!
+                    if (ttsService == null) {
+                        ttsService = runCatching {
+                            TextToSpeechVoiceService(context)
+                        }.getOrElse { null }
+                    }
+                    (ttsService ?: NoOpVoiceService(context)).speak(sampleLine)
+                }
+            }
             
             layout.addView(nameLabel)
             layout.addView(nameInput)
             layout.addView(nicknameLabel)
             layout.addView(nicknameInput)
+            layout.addView(personaLabel)
+            layout.addView(personaSpinner)
+            layout.addView(sampleButton)
             
             val dialog = AlertDialog.Builder(context)
                 .setTitle("Create New Profile")
@@ -60,8 +99,9 @@ object ProfileDialogs {
                 .setPositiveButton("Create") { _, _ ->
                     val name = nameInput.text.toString().trim()
                     val nickname = nicknameInput.text.toString().trim().ifEmpty { name }
+                    val persona = personaKeys[personaSpinner.selectedItemPosition]
                     if (continuation.isActive) {
-                        continuation.resume(name to nickname)
+                        continuation.resume(CreateProfileResult(name, nickname, persona))
                     }
                 }
                 .setNegativeButton("Cancel") { _, _ ->
@@ -72,6 +112,10 @@ object ProfileDialogs {
                 .setCancelable(false)
                 .create()
             
+            dialog.setOnDismissListener {
+                ttsService?.shutdown()
+            }
+
             continuation.invokeOnCancellation { dialog.dismiss() }
             dialog.show()
         }
@@ -148,6 +192,75 @@ object ProfileDialogs {
             input.requestFocus()
         }
     }
+
+    /**
+     * Show persona selection with sample play.
+     * @return persona key or null if cancelled
+     */
+    suspend fun showPersonaSelectionDialog(context: Context, currentPersona: String): String? {
+        return suspendCancellableCoroutine { continuation ->
+            val layout = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(50, 40, 50, 10)
+            }
+
+            val personas = listOf(
+                "cloudie" to "Cloudie (friendly)",
+                "coach" to "Coach (sporty)",
+                "jester" to "Jester (silly)",
+                "wizard" to "Wizard (magic)",
+                "bot" to "Bot (robot)"
+            )
+            val personaNames = personas.map { it.second }
+            val personaKeys = personas.map { it.first }
+            val currentIndex = personaKeys.indexOf(currentPersona).takeIf { it >= 0 } ?: 0
+
+            val spinner = Spinner(context).apply {
+                adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, personaNames)
+                setSelection(currentIndex)
+            }
+
+            var ttsService: TextToSpeechVoiceService? = null
+            val sampleButton = Button(context).apply {
+                text = "▶️ Play Sample"
+                setOnClickListener {
+                    val personaKey = personaKeys[spinner.selectedItemPosition]
+                    val sampleLine = sampleLines[personaKey] ?: sampleLines["cloudie"]!!
+                    if (ttsService == null) {
+                        ttsService = runCatching { TextToSpeechVoiceService(context) }.getOrElse { null }
+                    }
+                    (ttsService ?: NoOpVoiceService(context)).speak(sampleLine)
+                }
+            }
+
+            layout.addView(TextView(context).apply {
+                text = "Choose a voice style"
+                textSize = 14f
+                setPadding(0, 0, 0, 8)
+            })
+            layout.addView(spinner)
+            layout.addView(sampleButton)
+
+            val dialog = AlertDialog.Builder(context)
+                .setTitle("Voice Persona")
+                .setView(layout)
+                .setPositiveButton("Save") { _, _ ->
+                    val persona = personaKeys[spinner.selectedItemPosition]
+                    if (continuation.isActive) {
+                        continuation.resume(persona)
+                    }
+                }
+                .setNegativeButton("Cancel") { _, _ ->
+                    if (continuation.isActive) continuation.resume(null)
+                }
+                .setCancelable(true)
+                .create()
+
+            dialog.setOnDismissListener { ttsService?.shutdown() }
+            continuation.invokeOnCancellation { dialog.dismiss() }
+            dialog.show()
+        }
+    }
     
     /**
      * Show profile details with player code
@@ -180,3 +293,17 @@ object ProfileDialogs {
             .show()
     }
 }
+
+data class CreateProfileResult(
+    val name: String,
+    val nickname: String,
+    val persona: String
+)
+
+private val sampleLines = mapOf(
+    "cloudie" to "Hi there! I'm Cloudie, ready to cheer you on!",
+    "coach" to "Coach mode: keep your head in the game!",
+    "jester" to "Heehee! Let's make this turn super silly!",
+    "wizard" to "By spark and spell, adventure begins!",
+    "bot" to "Beep boop. Fun mode activated."
+)

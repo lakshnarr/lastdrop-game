@@ -29,19 +29,29 @@ class BoardScanManager(
 ) {
     companion object {
         private const val TAG = "BoardScanManager"
-        private const val SCAN_TIMEOUT_MS = 60000L  // 60 seconds
+        private const val SCAN_TIMEOUT_MS = 10000L  // 10 seconds (faster UX)
         private const val SCAN_DEBOUNCE_MS = 3000L  // Minimum gap between scan requests
         const val BOARD_PREFIX = "LASTDROP-"
         
         // MAC address whitelist (optional security)
         var TRUSTED_ADDRESSES = setOf<String>()
-    }
-    
+    }    
+    // Callback for real-time board discovery
+    private var onBoardDiscovered: ((BluetoothDevice) -> Unit)? = null
+    private var onScanComplete: (() -> Unit)? = null    
     private var scanCallback: ScanCallback? = null
     private var scanJob: Job? = null
     private val discoveredBoards = mutableListOf<BluetoothDevice>()
     private var isScanning = false
     private var lastScanStartedAt = 0L
+    
+    /**
+     * Set callback for real-time board discovery
+     */
+    fun setDiscoveryCallback(onDiscovered: (BluetoothDevice) -> Unit, onComplete: () -> Unit) {
+        this.onBoardDiscovered = onDiscovered
+        this.onScanComplete = onComplete
+    }
     
     /**
      * Start scanning for all LASTDROP-* boards
@@ -100,6 +110,9 @@ class BoardScanManager(
                     }
                     
                     // Avoid duplicates
+                    
+                    // Notify real-time discovery callback
+                    onBoardDiscovered?.invoke(device)
                     if (discoveredBoards.any { it.address == address }) {
                         return@let
                     }
@@ -127,9 +140,12 @@ class BoardScanManager(
             if (isScanning) {
                 stopScan()
                 
+                // Notify scan complete
+                onScanComplete?.invoke()
+                
                 when {
                     discoveredBoards.isEmpty() -> {
-                        onLogMessage("⏱️ No boards found (60s timeout)")
+                        onLogMessage("⏱️ No boards found (10s timeout)")
                         Toast.makeText(
                             context,
                             "No LASTDROP boards found. Check power and proximity.",

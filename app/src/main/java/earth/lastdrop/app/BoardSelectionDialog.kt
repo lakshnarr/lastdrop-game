@@ -4,12 +4,139 @@ import android.app.AlertDialog
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.text.InputType
+import android.view.LayoutInflater
+import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.ListView
+import android.widget.TextView
 
 /**
  * Dialog helper for board selection with nickname and saved board support
  */
 object BoardSelectionDialog {
+    
+    private var currentDialog: AlertDialog? = null
+    private var currentAdapter: ArrayAdapter<String>? = null
+    private val boardsList = mutableListOf<BluetoothDevice>()
+    
+    /**
+     * Show live scanning dialog that updates as boards are found
+     */
+    fun showLiveScanDialog(
+        context: Context,
+        preferencesManager: BoardPreferencesManager,
+        onBoardSelected: (BluetoothDevice) -> Unit,
+        onCancel: () -> Unit
+    ): LiveScanDialog {
+        boardsList.clear()
+        
+        val listView = ListView(context).apply {
+            setPadding(20, 20, 20, 20)
+        }
+        
+        val adapter = ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, mutableListOf("🔍 Scanning for boards..."))
+        listView.adapter = adapter
+        currentAdapter = adapter
+        
+        val dialog = AlertDialog.Builder(context)
+            .setTitle("Select LASTDROP Board")
+            .setView(listView)
+            .setNegativeButton("Cancel") { _, _ ->
+                currentDialog = null
+                currentAdapter = null
+                onCancel()
+            }
+            .setCancelable(true)
+            .create()
+        
+        listView.setOnItemClickListener { _, _, position, _ ->
+            if (position < boardsList.size) {
+                val board = boardsList[position]
+                dialog.dismiss()
+                currentDialog = null
+                currentAdapter = null
+                onBoardSelected(board)
+            }
+        }
+        
+        dialog.show()
+        currentDialog = dialog
+        
+        return LiveScanDialog(adapter, preferencesManager)
+    }
+    
+    /**
+     * Helper class for live scan dialog updates
+     */
+    class LiveScanDialog(
+        private val adapter: ArrayAdapter<String>,
+        private val preferencesManager: BoardPreferencesManager
+    ) {
+        fun addBoard(device: BluetoothDevice) {
+            // Check for duplicates by MAC address
+            if (boardsList.any { it.address == device.address }) {
+                return  // Already in list
+            }
+            
+            // Remove "Scanning..." message if it's the first board
+            if (boardsList.isEmpty() && adapter.count > 0 && adapter.getItem(0)?.contains("Scanning") == true) {
+                adapter.clear()
+            }
+            
+            boardsList.add(device)
+            
+            val boardId = device.name ?: "Unknown"
+            val nickname = preferencesManager.getBoardNickname(boardId)
+            val savedBoard = preferencesManager.getSavedBoard(boardId)
+            
+            val displayText = buildString {
+                if (nickname != boardId) {
+                    append("$nickname\n  $boardId")
+                } else {
+                    append(boardId)
+                }
+                
+                if (savedBoard?.passwordHash != null) append(" 🔑")
+                append("\n  ${device.address}")
+            }
+            
+            adapter.add(displayText)
+            adapter.notifyDataSetChanged()
+        }
+        
+        fun onScanComplete() {
+            if (boardsList.isEmpty()) {
+                // No boards found after scan complete
+                adapter.clear()
+                adapter.add("❌ No boards found")
+                adapter.add("")
+                adapter.add("Check:")
+                adapter.add("• Board is powered on")
+                adapter.add("• Bluetooth enabled")
+                adapter.add("• Close to board")
+            } else {
+                // Update scanning message to "Scan complete"
+                // Keep existing board list, just remove scanning indicator
+            }
+            adapter.notifyDataSetChanged()
+        }
+        
+        fun showNoBoards() {
+            adapter.clear()
+            adapter.add("❌ No boards found")
+            adapter.add("\nCheck:")
+            adapter.add("• Board is powered on")
+            adapter.add("• Bluetooth enabled")
+            adapter.add("• Close to board")
+            adapter.notifyDataSetChanged()
+        }
+        
+        fun dismiss() {
+            currentDialog?.dismiss()
+            currentDialog = null
+            currentAdapter = null
+        }
+    }
     
     /**
      * Show board selection dialog with nickname support

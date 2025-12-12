@@ -55,10 +55,11 @@ class BoardConnectionController(
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        Log.d(TAG, "ESP32 connected, discovering services...")
+                        Log.d(TAG, "ESP32 connected, requesting MTU...")
                         onLog("✅ ESP32 Connected")
                         onConnected(device)
-                        gatt?.discoverServices()
+                        // Request larger MTU for longer JSON messages (default is 23 bytes)
+                        gatt?.requestMtu(512)
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.d(TAG, "ESP32 disconnected")
@@ -67,6 +68,19 @@ class BoardConnectionController(
                         cleanup()
                         onDisconnected(prev)
                     }
+                }
+            }
+
+            override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+                super.onMtuChanged(gatt, mtu, status)
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    Log.d(TAG, "MTU changed to $mtu bytes")
+                    onLog("✅ MTU: $mtu bytes")
+                    // Now discover services after MTU is set
+                    gatt?.discoverServices()
+                } else {
+                    Log.e(TAG, "MTU request failed, using default")
+                    gatt?.discoverServices()
                 }
             }
 

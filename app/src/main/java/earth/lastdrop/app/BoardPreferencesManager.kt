@@ -23,6 +23,7 @@ class BoardPreferencesManager(context: Context) {
         private const val KEY_LAST_BOARD_ID = "last_board_id"
         private const val KEY_LAST_BOARD_MAC = "last_board_mac"
         private const val KEY_SAVED_BOARDS = "saved_boards"
+        private const val KEY_PIN_PREFIX = "board_pin_"  // Prefix for board PIN storage
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -242,6 +243,36 @@ class BoardPreferencesManager(context: Context) {
      */
     fun getSavedPasswordHash(boardId: String): String? {
         return getSavedBoard(boardId)?.passwordHash
+    }
+    
+    /**
+     * Save board PIN (plaintext for auto-fill, separate from password hash)
+     * Note: Stored separately for convenience, not for security
+     */
+    fun saveBoardPin(boardId: String, pin: String) {
+        prefs.edit().apply {
+            putString(KEY_PIN_PREFIX + boardId, pin)
+            apply()
+        }
+        Log.d(TAG, "Saved PIN for board: $boardId")
+    }
+    
+    /**
+     * Get saved PIN for board (for auto-fill convenience)
+     */
+    fun getSavedPin(boardId: String): String? {
+        return prefs.getString(KEY_PIN_PREFIX + boardId, null)
+    }
+    
+    /**
+     * Clear saved PIN for board
+     */
+    fun clearBoardPin(boardId: String) {
+        prefs.edit().apply {
+            remove(KEY_PIN_PREFIX + boardId)
+            apply()
+        }
+        Log.d(TAG, "Cleared PIN for board: $boardId")
     }
     
     /**

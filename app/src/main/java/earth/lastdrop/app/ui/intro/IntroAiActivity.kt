@@ -18,6 +18,7 @@ import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.TextToSpeechVoiceService
 import earth.lastdrop.app.voice.VoiceService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -180,14 +181,22 @@ class IntroAiActivity : AppCompatActivity() {
     }
 
     private fun playIntroLines() {
-        val lines = listOf(
+        val pool = listOf(
             "☁️ Cloudie here! Ready to host.",
             "I tuned into your colors—looking sharp!",
-            "Tap start when you want to hit the board."
-        )
+            "Tap start when you want to hit the board.",
+            "I brought extra sparkles—let's play!",
+            "Who's rolling first? I'm cheering for everyone!",
+            "Colors locked in. Adventures ahead!"
+        ).shuffled().take(3)
+
         dialogue.isVisible = true
-        lines.forEachIndexed { i, line ->
-            dialogue.postDelayed({ speakLine(line) }, i * 900L)
+        lifecycleScope.launch {
+            pool.forEach { line ->
+                speakLine(line)
+                val pauseMs = (line.length * 60L).coerceIn(1200L, 2200L)
+                delay(pauseMs)
+            }
         }
     }
 }

@@ -33,6 +33,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
     private lateinit var adapter: ProfileAdapter
     private lateinit var btnStartGame: Button
     private lateinit var btnLoadSavedGame: Button
+    private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
     private val selectedProfiles = mutableSetOf<String>() // For multiplayer
     private var isCalledFromMainActivity = false // Track where we came from
     private var latestSavedGame: SavedGame? = null
@@ -286,28 +287,28 @@ class ProfileSelectionActivity : AppCompatActivity() {
             
             val result = ProfileDialogs.showCreateProfileDialog(this@ProfileSelectionActivity)
             if (result != null) {
-                val (name, nickname) = result
-                createProfile(name, nickname)
+                createProfile(result)
             }
         }
     }
     
-    private fun createProfile(name: String, nickname: String) {
+    private fun createProfile(result: CreateProfileResult) {
         lifecycleScope.launch {
-            val error = profileManager.validateProfileName(name)
+            val error = profileManager.validateProfileName(result.name)
             if (error != null) {
                 Toast.makeText(this@ProfileSelectionActivity, "Name: $error", Toast.LENGTH_LONG).show()
                 return@launch
             }
             
-            val nicknameError = profileManager.validateProfileName(nickname)
+            val nicknameError = profileManager.validateProfileName(result.nickname)
             if (nicknameError != null) {
                 Toast.makeText(this@ProfileSelectionActivity, "Nickname: $nicknameError", Toast.LENGTH_LONG).show()
                 return@launch
             }
             
-            val result = profileManager.createProfile(name, nickname)
-            result.onSuccess { profile ->
+            val created = profileManager.createProfile(result.name, result.nickname, result.persona)
+            created.onSuccess { profile ->
+                cloudiePrefs.edit().putString("cloudie_persona", result.persona).apply()
                 Toast.makeText(this@ProfileSelectionActivity, 
                     "Profile created! Your player code: ${profile.playerCode}", 
                     Toast.LENGTH_LONG).show()
@@ -329,6 +330,9 @@ class ProfileSelectionActivity : AppCompatActivity() {
         options += "🎯 Change Nickname"
         actions += { showChangeNicknameDialog(profile) }
 
+        options += "🎙 Voice Persona"
+        actions += { showPersonaDialog(profile) }
+
         if (!profile.isAI && !profile.isGuest) {
             options += "🗑️ Delete Profile"
             actions += { confirmDeleteProfile(profile) }
@@ -340,6 +344,19 @@ class ProfileSelectionActivity : AppCompatActivity() {
                 actions.getOrNull(which)?.invoke()
             }
             .show()
+    }
+
+    private fun showPersonaDialog(profile: PlayerProfile) {
+        lifecycleScope.launch {
+            val currentPersona = profile.aiPersonality.ifBlank { cloudiePrefs.getString("cloudie_persona", "cloudie") ?: "cloudie" }
+            val selected = ProfileDialogs.showPersonaSelectionDialog(this@ProfileSelectionActivity, currentPersona)
+            if (selected != null) {
+                profileManager.updatePersona(profile.playerId, selected)
+                cloudiePrefs.edit().putString("cloudie_persona", selected).apply()
+                loadProfiles()
+                Toast.makeText(this@ProfileSelectionActivity, "Voice persona set to $selected", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     
     private fun showEditProfileDialog(profile: PlayerProfile) {
@@ -692,19 +709,23 @@ class ProfileAdapter(
                     gravity = android.view.Gravity.CENTER
                     
                     addView(TextView(context).apply {
-                        text = when {
+                        val nick = profile.nickname.takeIf { it.isNotBlank() && it != profile.name }
+                        val baseName = when {
                             profile.isAI -> "☁️ ${profile.name}"
                             profile.isGuest -> "👤 ${profile.name}"
                             else -> profile.name
                         }
+                        text = if (nick != null) "$baseName ($nick)" else baseName
                         textSize = 18f
                         setTextColor(Color.WHITE)
                     })
                     
                     addView(TextView(context).apply {
+                        val personaLabel = profile.aiPersonality.takeIf { it.isNotBlank() }?.let { "Voice: $it" }
                         text = when {
-                            profile.isAI -> "AI Player"
-                            profile.isGuest -> "Guest Player"
+                            profile.isAI -> personaLabel ?: "AI Player"
+                            profile.isGuest -> personaLabel ?: "Guest Player"
+                            personaLabel != null -> personaLabel
                             else -> "${profile.wins}W ${profile.losses}L"
                         }
                         textSize = 14f

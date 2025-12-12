@@ -1,0 +1,389 @@
+{
+  "personas": [
+    {
+      "name": "cloudie",
+      "events": {
+        "GAME_START": [
+          "Skies are clear—ready for takeoff, {player}?",
+          "Crew assembled. Let's rain some wins!",
+          "Hey {player}, buckle up! The board is our playground.",
+          "Fluffy greetings! Who grabs the first rainbow?",
+          "Raindrops at the ready. Adventure time!",
+          "Cloudie here—who will make the biggest splash today?"
+        ],
+        "TURN_PROMPT": [
+          "{player}, your cloud is charged. Roll when ready!",
+          "Winds are calm for {player}.",
+          "Your turn, {player}! Sprinkle some luck.",
+          "Ready, {player}? Let a raindrop roll!",
+          "The board is quiet—make some thunder, {player}.",
+          "Give the dice a cozy tumble, {player}."
+        ],
+        "DICE_ROLL": [
+          "Drizzle roll: {dice} on the board.",
+          "Rolling thunder! {player} hits {dice}.",
+          "Tiny drops or big splash? {dice} appears!",
+          "Raindrop dance lands on {dice}.",
+          "Cloud giggles—{player} just rolled a {dice}.",
+          "Whoosh! The dice says {dice}."
+        ],
+        "LANDED_TILE": [
+          "{player} drifts to {tile} ({delta}).",
+          "Touchdown at {tile} for {player}—{delta}.",
+          "Soft landing on {tile}! Score change: {delta}.",
+          "{player} hops onto {tile}. Delta {delta}.",
+          "Raindrop rests on {tile}. Nice move!",
+          "Tile time: {tile} welcomes {player}."
+        ],
+        "UNDO": [
+          "Rewinding {player}'s last drop to {tile}.",
+          "Undo breeze applied—back to {tile}.",
+          "Whoopsie undone. Return to {tile}.",
+          "Cloud rewind! {player} floats back to {tile}.",
+          "Step back in the puddle—{tile} again.",
+          "Poof! That move is rolled back." 
+        ],
+        "WIN": [
+          "{player} captures the crown!",
+          "Champions' clouds gather for {player}.",
+          "Rainbows celebrate {player}!",
+          "Crown floats to {player}. Sparkles everywhere!",
+          "Victory shower for {player}!",
+          "{player} wins! Time for a happy cloud dance."
+        ],
+        "WARNING_TIMEOUT": [
+          "Winds shifting—moving to keep the game flowing.",
+          "Clock's nudging us forward.",
+          "Little breeze reminder—let's keep rolling.",
+          "Tick tock—Cloudie keeps the sky moving.",
+          "Timer whisper: pass the turn along.",
+          "Gentle gust—next player, please!"
+        ],
+        "WARNING_MISPLACEMENT": [
+          "Coin off its cloud—reset on the right tile.",
+          "Hold up! Fix that placement and we're golden.",
+          "Oops, the token is wandering. Park it on {tile}.",
+          "Cloud check: place the coin neatly.",
+          "Tiny nudge—move the piece to the right spot.",
+          "Let’s straighten that token so the sky smiles."
+        ],
+        "WIN_ANIMATION": [
+          "Rainbow celebration coming in hot!",
+          "Lighting up the skies for the winner.",
+          "Confetti clouds swirl for our champ!",
+          "Sky party mode: ON!",
+          "Cloud cannons blasting sparkles!",
+          "Victory rainbow zoom!"
+        ]
+      }
+    },
+    {
+      "name": "coach",
+      "events": {
+        "GAME_START": [
+          "Team ready. {leader} leads the lineup—play smart!",
+          "Opening tip: protect your lead, attack the gaps.",
+          "Game plan set—have fun and stay sharp!",
+          "Huddle up! First whistle about to blow.",
+          "Warm-up done. {leader}, take the first move.",
+          "Remember: good sports, big smiles. Let's go!"
+        ],
+        "TURN_PROMPT": [
+          "{player}, it's your possession—execute the play.",
+          "Eyes up {player}, clock is your friend.",
+          "Your move, {player}. Nice and steady.",
+          "Set your feet, {player}. Roll with confidence.",
+          "Take the shot, {player}!",
+          "Run the play. Simple and strong."
+        ],
+        "DICE_ROLL": [
+          "Solid roll at {dice}. Reset and defend.",
+          "Momentum check: {dice} keeps you in it.",
+          "Clean release—{dice} on the board.",
+          "Good form, {player}. Score shows {dice}.",
+          "{dice} rolled. Stay focused on position.",
+          "Nice! {dice} keeps the pace." 
+        ],
+        "LANDED_TILE": [
+          "{player} steps onto {tile}. Delta {delta}.",
+          "Board position: {tile}. Adjust strategy.",
+          "Set your stance on {tile}. Score change {delta}.",
+          "Secure position at {tile}, {player}.",
+          "{tile} locked in. Eyes on the next play.",
+          "Hold this ground: {tile}."
+        ],
+        "UNDO": [
+          "Timeout called—play rolled back to {tile}.",
+          "Challenged and reversed. Reset at {tile}.",
+          "Call stands: back to {tile}.",
+          "Review done. Position restored to {tile}.",
+          "Rewind complete—new chance to execute.",
+          "Reset whistle. Try that move again." 
+        ],
+        "WIN": [
+          "Final whistle—{player} clinches it!",
+          "Game sealed. {player} walks off a winner.",
+          "Victory lap for {player}!",
+          "Scoreboard shines—{player} on top.",
+          "Great game! {player} leads the highlight reel.",
+          "Champions high-five!"
+        ],
+        "WARNING_TIMEOUT": [
+          "Clock violation incoming—move it.",
+          "Hustle up; we keep tempo.",
+          "Quick reset—next player steps in.",
+          "Timeout warning—flow stays fast.",
+          "Tempo check: keep the turns rolling.",
+          "Coach tap: pass it along."
+        ],
+        "WARNING_MISPLACEMENT": [
+          "Token off position—set your feet and reset.",
+          "Bad placement. Fix it before we resume.",
+          "Adjust the marker to the right tile.",
+          "Square it up—token needs a clean spot.",
+          "Line up your piece; then we play.",
+          "Quick fix—accuracy matters."
+        ],
+        "WIN_ANIMATION": [
+          "Victory lights up. Respect the grind.",
+          "Celebration drill: executed.",
+          "Scoreboard sparkle time!",
+          "Stadium roar—lights for the champ.",
+          "Winner's banner drops now.",
+          "Fireworks over center field!"
+        ]
+      }
+    },
+    {
+      "name": "jester",
+      "events": {
+        "GAME_START": [
+          "Welcome to the giggle games!",
+          "Ready, set, chuckle!",
+          "Who ordered extra fun? We did!",
+          "Laugh hats on—let's roll!",
+          "Clown car is here. Hop in, {player}!",
+          "Silly skies ahead."
+        ],
+        "TURN_PROMPT": [
+          "Your turn, {player}! Make the dice do a dance.",
+          "Roll time—give it a wiggle!",
+          "Tickle the dice, {player}.",
+          "Squeaky shoes say go, {player}!",
+          "Ring ring! It's your move, {player}.",
+          "Do a tiny drumroll and roll!"
+        ],
+        "DICE_ROLL": [
+          "Boop! Dice says {dice}.",
+          "Bouncy roll: {dice}!",
+          "Giggle number: {dice}.",
+          "Dice did a somersault to {dice}.",
+          "Clowny count lands on {dice}.",
+          "{dice}! Like a stack of pancakes—sort of."
+        ],
+        "LANDED_TILE": [
+          "Plop! {player} lands on {tile} ({delta}).",
+          "Hop, skip, jump to {tile}!",
+          "Ker-plunk on {tile}. Delta {delta}.",
+          "{player} sticks the landing on {tile}.",
+          "Bounce house stop: {tile}.",
+          "Jelly-step onto {tile}."
+        ],
+        "UNDO": [
+          "Oopsie! Magic rewind to {tile}.",
+          "Boing! Back we go to {tile}.",
+          "Reverse squeak—return to {tile}.",
+          "Clown time travel to {tile}.",
+          "Rewind the joke—start at {tile}.",
+          "Mulligan! Back to the silly spot." 
+        ],
+        "WIN": [
+          "{player} wins! Confetti cannons of candy!",
+          "Ta-da! {player} grabs the golden giggle.",
+          "Winner pie incoming—just kidding!",
+          "Clown horns for {player}!",
+          "High-five parade for our champ!",
+          "{player} = superstar of silliness."
+        ],
+        "WARNING_TIMEOUT": [
+          "Time's poking us—pass the turn!",
+          "Clown clock says hurry, pals.",
+          "Tickle tick tock—next player!",
+          "Silly sand timer is empty—go go!",
+          "Buzzer sound! Move along.",
+          "The banana peel of time is here—step quick!"
+        ],
+        "WARNING_MISPLACEMENT": [
+          "Token went wandering—park it right.",
+          "Clown nose alert: wrong spot!",
+          "Scoot the piece to its cozy tile.",
+          "Oops! The piece is doing hide and seek.",
+          "Place it straight so it stops wobbling.",
+          "Juggle it back into place." 
+        ],
+        "WIN_ANIMATION": [
+          "Sparkly slapstick celebration!",
+          "Confetti storm for the champ!",
+          "Silly lights go bananas!",
+          "Victory dance with rubber chickens!",
+          "Balloons, bubbles, and cheers!",
+          "Carousel of claps for the winner!"
+        ]
+      }
+    },
+    {
+      "name": "wizard",
+      "events": {
+        "GAME_START": [
+          "Welcome, young adventurers!",
+          "The quest begins—who will claim the crown?",
+          "Spells are ready, dice are glowing.",
+          "Gather round the magic board!",
+          "Brave {player}, your journey starts now.",
+          "Legends whisper—heroes are among us."
+        ],
+        "TURN_PROMPT": [
+          "{player}, cast your roll spell!",
+          "Raise the dice, {player}, and let fate sing.",
+          "Your turn, hero—summon a number!",
+          "Channel the winds, {player}.",
+          "The runes are calm—roll, {player}.",
+          "Let the magic tumble from your hand."
+        ],
+        "DICE_ROLL": [
+          "The dice reveals {dice}.",
+          "Ancient stones show {dice} today.",
+          "Mystic spin lands on {dice}.",
+          "Stars align at {dice}.",
+          "Glowing glyphs point to {dice}.",
+          "A gentle spell brings {dice}."
+        ],
+        "LANDED_TILE": [
+          "{player} steps onto {tile} ({delta}).",
+          "A new rune: {tile} welcomes you.",
+          "{player} reaches {tile}; the air shimmers.",
+          "The path bends to {tile}. Delta {delta}.",
+          "Magic circle at {tile} glows softly.",
+          "You arrive at {tile}; fortune stirs."
+        ],
+        "UNDO": [
+          "Time spell cast—back to {tile}.",
+          "Reversing the winds to {tile}.",
+          "Chronomancy engaged; return to {tile}.",
+          "Step backward through the portal to {tile}.",
+          "The hourglass flips—back you go.",
+          "The thread rewinds to {tile}."
+        ],
+        "WIN": [
+          "{player} claims the enchanted crown!",
+          "Victory spell complete—{player} shines!",
+          "Legends sing of {player} today.",
+          "The realm cheers for {player}.",
+          "A hero rises—{player} is champion!",
+          "Magic fireworks honor {player}."
+        ],
+        "WARNING_TIMEOUT": [
+          "The sands of time run low—act now.",
+          "The hourglass whispers: next turn.",
+          "Winds push the story forward.",
+          "Time spirit nudges the journey on.",
+          "The clock owl hoots—move along.",
+          "Fate tugs the page to the next hero."
+        ],
+        "WARNING_MISPLACEMENT": [
+          "A token strayed—place it true.",
+          "Align your piece on the right rune.",
+          "Magic likes neatness—fix the spot.",
+          "Center the token so spells behave.",
+          "A gentle nudge restores the path.",
+          "Set the marker right, and the gate opens."
+        ],
+        "WIN_ANIMATION": [
+          "Auroras dance for our champion!",
+          "Runes blaze; victory is bright!",
+          "Fireflies swirl in celebration.",
+          "Celestial ribbons wave for the winner.",
+          "Magic blooms across the board!",
+          "Starlight crowns the victor."
+        ]
+      }
+    },
+    {
+      "name": "bot",
+      "events": {
+        "GAME_START": [
+          "System online. Players detected. Ready.",
+          "Boot complete. {player}, initiate fun mode.",
+          "Calibration done. Begin match.",
+          "Hello humans. I predict excitement.",
+          "Sensors show smiles. Commencing game.",
+          "All circuits agree: this will be awesome."
+        ],
+        "TURN_PROMPT": [
+          "{player}, please roll. Processing...",
+          "Awaiting input from {player}.",
+          "Your move. Engage dice protocol.",
+          "Go, {player}. I am logging this.",
+          "Action requested: roll now.",
+          "Green light for {player}."
+        ],
+        "DICE_ROLL": [
+          "Result computed: {dice}.",
+          "Randomizer outputs {dice}.",
+          "Data point acquired: {dice}.",
+          "Dice telemetry shows {dice}.",
+          "{dice} registered. Confidence high.",
+          "Value {dice} stored in memory." 
+        ],
+        "LANDED_TILE": [
+          "{player} arrives at {tile}. Delta {delta} recorded.",
+          "Position update: {tile}.",
+          "Marker aligned on {tile}.",
+          "{player} set to {tile}. Change: {delta}.",
+          "Grid confirms location {tile}.",
+          "Tile {tile} locked."
+        ],
+        "UNDO": [
+          "Reverting state to {tile}.",
+          "Rollback successful. Position {tile}.",
+          "Undo acknowledged. Back to {tile}.",
+          "History rewound. {tile} active.",
+          "State restored. Proceed.",
+          "Command undo executed."
+        ],
+        "WIN": [
+          "Victory detected: {player}.",
+          "Winner flag set for {player}.",
+          "Celebration protocol for {player} initiated.",
+          "{player} tops the leaderboard.",
+          "Mission complete. {player} leads.",
+          "Result: {player} is champion."
+        ],
+        "WARNING_TIMEOUT": [
+          "Timer warning. Please act.",
+          "Latency high—passing turn.",
+          "Time threshold reached. Move on.",
+          "Schedule drift detected. Next player.",
+          "Clock ping—keep flow moving.",
+          "Auto-advance ready if no action."
+        ],
+        "WARNING_MISPLACEMENT": [
+          "Token misaligned. Adjust to correct tile.",
+          "Calibration needed: place piece properly.",
+          "Piece offset detected. Realign.",
+          "Error: token outside target zone.",
+          "Fix position to continue.",
+          "Alignment check failed. Please correct."
+        ],
+        "WIN_ANIMATION": [
+          "LEDs celebrating. Winner acknowledged.",
+          "Spark routine activated.",
+          "Visuals online: victory mode.",
+          "Fireworks.exe running.",
+          "Display: champion highlight.",
+          "Confetti protocol: engaged."
+        ]
+      }
+    }
+  ]
+}

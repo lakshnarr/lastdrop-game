@@ -64,7 +64,7 @@ class ProfileManager(context: Context) {
     
     // ==================== PROFILE CRUD ====================
     
-    suspend fun createProfile(name: String, nickname: String = name): Result<PlayerProfile> {
+    suspend fun createProfile(name: String, nickname: String = name, persona: String = "cloudie"): Result<PlayerProfile> {
         return try {
             val count = dao.getProfileCount()
             
@@ -89,7 +89,8 @@ class ProfileManager(context: Context) {
                 name = name.trim(),
                 nickname = nickname.trim(),
                 avatarColor = tileColor, // Use first available unique color
-                isGuest = false
+                isGuest = false,
+                aiPersonality = persona
             )
             
             dao.insertProfile(profile)
@@ -177,6 +178,15 @@ class ProfileManager(context: Context) {
                 return Result.failure(Exception(validationError))
             }
             dao.updateNickname(profileId, newNickname.trim())
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updatePersona(profileId: String, persona: String): Result<Unit> {
+        return try {
+            dao.updatePersona(profileId, persona)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
