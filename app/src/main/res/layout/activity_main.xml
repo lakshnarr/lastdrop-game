@@ -1063,7 +1063,7 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/scrollTestLog"
         android:layout_width="match_parent"
         android:layout_height="300dp"
@@ -1071,6 +1071,8 @@
         android:padding="12dp"
         android:scrollbars="vertical"
         android:fadeScrollbars="false"
+        android:fillViewport="true"
+        android:overScrollMode="always"
         android:visibility="gone">
 
         <TextView
@@ -1082,7 +1084,7 @@
             android:textColor="#8B949E"
             android:textSize="13sp"
             android:lineSpacingExtra="2dp" />
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <Button
         android:id="@+id/btnClearLog"

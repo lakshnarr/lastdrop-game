@@ -57,6 +57,7 @@ import java.util.UUID
 import kotlin.collections.HashMap
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import androidx.core.widget.NestedScrollView
 
 @SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
@@ -196,7 +197,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var btnDice6: Button
     private lateinit var tvTestLog: TextView
     private lateinit var tvTestLogTitle: TextView
-    private lateinit var scrollTestLog: ScrollView
+    private lateinit var scrollTestLog: NestedScrollView
     private lateinit var btnClearLog: Button
 
     // ---------- Game / players ----------
@@ -973,6 +974,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun onConnectBoardClicked() {
+        // Ensure BLE permissions before starting any scan
+        if (!ensureBlePermissions()) {
+            Toast.makeText(this, "Bluetooth permissions required", Toast.LENGTH_LONG).show()
+            return
+        }
+
         if (!esp32Connected) {
             // Not connected → Show dialog immediately and start scanning inside it
             btnConnectBoard.text = "🎮  Scanning..."
@@ -1006,8 +1013,14 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 onComplete = {
                     runOnUiThread {
                         liveScanDialog.onScanComplete()
-                        btnConnectBoard.text = "🎮  Connect Board"
-                        btnConnectBoard.isEnabled = true
+
+                        // Only reset button state if we did not already connect to a board
+                        if (!esp32Connected) {
+                            btnConnectBoard.text = "🎮  Connect Board"
+                            btnConnectBoard.isEnabled = true
+                        } else {
+                            appendTestLog("ℹ️ Scan stopped (board already connected)")
+                        }
                     }
                 }
             )
@@ -2980,7 +2993,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 appendTestLog("❌ Scan cancelled")
                 boardScanManager.stopScan()
                 btnConnectBoard.isEnabled = true
-                btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                btnConnectBoard.text = "🎮  Connect Board"
             }
         )
         
@@ -3099,8 +3112,21 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
      */
     @SuppressLint("MissingPermission")
     private fun showPinEntryDialog(device: BluetoothDevice) {
-        pendingPinDevice = device
         val boardId = device.name ?: "Unknown"
+        
+        // Prevent showing PIN dialog if already connected or pending
+        if (esp32Connected) {
+            appendTestLog("⚠️ Already connected to $boardId, ignoring PIN dialog request")
+            return
+        }
+        
+        if (pendingPinDevice != null) {
+            appendTestLog("⚠️ PIN dialog already pending for ${pendingPinDevice?.name}, ignoring duplicate")
+            return
+        }
+        
+        pendingPinDevice = device
+        appendTestLog("🔐 Showing PIN dialog for $boardId")
         
         runOnUiThread {
             PinEntryDialog.show(
@@ -3125,7 +3151,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     pendingPinDevice = null
                     runOnUiThread {
                         btnConnectBoard.isEnabled = true
-                        btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                        btnConnectBoard.text = "🎮  Connect Board"
                     }
                 }
             )
@@ -3139,11 +3165,18 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun validatePinAndConnect(device: BluetoothDevice, pin: String, rememberPin: Boolean) {
         val boardId = device.name ?: "Unknown"
         
-        // Prevent multiple simultaneous connection attempts
-        if (esp32Connected) {
-            appendTestLog("⚠️ Already connected, ignoring duplicate request")
-            return
+        appendTestLog("📍 validatePinAndConnect called for $boardId")
+        appendTestLog("   esp32Connected=$esp32Connected, esp32Paired=$esp32Paired")
+        
+        // Clean up any existing connection first (allow reconnection)
+        if (::boardConnectionController.isInitialized) {
+            appendTestLog("⚠️ Disconnecting existing controller before new connection")
+            boardConnectionController.disconnect()
         }
+        
+        // Reset connection state
+        esp32Connected = false
+        esp32Paired = false
         
         appendTestLog("🔌 Connecting to $boardId...")
         
@@ -3158,26 +3191,36 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             onLog = { msg -> appendTestLog(msg) },
             onConnected = { connectedDevice ->
                 appendTestLog("✓ BLE connected to ${connectedDevice.name}")
+                appendTestLog("   Setting esp32Connected=true")
                 esp32Connected = true
+                runOnUiThread {
+                    btnConnectBoard.text = "🎮  Disconnect Board"
+                    btnConnectBoard.isEnabled = true
+                }
             },
             onDisconnected = { disconnectedDevice ->
+                appendTestLog("❌ onDisconnected callback triggered")
+                appendTestLog("   disconnectedDevice=${disconnectedDevice?.name}")
                 runOnUiThread {
                     esp32Connected = false
                     esp32Paired = false
-                    btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                    btnConnectBoard.text = "🎮  Connect Board"
+                    btnConnectBoard.isEnabled = true
                 }
-                appendTestLog("🔌 Board disconnected")
+                appendTestLog("🔌 Board disconnected, button reset")
             },
             onMessage = { data ->
                 handleESP32Event(data)
             },
             onServicesReady = {
                 appendTestLog("✓ ESP32 services ready")
+                appendTestLog("   esp32Connected=$esp32Connected")
                 
                 // NOW send PIN validation command (services are ready)
                 mainScope.launch {
                     delay(500)  // Small delay to ensure everything is stable
                     appendTestLog("📤 Sending PIN validation to ESP32...")
+                    appendTestLog("   PIN: $pin")
                     
                     val pairCommand = JSONObject().apply {
                         put("command", "pair")
@@ -3204,17 +3247,19 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         }
                         
                         runOnUiThread {
-                            btnConnectBoard.text = "🔌 Disconnect Board"
+                            btnConnectBoard.text = "🎮  Disconnect Board"
+                            btnConnectBoard.isEnabled = true
                             Toast.makeText(this@MainActivity, "Connected to $boardId", Toast.LENGTH_SHORT).show()
+                            
+                            // Clear pending device on success
+                            pendingPinDevice = null
                             
                             PinEntryDialog.showValidationResult(
                                 context = this@MainActivity,
                                 success = true,
                                 boardId = boardId,
                                 onRetry = { },
-                                onCancel = {
-                                    pendingPinDevice = null
-                                }
+                                onCancel = { }
                             )
                         }
                     } else {
@@ -3223,7 +3268,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         runOnUiThread {
                             boardConnectionController?.disconnect()
                             esp32Connected = false
-                            btnConnectBoard.text = "🎮  Connect ESP32 Board"
+                            btnConnectBoard.text = "🎮  Connect Board"
+                            btnConnectBoard.isEnabled = true
                             
                             PinEntryDialog.showValidationResult(
                                 context = this@MainActivity,
@@ -3402,9 +3448,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun sendRollToESP32(playerId: Int, diceValue: Int, currentTile: Int, expectedTile: Int) {
-        if (testModeEnabled) {
-            // In test mode, skip ESP32 and immediately process the turn
-            Log.d(TAG, "Test mode: Skipping ESP32, processing turn immediately")
+        if (testModeEnabled && testModeType == 2) {
+            // Test Mode 2 bypasses ESP32 entirely
+            Log.d(TAG, "Test Mode 2: Skipping ESP32, processing turn locally")
             return
         }
         
