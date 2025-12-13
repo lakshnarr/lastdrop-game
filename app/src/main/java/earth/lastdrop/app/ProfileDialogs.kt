@@ -4,6 +4,8 @@ import android.app.AlertDialog
 import android.content.Context
 import android.text.InputType
 import android.view.LayoutInflater
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.*
 import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.TextToSpeechVoiceService
@@ -21,9 +23,13 @@ object ProfileDialogs {
      */
     suspend fun showCreateProfileDialog(context: Context): CreateProfileResult? {
         return suspendCancellableCoroutine { continuation ->
-            val layout = LinearLayout(context).apply {
+            val linear = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(50, 40, 50, 10)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             }
             
             // Profile Name input
@@ -84,34 +90,86 @@ object ProfileDialogs {
                 }
             }
             
-            layout.addView(nameLabel)
-            layout.addView(nameInput)
-            layout.addView(nicknameLabel)
-            layout.addView(nicknameInput)
-            layout.addView(personaLabel)
-            layout.addView(personaSpinner)
-            layout.addView(sampleButton)
-            
+            linear.addView(nameLabel)
+            linear.addView(nameInput)
+            linear.addView(nicknameLabel)
+            linear.addView(nicknameInput)
+            linear.addView(personaLabel)
+            linear.addView(personaSpinner)
+            linear.addView(sampleButton)
+
+            val scroll = ScrollView(context).apply {
+                isFillViewport = true
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                )
+                addView(linear)
+            }
+
+            val actionRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                setPadding(40, 24, 40, 24)
+                gravity = android.view.Gravity.END
+            }
+
+            val cancelButton = Button(context).apply {
+                text = "Cancel"
+            }
+
+            val createButton = Button(context).apply {
+                text = "Create"
+            }
+
+            actionRow.addView(cancelButton)
+            actionRow.addView(createButton)
+
+            val root = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                addView(scroll)
+                addView(actionRow)
+            }
+
             val dialog = AlertDialog.Builder(context)
                 .setTitle("Create New Profile")
                 .setMessage("You'll get a unique player code to track your stats even if you change your name later.")
-                .setView(layout)
-                .setPositiveButton("Create") { _, _ ->
-                    val name = nameInput.text.toString().trim()
-                    val nickname = nicknameInput.text.toString().trim().ifEmpty { name }
-                    val persona = personaKeys[personaSpinner.selectedItemPosition]
-                    if (continuation.isActive) {
-                        continuation.resume(CreateProfileResult(name, nickname, persona))
-                    }
-                }
-                .setNegativeButton("Cancel") { _, _ ->
-                    if (continuation.isActive) {
-                        continuation.resume(null)
-                    }
-                }
+                .setView(root)
                 .setCancelable(false)
                 .create()
-            
+
+            fun resume(result: CreateProfileResult?) {
+                if (continuation.isActive) {
+                    continuation.resume(result)
+                }
+            }
+
+            cancelButton.setOnClickListener {
+                resume(null)
+                dialog.dismiss()
+            }
+
+            createButton.setOnClickListener {
+                val name = nameInput.text.toString().trim()
+                val nickname = nicknameInput.text.toString().trim().ifEmpty { name }
+                val persona = personaKeys[personaSpinner.selectedItemPosition]
+                resume(CreateProfileResult(name, nickname, persona))
+                dialog.dismiss()
+            }
+
+            dialog.setOnShowListener {
+                dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+                nameInput.requestFocus()
+            }
+
             dialog.setOnDismissListener {
                 ttsService?.shutdown()
             }

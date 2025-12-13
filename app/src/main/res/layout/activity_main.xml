@@ -1086,16 +1086,34 @@
             android:lineSpacingExtra="2dp" />
     </androidx.core.widget.NestedScrollView>
 
-    <Button
-        android:id="@+id/btnClearLog"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="100dp"
-        android:backgroundTint="#666666"
-        android:text="Clear Log"
-        android:textColor="#FFFFFF"
-        android:visibility="gone" />
+        android:visibility="gone"
+        android:id="@+id/layoutLogButtons">
+
+        <Button
+            android:id="@+id/btnCopyLog"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="#4CAF50"
+            android:text="📋 Copy Log"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btnClearLog"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:backgroundTint="#666666"
+            android:text="Clear Log"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
 
 </LinearLayout>
 

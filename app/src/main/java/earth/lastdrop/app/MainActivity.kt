@@ -199,6 +199,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvTestLogTitle: TextView
     private lateinit var scrollTestLog: NestedScrollView
     private lateinit var btnClearLog: Button
+    private lateinit var btnCopyLog: Button
+    private lateinit var layoutLogButtons: LinearLayout
 
     // ---------- Game / players ----------
     private var lastRoll: Int? = null
@@ -431,6 +433,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     // battery per diceId
     private val diceBatteryLevels: MutableMap<Int, Int> = HashMap()
+    private val diceDisplayNames: MutableMap<Int, String> = HashMap()
+    private val diceBatteryAnnounced: MutableSet<Int> = HashSet()
 
     // Rolling status tracking - per die in 2-dice mode
     private var isDiceRolling: Boolean = false
@@ -531,18 +535,27 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             playWithTwoDice = { playWithTwoDice },
             onStatus = { status -> runOnUiThread { tvDiceStatus.text = status } },
             onLog = { msg -> appendTestLog(msg) },
-            onDiceConnected = { _, dieName ->
+            onDiceConnected = { diceId, dieName ->
+                val displayName = dieName ?: "BLDice"
+                diceDisplayNames[diceId] = displayName
+                diceBatteryAnnounced.remove(diceId)
+
                 runOnUiThread {
                     diceConnected = true
                     btnConnectDice.text = "Disconnect Dice"
-                    tvDiceStatus.text = "Connected to ${dieName ?: "BLDice"}"
+                    tvDiceStatus.text = "Connected to $displayName"
+                    if (voiceEnabled) runCatching { voiceService?.speak("Connected to $displayName") }
                 }
             },
             onDiceDisconnected = {
+                diceDisplayNames.clear()
+                diceBatteryAnnounced.clear()
+
                 runOnUiThread {
                     diceConnected = false
                     btnConnectDice.text = "Connect Dice"
                     tvDiceStatus.text = "Dice disconnected"
+                    if (voiceEnabled) runCatching { voiceService?.speak("Dice disconnected") }
                 }
             }
         )
@@ -571,19 +584,23 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 runOnUiThread {
                     btnConnectBoard.text = "🎮  Disconnect Board"
                     btnConnectBoard.isEnabled = true
+                    if (voiceEnabled) runCatching { voiceService?.speak("Board connected") }
                 }
             },
             onDisconnected = { _ ->
                 esp32Connected = false
                 esp32ErrorHandler.stopHeartbeatMonitoring()
                 stateSyncManager.stopSyncMonitoring()
-                gameActive = false
+                waitingForCoinPlacement = false
+                uiUpdateManager.cancelCountdown()
+                esp32ErrorHandler.cancelCoinPlacementTimeout()
 
                 if (!watchdogReconnectInProgress) {
                     runOnUiThread {
                         Toast.makeText(this, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
                         btnConnectBoard.text = "🎮  Connect Board"
                         btnConnectBoard.isEnabled = true
+                        if (voiceEnabled) runCatching { voiceService?.speak("Board disconnected") }
                     }
                 }
 
@@ -604,6 +621,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             onServicesReady = {
                 runOnUiThread {
                     Toast.makeText(this, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                    if (voiceEnabled) runCatching { voiceService?.speak("Board connected") }
                 }
                 sendPairCommandToESP32()
                 sendConfigToESP32()
@@ -897,6 +915,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvTestLogTitle = findViewById(R.id.tvTestLogTitle)
         scrollTestLog = findViewById(R.id.scrollTestLog)
         btnClearLog = findViewById(R.id.btnClearLog)
+        btnCopyLog = findViewById(R.id.btnCopyLog)
+        layoutLogButtons = findViewById(R.id.layoutLogButtons)
 
         tvTitle.text = "Last Drop Earth: AI Board Game Controller"
         tvDiceStatus.text = "Not connected"
@@ -911,7 +931,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         layoutDiceButtons.visibility = View.GONE
         tvTestLogTitle.visibility = View.GONE
         scrollTestLog.visibility = View.GONE
-        btnClearLog.visibility = View.GONE
+        layoutLogButtons.visibility = View.GONE
     }
 
     private fun setupUiListeners() {
@@ -961,6 +981,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             tvTestLog.text = "Console cleared..."
             Toast.makeText(this, "Test log cleared", Toast.LENGTH_SHORT).show()
         }
+        btnCopyLog.setOnClickListener {
+            val logText = tvTestLog.text.toString()
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("ESP32 Test Log", logText)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun onConnectButtonClicked() {
@@ -984,6 +1011,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             // Not connected → Show dialog immediately and start scanning inside it
             btnConnectBoard.text = "🎮  Scanning..."
             btnConnectBoard.isEnabled = false
+            if (voiceEnabled) runCatching { voiceService?.speak("Connecting to board") }
             
             // Show live scan dialog immediately
             val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
@@ -1082,6 +1110,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         "Connected to session: ${sessionId.take(8)}...",
                         Toast.LENGTH_LONG
                     ).show()
+                    if (voiceEnabled) runCatching { voiceService?.speak("Connected to live server") }
                     
                     // Send another heartbeat after successful connection
                     apiManager.sendImmediateHeartbeat()
@@ -1099,6 +1128,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         "Connection failed: ${e.message}",
                         Toast.LENGTH_SHORT
                     ).show()
+                    if (voiceEnabled) runCatching { voiceService?.speak("Live server disconnected") }
                 }
             }
         }
@@ -1195,6 +1225,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             .setTitle("Choose dice mode")
             .setItems(options) { dialog, which ->
                 playWithTwoDice = (which == 1)
+                if (voiceEnabled) {
+                    val modeAnnouncement = if (playWithTwoDice) "Two dice mode selected" else "One die mode selected"
+                    runCatching { voiceService?.speak(modeAnnouncement) }
+                }
                 dialog.dismiss()
                 connectDice()
             }
@@ -1221,6 +1255,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         diceConnectionController.disconnectAll()
         diceResults.clear()
         diceBatteryLevels.clear()
+        diceDisplayNames.clear()
+        diceBatteryAnnounced.clear()
         diceColorMap.clear()
         diceRollingStatus.clear()
 
@@ -1364,6 +1400,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     override fun onDiceChargeLevel(diceId: Int, level: Int) {
         runOnUiThread {
             diceBatteryLevels[diceId] = level
+
+            if (diceBatteryAnnounced.add(diceId)) {
+                val displayName = diceDisplayNames[diceId] ?: "BLDice"
+                if (voiceEnabled) runCatching { voiceService?.speak("$displayName battery $level percent") }
+            }
             
             // Use BatteryMonitor for warnings
             batteryMonitor.updateBatteryLevel(diceId, level) { message ->
@@ -2799,11 +2840,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Production"
                         btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
                         layoutDiceButtons.visibility = View.GONE
+                        if (voiceEnabled) runCatching { voiceService?.speak("Production mode") }
                         
                         // Hide test console
                         tvTestLogTitle.visibility = View.GONE
                         scrollTestLog.visibility = View.GONE
-                        btnClearLog.visibility = View.GONE
+                        layoutLogButtons.visibility = View.GONE
                         
                         // Clear log
                         tvTestLog.text = ""
@@ -2820,11 +2862,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Test Mode 1"
                         btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
                         layoutDiceButtons.visibility = View.VISIBLE
+                        if (voiceEnabled) runCatching { voiceService?.speak("Test Mode 1: virtual dice with board") }
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
                         scrollTestLog.visibility = View.VISIBLE
-                        btnClearLog.visibility = View.VISIBLE
+                        layoutLogButtons.visibility = View.VISIBLE
                         
                         // Clear log
                         tvTestLog.text = ""
@@ -2841,11 +2884,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Test Mode 2"
                         btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
                         layoutDiceButtons.visibility = View.VISIBLE
+                        if (voiceEnabled) runCatching { voiceService?.speak("Test Mode 2: Android and live dot HTML only") }
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
                         scrollTestLog.visibility = View.VISIBLE
-                        btnClearLog.visibility = View.VISIBLE
+                        layoutLogButtons.visibility = View.VISIBLE
                         
                         // Clear log
                         tvTestLog.text = ""
@@ -3603,6 +3647,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvDiceStatus.text = "Waiting for coin placement..."
                         
                         appendTestLog("📥 ESP32 response: $playerName → Tile $toTile, Score: $newScore")
+                        if (voiceEnabled) {
+                            val voiceLine = buildString {
+                                append("$playerName to tile $toTile. Score $newScore")
+                                if (chanceCardText.isNotBlank()) append(". Chance card drawn.")
+                            }
+                            runCatching { voiceService?.speak(voiceLine) }
+                        }
                         
                         updateScoreboard()
                         
@@ -4061,7 +4112,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         tvTestLogTitle.visibility = View.VISIBLE
         scrollTestLog.visibility = View.VISIBLE
-        btnClearLog.visibility = View.VISIBLE
+        layoutLogButtons.visibility = View.VISIBLE
         
         appendTestLog("🟢 Switched to Test Mode 2 - Android + live.html (No ESP32)")
         Toast.makeText(this, "Test Mode 2: Continuing without ESP32", Toast.LENGTH_LONG).show()
