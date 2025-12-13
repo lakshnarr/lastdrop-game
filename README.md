@@ -2,6 +2,27 @@
 
 A unique board game system combining physical GoDice, ESP32 LED hardware, and live web display.
 
+## ✨ Latest Features
+
+**Voice Announcements** 🔊
+- Dice connection with battery level
+- Board connect/disconnect status
+- Server connection status
+- Test mode selections
+- ESP32 event notifications
+
+**Stability Improvements** 🛠️
+- Orientation lock (no more connection loss on rotation)
+- Board disconnect doesn't interrupt active games
+- Coin timeout dialogs auto-cancel on disconnect
+- Profile dialog keyboard no longer blocks buttons
+
+**Developer Tools** 🔧
+- ESP32 serial monitor in PowerShell
+- Firmware upload helper commands
+- Copy log button for team sharing
+- Test console with real-time ESP32 events
+
 ## 📁 Project Structure
 
 ```
@@ -27,10 +48,13 @@ LastDrop/
 │   └── MainActivity_COMPLETE.kt
 │
 ├── app/                         # Android application
-│   └── src/main/java/com/example/lastdrop/
-│       ├── MainActivity.kt
-│       ├── GameEngine.kt
-│       └── ... (Room DB, entities)
+│   └── src/main/java/earth/lastdrop/app/
+│       ├── MainActivity.kt      # Main orchestrator (~4,240 lines)
+│       ├── GameEngine.kt        # 20-tile board logic
+│       ├── BoardScanManager.kt  # Multi-board scanning
+│       ├── ApiManager.kt        # Server communication
+│       ├── VoiceService.kt      # Voice announcements
+│       └── ... (Room DB, managers, entities)
 │
 ├── godicesdklib/                # GoDice SDK (native C + JNI)
 └── gradle/                      # Gradle build configuration
@@ -67,11 +91,17 @@ This will:
 ### 2. Build Android App
 
 ```powershell
+# Load project configuration and helpers
+. .\config.ps1
+
 # Build the app
 .\gradlew assembleDebug
 
 # Install on connected Android device
 .\gradlew installDebug
+
+# Or run both in one command
+Build-LastDropApp
 ```
 
 **Requirements**:
@@ -79,15 +109,30 @@ This will:
 - Android SDK (minSdk 24, targetSdk 34)
 - Physical Android device (emulator won't work for BLE)
 
+**APK Location**: `app/build/outputs/apk/debug/app-debug.apk`
+
 ### 3. Upload ESP32 Firmware
 
+**Quick Method** (PowerShell):
+```powershell
+# Load helpers
+. .\config.ps1
+
+# Upload firmware to ESP32
+Upload-ESP32Firmware
+
+# Monitor serial output
+Start-ESP32Monitor
+```
+
+**Manual Method** (Arduino IDE):
 1. Open `ESP32 Program/sketch_ble.ino` in Arduino IDE
 2. Install libraries:
    - Adafruit NeoPixel
    - ArduinoJson
    - ESP32 BLE Arduino
 3. Select Board: "ESP32 Dev Module"
-4. Upload to your ESP32
+4. Upload to your ESP32 (115200 baud)
 
 **Hardware needed**:
 - ESP32 Dev Board
@@ -161,25 +206,39 @@ GoDice (BLE) → Android App (orchestrator)
 **Android**:
 - Kotlin 2.0.21
 - Gradle 8.13.1
+- AGP 8.13.1
 - Room Database (player/game state)
 - GoDice SDK (native C + JNI)
 - OkHttp (API calls)
 - Coroutines (async operations)
+- TextToSpeech (voice announcements)
 
 **ESP32**:
 - Arduino C++
 - Adafruit NeoPixel (LED control)
 - ArduinoJson (BLE protocol)
 - BLE Server (Nordic UART Service)
+- Multi-board support (unique board IDs)
 
 **Web**:
 - Pure HTML/CSS/JS (no frameworks)
 - Fetch API (poll server for updates)
 - Canvas 2D (dice animations)
 
+**Development Tools**:
+- PowerShell helpers (config.ps1)
+- arduino-cli (firmware upload)
+- Serial monitor integration
+- ADB (device deployment)
+
 ## 🧪 Testing
 
-No automated tests yet. Manual workflow:
+**Test Modes Available**:
+- **Test Mode 1**: ESP32 board only (dummy dice, full game logic on board)
+- **Test Mode 2**: Android + Web only (bypasses ESP32)
+- See `DOCS/TEST_MODE_GUIDE.md` for complete documentation
+
+**Manual Testing Workflow**:
 
 1. Build + install Android app
 2. Upload ESP32 firmware
@@ -188,6 +247,12 @@ No automated tests yet. Manual workflow:
 5. Verify LED animates on ESP32
 6. Place coin on tile
 7. Check web display updates
+
+**Development Features**:
+- Real-time test console with ESP32 events
+- Copy log button for team sharing
+- Voice announcements for all events
+- Serial monitor for ESP32 debugging
 
 ## 🤝 Contributing
 
@@ -211,14 +276,36 @@ No automated tests yet. Manual workflow:
 ## 🙏 Credits
 
 - **GoDice SDK** - Particula Tech
-- **Game Design** - [Your team]
-- **Hardware Integration** - [Contributors]
+- **Game Design** - Lakhna Team
+- **Hardware Integration** - ESP32 + WS2812B LEDs + Hall Sensors
+- **Development** - Android (Kotlin) + Arduino C++ + Web Stack
 
 ## 📧 Support
 
-- Issues: [GitHub Issues](https://github.com/lakshnarr/lastdrop-game/issues)
-- Documentation: See `/docs` folder
-- API: https://lastdrop.earth/docs
+- **Issues**: [GitHub Issues](https://github.com/lakshnarr/lastdrop-game/issues)
+- **Documentation**: See `DOCS/` folder (17 comprehensive guides)
+- **API**: https://lastdrop.earth
+- **Repository**: https://github.com/lakshnarr/lastdrop-game
+
+## 📦 Quick Commands Reference
+
+```powershell
+# Load project helpers
+. .\config.ps1
+
+# Build and install app
+Build-LastDropApp
+
+# ESP32 operations
+Upload-ESP32Firmware
+Start-ESP32Monitor
+
+# Git operations
+git status
+git add .
+git commit -m "Your message"
+git push origin main
+```
 
 ---
 
