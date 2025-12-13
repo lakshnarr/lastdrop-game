@@ -61,6 +61,11 @@ const int hallPins[NUM_TILES] = {
 #define BLE_PAIRING_PIN 654321      // Default PIN: 654321
 #define MAC_FILTERING_ENABLED false // Set true to enable MAC whitelist
 
+// ==================== BUILD FLAGS ====================
+// Toggle production vs. Test Mode 1 behavior
+const bool PRODUCTION_MODE = false;      // Set to false to enable test behaviors
+const bool TEST_MODE_1 = true;         // When PRODUCTION_MODE is false and this is true, ESP auto-confirms coin placement and returns chance card details without waiting for Hall sensors
+
 // Android device MAC address whitelist (find via Android Bluetooth settings)
 const String TRUSTED_ANDROID_MACS[] = {
   "AA:BB:CC:DD:EE:FF",  // Your phone's BLE MAC address
@@ -323,10 +328,10 @@ void setTileColor(int tile, uint32_t color);
 void renderBackground();
 void renderPlayers();
 void saveGameState();
-void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefinition& tile, int scoreChange, int oldScore, int newScore, int chanceCard, const char* chanceDesc, bool alive);
+void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefinition& tile, int scoreChange, int oldScore, int newScore, int chanceCard, const char* chanceDesc, bool alive, bool waitForCoin);
 void sendUndoResponse(int playerId, int fromTile, int toTile, int score, bool alive);
 void sendResetResponse();
-void sendCoinPlacedResponse(int playerId, int tile);
+void sendCoinPlacedResponse(int playerId, int tile, bool hallVerified = true, const char* message = "Physical coin placement confirmed");
 void sendTimeoutResponse(int playerId, int tile);
 const char* getTileTypeName(TileType type);
 
@@ -972,25 +977,39 @@ void handleRoll(JsonDocument& doc) {
   currentPlayer = playerId;
   expectedTile = newTile;
   animateMove(currentTile, newTile, PLAYER_COLORS[playerId]);
-  
-  // Start waiting for coin placement
-  waitingForCoin = true;
-  coinWaitStartTime = millis();
-  
-  // Save state
-  saveGameState();
 
-  // Send comprehensive response
-  sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore, 
-                   chanceCardNumber, chanceCardDesc, players[playerId].alive);
+  const bool skipCoinWait = (!PRODUCTION_MODE && TEST_MODE_1);
 
-  Serial.println("✓ Roll processed, waiting for coin placement\n");
+  if (skipCoinWait) {
+    // Test Mode 1: Auto-confirm placement without Hall sensors
+    players[playerId].coinPlaced = true;
+    waitingForCoin = false;
+    currentPlayer = -1;
+    expectedTile = -1;
+    saveGameState();
+
+    sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore,
+                     chanceCardNumber, chanceCardDesc, players[playerId].alive, false);
+    sendCoinPlacedResponse(playerId, newTile, false, "Test Mode 1: placement auto-confirmed");
+
+    Serial.println("✓ Roll processed (Test Mode 1) - coin auto-confirmed\n");
+  } else {
+    // Production/normal behavior: wait for Hall sensor confirmation
+    waitingForCoin = true;
+    coinWaitStartTime = millis();
+    saveGameState();
+
+    sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore,
+                     chanceCardNumber, chanceCardDesc, players[playerId].alive, true);
+
+    Serial.println("✓ Roll processed, waiting for coin placement\n");
+  }
 }
 
 // ==================== SEND ROLL RESPONSE ====================
 void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefinition& tile,
                       int scoreChange, int oldScore, int newScore, int chanceCard, 
-                      const char* chanceDesc, bool alive) {
+                      const char* chanceDesc, bool alive, bool waitForCoin) {
   StaticJsonDocument<768> doc;
   
   doc["event"] = "roll_processed";
@@ -1017,9 +1036,9 @@ void sendRollResponse(int playerId, int fromTile, int toTile, const TileDefiniti
   doc["player"]["alive"] = alive;
   doc["player"]["eliminated"] = !alive;
   
-  doc["waiting"]["forCoin"] = true;
+  doc["waiting"]["forCoin"] = waitForCoin;
   doc["waiting"]["tile"] = toTile;
-  doc["waiting"]["blinking"] = true;
+  doc["waiting"]["blinking"] = waitForCoin;
   
   String response;
   serializeJson(doc, response);
@@ -1239,15 +1258,15 @@ void checkCoinPlacement() {
   }
 }
 
-void sendCoinPlacedResponse(int playerId, int tile) {
+void sendCoinPlacedResponse(int playerId, int tile, bool hallVerified, const char* message) {
   StaticJsonDocument<384> doc;
   
   doc["event"] = "coin_placed";
   doc["playerId"] = playerId;
   doc["tile"] = tile;
-  doc["verified"] = true;
-  doc["hallSensor"] = true;
-  doc["message"] = "Physical coin placement confirmed";
+  doc["verified"] = hallVerified;
+  doc["hallSensor"] = hallVerified;
+  doc["message"] = message;
   
   doc["player"]["score"] = players[playerId].score;
   doc["player"]["alive"] = players[playerId].alive;
@@ -1291,6 +1310,9 @@ void sendTimeoutResponse(int playerId, int tile) {
 
 // ==================== MISPLACEMENT DETECTION ====================
 void scanAllTiles() {
+  // In Test Mode 1 we skip misplacement scanning to avoid noisy Hall readings
+  if (!PRODUCTION_MODE && TEST_MODE_1) return;
+
   if (waitingForCoin) return;
   
   bool foundMisplacement = false;
