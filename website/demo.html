@@ -1225,7 +1225,7 @@
               <div id="chanceImage" class="chance-image"></div>
               <div class="chance-body">
                 <div id="chanceTitle" class="chance-title">Chance Card</div>
-                <div id="chanceText" class="chance-text">Awaiting event...ª</div>
+                <div id="chanceText" class="chance-text">Awaiting event...</div>
               </div>
             </div>
           </div>
@@ -1365,7 +1365,7 @@
         </div>
       </div>
 
-      <div id="eventLog" class="event-log">Waiting for first drop...ª</div>
+      <div id="eventLog" class="event-log">Waiting for first drop...</div>
 
       <div class="section-title" style="margin-top: 12px;">
         Eliminated
@@ -1379,7 +1379,7 @@
       </div>
 
       <div class="footer-note">
-        ESP32 GåÆ Android GåÆ Server GåÆ Live GÇö visual only, rules stay on hardware.
+        ESP32 → Android → Server → Live — visual only, rules stay on hardware.
       </div>
     </aside>
   </main>
@@ -1390,7 +1390,7 @@
       <div class="winner-trophy">=ƒÅå</div>
       <div class="winner-title">WINNER!</div>
       <div id="winnerName" class="winner-name">Player 1</div>
-      <div id="winnerDrops" class="winner-drops">=ƒÆº 15 drops</div>
+      <div id="winnerDrops" class="winner-drops">💧 15 drops</div>
       <div class="winner-confetti">
         <div class="confetti"></div>
         <div class="confetti"></div>
@@ -1917,7 +1917,7 @@
 
       // Prevent immediate repositioning while a dice animation is playing.
       // If the client is animating dice and someone requests a non-animated
-      // move to a different tile, ignore it GÇö the queued state will be
+      // move to a different tile, ignore it — the queued state will be
       // applied after the dice animation completes.
       if (isDiceAnimationPlaying && !animate) {
         const currentIdx = (token.dataset.tileIndex !== undefined && token.dataset.tileIndex !== '') ? parseInt(token.dataset.tileIndex) : null;
@@ -2210,11 +2210,11 @@
       // If a dice animation is currently playing on the client, queue the latest
       // polled state and DO NOT touch tokens at all (they are animating).
       if (isDiceAnimationPlaying) {
-        console.debug('[live] updateUIFromState GÇö animation playing, queuing latest state');
+        console.debug('[live] updateUIFromState — animation playing, queuing latest state');
         queuedLiveState = state; // keep only newest state
         // Keep a minimal event message while animation plays
         if (state.lastEvent && state.lastEvent.rolling) {
-          eventLog.innerHTML = `<span class='event-highlight'>${state.lastEvent.playerName || state.lastEvent.playerId} is rollingGÇª</span>`;
+          eventLog.innerHTML = `<span class='event-highlight'>${state.lastEvent.playerName || state.lastEvent.playerId} is rolling…</span>`;
         }
         return;
       }
@@ -2261,7 +2261,7 @@
               if (t) t.dataset.tileIndex = newPos;
             });
           } else {
-            // No animation required GÇö position immediately and update dataset
+            // No animation required — position immediately and update dataset
             positionToken(p.id, newPos, idx, false);
             token.dataset.tileIndex = newPos;
           }
@@ -2540,7 +2540,7 @@
     function onControllerConnected() {
       // Update popup status
       connectionIndicator.querySelector('.status-dot').classList.add('connected');
-      connectionText.textContent = 'Controller Connected! ë';
+      connectionText.textContent = 'Controller Connected! ✓';
 
       // Hide popup after 2 seconds
       setTimeout(() => {
@@ -2605,7 +2605,7 @@
     function showWinner(player) {
       playSound('winner');
       winnerName.textContent = player.name || player.id;
-      winnerDrops.textContent = `=ƒÆº ${player.drops} drops`;
+      winnerDrops.textContent = `💧 ${player.drops} drops`;
       winnerOverlay.classList.remove('hidden');
     }
 
@@ -2814,7 +2814,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       }
       // Mark that the client is playing a dice animation so incoming polled
       // states won't move tokens until this animation completes.
-      console.debug('[live] show3DDiceRoll START GÇö setting isDiceAnimationPlaying = true', value1, value2, playerName);
+      console.debug('[live] show3DDiceRoll START — setting isDiceAnimationPlaying = true', value1, value2, playerName);
       isDiceAnimationPlaying = true;
       
       // Update dice colors if provided
@@ -2901,7 +2901,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
           dicePlayerName.textContent = `${playerName} rolled ${value2 !== null ? value1 + ' & ' + value2 : value1}`;
 
           // Clear animation guard, then run callback and apply any queued state
-          console.debug('[live] show3DDiceRoll END GÇö clearing isDiceAnimationPlaying and applying queued state');
+          console.debug('[live] show3DDiceRoll END — clearing isDiceAnimationPlaying and applying queued state');
           isDiceAnimationPlaying = false;
 
           if (callback) callback();
