@@ -12,6 +12,16 @@ $global:ESP32Firmware = "$ProjectRoot\sketch_ble\sketch_ble.ino"
 # Set JAVA_HOME environment variable for Gradle builds
 $env:JAVA_HOME = $global:JavaHome
 
+# Ensure Android SDK environment + adb are available in the current PowerShell session
+$env:ANDROID_SDK_ROOT = $global:AndroidSdkPath
+$env:ANDROID_HOME = $global:AndroidSdkPath
+$platformTools = "$($global:AndroidSdkPath)\platform-tools"
+if (Test-Path $platformTools) {
+    if ($env:Path -notlike "*$platformTools*") {
+        $env:Path = "$platformTools;$env:Path"
+    }
+}
+
 function Test-ArduinoCli {
     if (Test-Path $ArduinoCli) {
         Write-Host "✓ Arduino CLI found" -ForegroundColor Green

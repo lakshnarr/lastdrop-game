@@ -198,6 +198,16 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var tvTestLog: TextView
     private lateinit var tvTestLogTitle: TextView
     private lateinit var scrollTestLog: NestedScrollView
+    
+    // Virtual Dice UI
+    private lateinit var switchDiceMode: Switch
+    private lateinit var tvDiceModeLabel: TextView
+    private lateinit var layoutVirtualDiceContainer: LinearLayout
+    private lateinit var virtualDiceView: VirtualDiceView
+    private var virtualDiceEnabled: Boolean = false
+    private data class DiceAnimRequest(val value: Int, val intensity: Float, val onFinished: () -> Unit)
+    private val diceAnimationQueue: ArrayDeque<DiceAnimRequest> = ArrayDeque()
+    private var virtualDicePressStartMs: Long = 0L
     private lateinit var btnClearLog: Button
     private lateinit var btnCopyLog: Button
     private lateinit var layoutLogButtons: LinearLayout
@@ -917,6 +927,13 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnClearLog = findViewById(R.id.btnClearLog)
         btnCopyLog = findViewById(R.id.btnCopyLog)
         layoutLogButtons = findViewById(R.id.layoutLogButtons)
+        
+        // Virtual Dice UI
+        switchDiceMode = findViewById(R.id.switchDiceMode)
+        tvDiceModeLabel = findViewById(R.id.tvDiceModeLabel)
+        layoutVirtualDiceContainer = findViewById(R.id.layoutVirtualDiceContainer)
+        virtualDiceView = findViewById(R.id.virtualDiceView)
+        virtualDiceView.setValue(1)
 
         tvTitle.text = "Last Drop Earth: AI Board Game Controller"
         tvDiceStatus.text = "Not connected"
@@ -932,6 +949,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         tvTestLogTitle.visibility = View.GONE
         scrollTestLog.visibility = View.GONE
         layoutLogButtons.visibility = View.GONE
+        
+        // Initialize virtual dice UI
+        switchDiceMode.isChecked = false // Default to Bluetooth
+        tvDiceModeLabel.text = "Bluetooth Dice"
+        layoutVirtualDiceContainer.visibility = View.GONE
+        updateDiceModeUI()
     }
 
     private fun setupUiListeners() {
@@ -977,6 +1000,45 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         btnDice4.setOnClickListener { simulateDiceRoll(4) }
         btnDice5.setOnClickListener { simulateDiceRoll(5) }
         btnDice6.setOnClickListener { simulateDiceRoll(6) }
+        
+        // Virtual Dice Mode Switch
+        switchDiceMode.setOnCheckedChangeListener { _, isChecked ->
+            virtualDiceEnabled = isChecked
+            updateDiceModeUI()
+            
+            if (isChecked) {
+                tvDiceModeLabel.text = "Virtual Dice"
+                Toast.makeText(this, "Virtual Dice Mode: Tap dice to roll", Toast.LENGTH_SHORT).show()
+            } else {
+                tvDiceModeLabel.text = "Bluetooth Dice"
+                Toast.makeText(this, "Bluetooth Mode: Connect GoDice to roll", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Virtual Dice Press: short press = gentler roll, long press = faster roll
+        virtualDiceView.setOnTouchListener { _, event ->
+            if (!virtualDiceEnabled) return@setOnTouchListener false
+
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    virtualDicePressStartMs = android.os.SystemClock.elapsedRealtime()
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val heldMs = (now - virtualDicePressStartMs).coerceAtLeast(0L)
+
+                    // Map hold duration -> intensity
+                    // 0ms..900ms maps to 0.85x..1.55x (clamped)
+                    val t = (heldMs / 900.0).coerceIn(0.0, 1.0)
+                    val intensity = (0.85 + (1.55 - 0.85) * t).toFloat()
+
+                    rollVirtualDice(intensity)
+                    true
+                }
+                else -> false
+            }
+        }
         btnClearLog.setOnClickListener { 
             tvTestLog.text = "Console cleared..."
             Toast.makeText(this, "Test log cleared", Toast.LENGTH_SHORT).show()
@@ -1543,10 +1605,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         roll
                     }
                     
-                    // Process the AI roll
-                    handleNewRoll(aiRoll)
-                    sendLastRollToServer()
-                    pushLiveStateToBoard(rolling = false)
+                    playDiceAnimationIfNeeded(aiRoll) {
+                        handleNewRoll(aiRoll)
+                        sendLastRollToServer()
+                        pushLiveStateToBoard(rolling = false)
+                    }
                 }
             }
         }
@@ -3002,6 +3065,91 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 .format(java.util.Date())
             val currentLog = tvTestLog.text.toString()
             tvTestLog.text = "[$timestamp] $message\n$currentLog"
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    //  Virtual Dice (Production Mode)
+    // ------------------------------------------------------------------------
+    
+    /**
+     * Update UI based on virtual dice mode state
+     */
+    private fun updateDiceModeUI() {
+        if (virtualDiceEnabled) {
+            // Virtual Dice Mode
+            btnConnectDice.isEnabled = false
+            btnConnectDice.alpha = 0.5f
+            btnConnectDice.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF757575.toInt()) // Gray
+            layoutVirtualDiceContainer.visibility = View.VISIBLE
+            tvDiceStatus.text = "Virtual Dice: Ready to roll"
+            
+            // Disconnect physical dice if connected
+            if (diceConnected) {
+                diceConnectionController.disconnectAll()
+            }
+        } else {
+            // Bluetooth Dice Mode
+            btnConnectDice.isEnabled = true
+            btnConnectDice.alpha = 1.0f
+            btnConnectDice.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF4CAF50.toInt()) // Green
+            layoutVirtualDiceContainer.visibility = View.GONE
+            diceAnimationQueue.clear()
+            tvDiceStatus.text = if (diceConnected) {
+                val diceName = diceDisplayNames.values.firstOrNull() ?: "BLDice"
+                "Connected: $diceName"
+            } else {
+                "Dice: Not connected"
+            }
+        }
+    }
+    
+    private fun playDiceAnimationIfNeeded(targetValue: Int, intensity: Float = 1.0f, onFinished: () -> Unit) {
+        if (!virtualDiceEnabled || !::virtualDiceView.isInitialized) {
+            onFinished()
+            return
+        }
+
+        Log.d(TAG, "VirtualDice enqueue value=$targetValue intensity=${"%.2f".format(intensity)}")
+        diceAnimationQueue.addLast(DiceAnimRequest(targetValue, intensity, onFinished))
+        processDiceAnimationQueue()
+    }
+
+    private fun processDiceAnimationQueue() {
+        if (!virtualDiceEnabled || !::virtualDiceView.isInitialized) {
+            diceAnimationQueue.clear()
+            return
+        }
+
+        if (virtualDiceView.isRolling()) return
+
+        if (diceAnimationQueue.isEmpty()) return
+
+        val req = diceAnimationQueue.removeFirst()
+        Log.d(TAG, "VirtualDice start value=${req.value} intensity=${"%.2f".format(req.intensity)} (queueRemaining=${diceAnimationQueue.size})")
+        virtualDiceView.rollDice(req.value, req.intensity) {
+            Log.d(TAG, "VirtualDice complete value=${req.value}")
+            req.onFinished()
+            processDiceAnimationQueue()
+        }
+    }
+
+    private fun finalizeVirtualDiceRoll(finalValue: Int) {
+        if (testModeEnabled && (testModeType == 1 || testModeType == 2)) {
+            simulateDiceRoll(finalValue)
+        } else {
+            onDiceStable(0, finalValue)
+        }
+    }
+
+    /**
+     * Roll virtual dice with 3D animation
+     */
+    private fun rollVirtualDice(intensity: Float = 1.0f) {
+        val finalValue = Random.nextInt(1, 7)
+        
+        playDiceAnimationIfNeeded(finalValue, intensity) {
+            finalizeVirtualDiceRoll(finalValue)
         }
     }
 

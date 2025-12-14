@@ -116,6 +116,37 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!-- Virtual/Bluetooth Dice Mode Toggle -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#1F2937"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tvDiceModeLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Bluetooth Dice"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Switch
+            android:id="@+id/switchDiceMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Virtual"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:checked="false" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/btnConnectDice"
         android:layout_width="match_parent"
@@ -606,6 +637,42 @@
 
         </TableLayout>
     </androidx.cardview.widget.CardView>
+
+    <!-- Virtual Dice Container (below scoreboard, above last event) -->
+    <LinearLayout
+        android:id="@+id/layoutVirtualDiceContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎲 Tap to Roll"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <earth.lastdrop.app.VirtualDiceView
+            android:id="@+id/virtualDiceView"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Virtual Dice Active"
+            android:textColor="#9CA3AF"
+            android:textSize="12sp"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tvLastEventTitle"
