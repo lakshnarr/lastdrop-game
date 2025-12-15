@@ -97,6 +97,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    // Lottie animations for character emotes
+    implementation("com.airbnb.android:lottie:6.2.0")
+
     // Tests (from your original file)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
