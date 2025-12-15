@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/connect_dice"
+        android:title="Connect Dice"
+        android:icon="@drawable/ic_dice_bluetooth" />
+    <item
+        android:id="@+id/connect_board"
+        android:title="Connect Board"
+        android:icon="@drawable/ic_connect" />
+    <item
+        android:id="@+id/connect_server"
+        android:title="Test Server"
+        android:icon="@drawable/ic_refresh" />
+</menu>
