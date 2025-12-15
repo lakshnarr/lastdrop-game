@@ -8,90 +8,80 @@ import com.airbnb.lottie.LottieDrawable
 /**
  * EmoteManager - Centralized animation controller for Cloudie and Drop characters
  * 
- * Handles loading and playing Lottie animations from res/raw/
- * Falls back gracefully if animation files are missing
+ * Supports loading from:
+ * - Local res/raw/ JSON files (offline)
+ * - LottieFiles.com URLs (online, faster setup)
  */
 class EmoteManager(private val context: Context) {
 
     companion object {
         private const val TAG = "EmoteManager"
         
-        // Cloudie animation names (must match files in res/raw/)
-        const val CLOUDIE_IDLE = "cloudie_idle"
-        const val CLOUDIE_SPEAKING = "cloudie_speaking"
-        const val CLOUDIE_CELEBRATE = "cloudie_celebrate"
-        const val CLOUDIE_WARNING = "cloudie_warning"
-        const val CLOUDIE_SAD = "cloudie_sad"
-        const val CLOUDIE_THINKING = "cloudie_thinking"
-        const val CLOUDIE_EXCITED = "cloudie_excited"
+        // Animation URLs from LottieFiles.com (can be changed anytime)
+        // Format: https://lottie.host/[id]/[hash].json or .lottie
         
-        // Drop animation names
-        const val DROP_IDLE = "drop_idle"
-        const val DROP_ROLLING = "drop_rolling"
-        const val DROP_MOVING = "drop_moving"
-        const val DROP_WINNING = "drop_winning"
-        const val DROP_LOSING = "drop_losing"
-        const val DROP_ELIMINATED = "drop_eliminated"
-        const val DROP_REVIVED = "drop_revived"
+        // Cloudie animations
+        const val CLOUDIE_IDLE = "https://lottie.host/embed/YOUR_IDLE_ID/YOUR_HASH.json"
+        const val CLOUDIE_SPEAKING = "https://lottie.host/embed/YOUR_SPEAKING_ID/YOUR_HASH.json"
+        const val CLOUDIE_CELEBRATE = "https://lottie.host/embed/YOUR_CELEBRATE_ID/YOUR_HASH.json"
+        const val CLOUDIE_WARNING = "https://lottie.host/embed/YOUR_WARNING_ID/YOUR_HASH.json"
+        const val CLOUDIE_SAD = "https://lottie.host/embed/YOUR_SAD_ID/YOUR_HASH.json"
+        const val CLOUDIE_THINKING = "https://lottie.host/embed/YOUR_THINKING_ID/YOUR_HASH.json"
+        const val CLOUDIE_EXCITED = "https://lottie.host/embed/YOUR_EXCITED_ID/YOUR_HASH.json"
+        
+        // Drop animations
+        const val DROP_IDLE = "https://lottie.host/embed/YOUR_DROP_IDLE_ID/YOUR_HASH.json"
+        const val DROP_ROLLING = "https://lottie.host/embed/YOUR_ROLLING_ID/YOUR_HASH.json"
+        const val DROP_MOVING = "https://lottie.host/embed/YOUR_MOVING_ID/YOUR_HASH.json"
+        const val DROP_WINNING = "https://lottie.host/embed/YOUR_WINNING_ID/YOUR_HASH.json"
+        const val DROP_LOSING = "https://lottie.host/embed/YOUR_LOSING_ID/YOUR_HASH.json"
+        const val DROP_ELIMINATED = "https://lottie.host/embed/YOUR_ELIMINATED_ID/YOUR_HASH.json"
+        const val DROP_REVIVED = "https://lottie.host/embed/YOUR_REVIVED_ID/YOUR_HASH.json"
     }
 
     /**
-     * Play a Cloudie animation by name
-     * @param view LottieAnimationView to animate
-     * @param emote Animation name constant (e.g., CLOUDIE_IDLE)
-     * @param loop Whether to loop the animation (default true for idle, false for one-shots)
-     * @param onComplete Optional callback when animation finishes
+     * Play a Cloudie animation by URL
      */
     fun playCloudieEmote(
         view: LottieAnimationView,
-        emote: String,
-        loop: Boolean = shouldLoop(emote),
+        animationUrl: String,
+        loop: Boolean = shouldLoop(animationUrl),
         onComplete: (() -> Unit)? = null
     ) {
-        playAnimation(view, emote, loop, onComplete)
+        playAnimationFromUrl(view, animationUrl, loop, onComplete)
     }
 
     /**
-     * Play a Drop animation by name
-     * @param view LottieAnimationView to animate
-     * @param emote Animation name constant (e.g., DROP_IDLE)
-     * @param loop Whether to loop the animation
-     * @param onComplete Optional callback when animation finishes
+     * Play a Drop animation by URL
      */
     fun playDropEmote(
         view: LottieAnimationView,
-        emote: String,
-        loop: Boolean = shouldLoop(emote),
+        animationUrl: String,
+        loop: Boolean = shouldLoop(animationUrl),
         onComplete: (() -> Unit)? = null
     ) {
-        playAnimation(view, emote, loop, onComplete)
+        playAnimationFromUrl(view, animationUrl, loop, onComplete)
     }
 
     /**
-     * Internal animation player with fallback handling
+     * Load and play animation from LottieFiles URL
      */
-    private fun playAnimation(
+    private fun playAnimationFromUrl(
         view: LottieAnimationView,
-        animationName: String,
+        url: String,
         loop: Boolean,
         onComplete: (() -> Unit)?
     ) {
         try {
-            // Get resource ID from res/raw/
-            val resId = context.resources.getIdentifier(
-                animationName,
-                "raw",
-                context.packageName
-            )
-
-            if (resId == 0) {
-                Log.w(TAG, "Animation not found: $animationName.json - using fallback")
-                showFallback(view, animationName)
+            // Check if URL is a placeholder
+            if (url.contains("YOUR_") || url.contains("PLACEHOLDER")) {
+                Log.w(TAG, "Placeholder URL detected: $url - using fallback")
+                showFallback(view, url)
                 return
             }
 
-            // Load and play animation
-            view.setAnimation(resId)
+            // Load from URL
+            view.setAnimationFromUrl(url)
             view.repeatCount = if (loop) LottieDrawable.INFINITE else 0
             
             // Add completion listener if provided
@@ -104,32 +94,64 @@ class EmoteManager(private val context: Context) {
             }
             
             view.playAnimation()
-            Log.d(TAG, "Playing animation: $animationName (loop=$loop)")
+            Log.d(TAG, "Loading animation from URL: $url (loop=$loop)")
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error playing animation $animationName: ${e.message}")
-            showFallback(view, animationName)
+            Log.e(TAG, "Error loading animation from URL $url: ${e.message}")
+            showFallback(view, url)
         }
     }
 
     /**
-     * Show fallback for missing animations (solid color pulse)
+     * Load animation from local res/raw/ file (fallback for offline use)
      */
-    private fun showFallback(view: LottieAnimationView, animationName: String) {
-        view.cancelAnimation()
-        // Could show a simple colored square or icon as fallback
-        Log.d(TAG, "Fallback displayed for: $animationName")
+    fun playLocalAnimation(
+        view: LottieAnimationView,
+        resourceName: String,
+        loop: Boolean = true
+    ) {
+        try {
+            val resId = context.resources.getIdentifier(
+                resourceName,
+                "raw",
+                context.packageName
+            )
+
+            if (resId == 0) {
+                Log.w(TAG, "Local animation not found: $resourceName.json")
+                showFallback(view, resourceName)
+                return
+            }
+
+            view.setAnimation(resId)
+            view.repeatCount = if (loop) LottieDrawable.INFINITE else 0
+            view.playAnimation()
+            Log.d(TAG, "Playing local animation: $resourceName")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing local animation: ${e.message}")
+            showFallback(view, resourceName)
+        }
     }
 
     /**
-     * Stop all animations on a view
+     * Show fallback for missing animations
+     */
+    private fun showFallback(view: LottieAnimationView, identifier: String) {
+        view.cancelAnimation()
+        view.alpha = 0.3f // Dim to indicate placeholder
+        Log.d(TAG, "Fallback mode for: $identifier")
+    }
+
+    /**
+     * Stop all animations
      */
     fun stopAnimation(view: LottieAnimationView) {
         view.cancelAnimation()
     }
 
     /**
-     * Resume playing current animation
+     * Resume animation
      */
     fun resumeAnimation(view: LottieAnimationView) {
         if (!view.isAnimating) {
@@ -138,59 +160,60 @@ class EmoteManager(private val context: Context) {
     }
 
     /**
-     * Pause current animation
+     * Pause animation
      */
     fun pauseAnimation(view: LottieAnimationView) {
         view.pauseAnimation()
     }
 
     /**
-     * Determine if animation should loop by default
+     * Determine if animation should loop based on URL pattern
      */
-    private fun shouldLoop(emote: String): Boolean {
-        return when (emote) {
-            // Loop these animations
-            CLOUDIE_IDLE, CLOUDIE_SPEAKING, CLOUDIE_THINKING,
-            DROP_IDLE, DROP_ROLLING -> true
-            
-            // One-shot animations
-            CLOUDIE_CELEBRATE, CLOUDIE_WARNING, CLOUDIE_SAD, CLOUDIE_EXCITED,
-            DROP_MOVING, DROP_WINNING, DROP_LOSING, DROP_ELIMINATED, DROP_REVIVED -> false
-            
-            else -> true // Default to loop for unknown animations
+    private fun shouldLoop(identifier: String): Boolean {
+        return when {
+            identifier.contains("idle", ignoreCase = true) -> true
+            identifier.contains("speaking", ignoreCase = true) -> true
+            identifier.contains("thinking", ignoreCase = true) -> true
+            identifier.contains("rolling", ignoreCase = true) -> true
+            identifier.contains("celebrate", ignoreCase = true) -> false
+            identifier.contains("warning", ignoreCase = true) -> false
+            identifier.contains("sad", ignoreCase = true) -> false
+            identifier.contains("excited", ignoreCase = true) -> false
+            identifier.contains("moving", ignoreCase = true) -> false
+            identifier.contains("winning", ignoreCase = true) -> false
+            identifier.contains("losing", ignoreCase = true) -> false
+            identifier.contains("eliminated", ignoreCase = true) -> false
+            identifier.contains("revived", ignoreCase = true) -> false
+            else -> true // Default to loop
         }
     }
 
     /**
      * Chain animations (play one after another)
-     * @param view Target LottieAnimationView
-     * @param animations List of animation names to play in sequence
-     * @param finalLoop Whether the last animation should loop
      */
     fun chainAnimations(
         view: LottieAnimationView,
-        animations: List<String>,
+        animationUrls: List<String>,
         finalLoop: Boolean = false
     ) {
-        if (animations.isEmpty()) return
-        
-        playAnimationChain(view, animations, 0, finalLoop)
+        if (animationUrls.isEmpty()) return
+        playAnimationChain(view, animationUrls, 0, finalLoop)
     }
 
     private fun playAnimationChain(
         view: LottieAnimationView,
-        animations: List<String>,
+        urls: List<String>,
         index: Int,
         finalLoop: Boolean
     ) {
-        if (index >= animations.size) return
+        if (index >= urls.size) return
         
-        val isLast = index == animations.size - 1
+        val isLast = index == urls.size - 1
         val shouldLoop = isLast && finalLoop
         
-        playAnimation(view, animations[index], shouldLoop) {
+        playAnimationFromUrl(view, urls[index], shouldLoop) {
             if (!isLast) {
-                playAnimationChain(view, animations, index + 1, finalLoop)
+                playAnimationChain(view, urls, index + 1, finalLoop)
             }
         }
     }

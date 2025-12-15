@@ -1,136 +1,142 @@
-# Lottie Animation Download Guide
+# Lottie Animation Setup Guide - URL Method (RECOMMENDED)
 
-## Required Animations from LottieFiles.com
+## Quick Start - Using LottieFiles URLs
 
-Visit [lottiefiles.com](https://lottiefiles.com) and search for the following animations. Download as **Lottie JSON** format.
+**No downloads needed!** Load animations directly from LottieFiles.com URLs.
 
----
+### Step 1: Find Animations on LottieFiles.com
 
-## Cloudie Animations (7 files)
+Visit [lottiefiles.com](https://lottiefiles.com) and search for animations.
 
-### 1. **cloudie_idle.json**
-- **Search**: "cloud character idle" OR "cute cloud breathing"
-- **Style**: Gentle floating/breathing animation, loop-friendly
-- **Duration**: 2-4 seconds loop
-- **Save as**: `app/src/main/res/raw/cloudie_idle.json`
+### Step 2: Get the URL
 
-### 2. **cloudie_speaking.json**
-- **Search**: "character talking" OR "mouth animation"
-- **Style**: Subtle mouth movement, loop-friendly
-- **Duration**: 1-2 seconds loop
-- **Save as**: `app/src/main/res/raw/cloudie_speaking.json`
+On any animation page:
+1. Click the **"</> Embed"** button or **"Lottie URL"**
+2. Copy the URL that looks like:
+   ```
+   https://lottie.host/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX/YYYYYYYYYY.json
+   ```
+   OR
+   ```
+   https://assets5.lottiefiles.com/packages/lf20_XXXXX.json
+   ```
 
-### 3. **cloudie_celebrate.json**
-- **Search**: "celebration jump" OR "happy dance character"
-- **Style**: Joyful bouncing/dancing, can be one-shot
-- **Duration**: 2-3 seconds
-- **Save as**: `app/src/main/res/raw/cloudie_celebrate.json`
+### Step 3: Update EmoteManager.kt
 
-### 4. **cloudie_warning.json**
-- **Search**: "warning shake" OR "alert character"
-- **Style**: Shaking/concerned movement
-- **Duration**: 1-2 seconds
-- **Save as**: `app/src/main/res/raw/cloudie_warning.json`
+Replace placeholder URLs in `EmoteManager.kt` (lines 15-30):
 
-### 5. **cloudie_sad.json**
-- **Search**: "sad character" OR "crying cloud"
-- **Style**: Drooping/crying animation
-- **Duration**: 2-3 seconds
-- **Save as**: `app/src/main/res/raw/cloudie_sad.json`
+```kotlin
+// Cloudie animations
+const val CLOUDIE_IDLE = "https://lottie.host/YOUR_URL_HERE.json"
+const val CLOUDIE_SPEAKING = "https://lottie.host/YOUR_URL_HERE.json"
+// ... etc
+```
 
-### 6. **cloudie_thinking.json**
-- **Search**: "thinking character" OR "pondering animation"
-- **Style**: Hand on chin or question mark above head
-- **Duration**: 2-3 seconds loop
-- **Save as**: `app/src/main/res/raw/cloudie_thinking.json`
+### Step 4: Rebuild & Test
 
-### 7. **cloudie_excited.json**
-- **Search**: "excited bounce" OR "energetic character"
-- **Style**: Fast bouncing/vibrating with energy
-- **Duration**: 1-2 seconds loop
-- **Save as**: `app/src/main/res/raw/cloudie_excited.json`
+```powershell
+.\gradlew installDebug
+```
+
+Animations load automatically - no file management needed!
 
 ---
 
-## Drop Animations (7 files)
+## Recommended Animations
 
-### 8. **drop_idle.json**
-- **Search**: "water drop idle" OR "droplet wobble"
-- **Style**: Subtle wobble/breathing, loop-friendly
-- **Duration**: 2-3 seconds loop
-- **Save as**: `app/src/main/res/raw/drop_idle.json`
+### Cloudie (Water Conservation Mascot)
 
-### 9. **drop_rolling.json**
-- **Search**: "rolling dice" OR "spinning object"
-- **Style**: Fast spinning/rotating animation
-- **Duration**: 1-2 seconds loop
-- **Save as**: `app/src/main/res/raw/drop_rolling.json`
+| Animation | Search Terms | Style | Loop |
+|-----------|-------------|-------|------|
+| CLOUDIE_IDLE | "cloud character breathing", "cute cloud idle" | Gentle floating | ✅ Yes |
+| CLOUDIE_SPEAKING | "character talking mouth", "speaking animation" | Mouth movement | ✅ Yes |
+| CLOUDIE_CELEBRATE | "celebration jump", "happy character dance" | Joyful bouncing | ❌ No |
+| CLOUDIE_WARNING | "warning shake", "alert character" | Shaking/concerned | ❌ No |
+| CLOUDIE_SAD | "sad cloud", "crying character" | Drooping/crying | ❌ No |
+| CLOUDIE_THINKING | "thinking character", "pondering" | Hand on chin | ✅ Yes |
+| CLOUDIE_EXCITED | "excited bounce", "energetic character" | Fast bouncing | ❌ No |
 
-### 10. **drop_moving.json**
-- **Search**: "hopping forward" OR "jump animation"
-- **Style**: Small hop from left to right
-- **Duration**: 0.5-1 second one-shot
-- **Save as**: `app/src/main/res/raw/drop_moving.json`
+### Drops (Player Tokens)
 
-### 11. **drop_winning.json**
-- **Search**: "victory celebration" OR "confetti character"
-- **Style**: Celebratory jump with sparkles/confetti
-- **Duration**: 2-3 seconds
-- **Save as**: `app/src/main/res/raw/drop_winning.json`
-
-### 12. **drop_losing.json**
-- **Search**: "sad droop" OR "disappointed character"
-- **Style**: Deflating/drooping animation
-- **Duration**: 1-2 seconds
-- **Save as**: `app/src/main/res/raw/drop_losing.json`
-
-### 13. **drop_eliminated.json**
-- **Search**: "fade out" OR "disappear animation"
-- **Style**: Fading/sinking downward, opacity to 0
-- **Duration**: 2-3 seconds one-shot
-- **Save as**: `app/src/main/res/raw/drop_eliminated.json`
-
-### 14. **drop_revived.json**
-- **Search**: "appear animation" OR "power up glow"
-- **Style**: Rising from below with glow effect
-- **Duration**: 2-3 seconds one-shot
-- **Save as**: `app/src/main/res/raw/drop_revived.json`
+| Animation | Search Terms | Style | Loop |
+|-----------|-------------|-------|------|
+| DROP_IDLE | "water drop idle", "droplet wobble" | Subtle breathing | ✅ Yes |
+| DROP_ROLLING | "rolling dice", "spinning object" | Fast rotation | ✅ Yes |
+| DROP_MOVING | "hop animation", "jump forward" | Small hop | ❌ No |
+| DROP_WINNING | "victory celebration", "confetti character" | Celebratory jump | ❌ No |
+| DROP_LOSING | "sad droop", "disappointed" | Deflating | ❌ No |
+| DROP_ELIMINATED | "fade out", "disappear animation" | Fading/sinking | ❌ No |
+| DROP_REVIVED | "appear", "power up glow" | Rising with glow | ❌ No |
 
 ---
 
-## Download Instructions
+## Example Search & URL Copy Process
 
-1. **Visit**: https://lottiefiles.com
-2. **Search** using keywords above
-3. **Select** animation that matches style
-4. **Click** "Download" button
-5. **Choose** "Lottie JSON" format (NOT After Effects or GIF)
-6. **Rename** file to match names above
-7. **Save** to `app/src/main/res/raw/` directory
+### Example: Finding CLOUDIE_IDLE
 
-## File Naming Rules
-
-- All lowercase
-- Underscores for spaces
-- `.json` extension
-- No special characters
-
-## Fallback Strategy
-
-If you can't find perfect matches:
-- Use generic animations temporarily (e.g., bouncing ball for drop_idle)
-- Can replace individual files later without code changes
-- System will work with ANY valid Lottie JSON
-
-## Testing After Download
-
-After placing files in `/res/raw/`:
-1. Rebuild app: `.\gradlew installDebug`
-2. Animations will auto-load in IntroAiActivity
-3. Check logcat for loading errors
+1. Go to https://lottiefiles.com
+2. Search: **"cloud character idle"**
+3. Select animation you like
+4. Click **"</> Embed"** or **"Lottie URL"**
+5. Copy URL:
+   ```
+   https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.json
+   ```
+6. Open `EmoteManager.kt`
+7. Replace line 16:
+   ```kotlin
+   const val CLOUDIE_IDLE = "https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.json"
+   ```
+8. Save & rebuild
 
 ---
 
-**Total Files Needed**: 14 JSON files  
-**Estimated Download Time**: 30-60 minutes  
-**Current Status**: Directory created, waiting for files
+## Advantages of URL Method
+
+✅ **No file management** - no downloads, no res/raw/ folders  
+✅ **Easy updates** - change URL anytime  
+✅ **Instant preview** - see changes immediately  
+✅ **Smaller APK size** - animations loaded on demand  
+✅ **Version control friendly** - just text URLs in code  
+
+## Disadvantages
+
+❌ **Requires internet** - won't work offline  
+❌ **Slight delay** - first load takes ~500ms  
+❌ **External dependency** - relies on LottieFiles hosting  
+
+---
+
+## Fallback to Local Files (Optional)
+
+If you prefer offline animations:
+1. Download JSON from LottieFiles
+2. Place in `app/src/main/res/raw/`
+3. Use `emoteManager.playLocalAnimation(view, "filename")`
+
+---
+
+## Testing Your URLs
+
+After updating URLs, check logcat for:
+```
+D/EmoteManager: Loading animation from URL: https://lottie.host/... (loop=true)
+```
+
+If you see:
+```
+W/EmoteManager: Placeholder URL detected: ... - using fallback
+```
+You forgot to replace `YOUR_URL_HERE` placeholders!
+
+---
+
+## Next Steps
+
+1. Find 14 animations on LottieFiles.com
+2. Copy their URLs
+3. Paste into `EmoteManager.kt` constants
+4. Rebuild: `.\gradlew installDebug`
+5. Animations appear automatically!
+
+**Estimated Time**: 15-30 minutes (vs 1-2 hours downloading files)
