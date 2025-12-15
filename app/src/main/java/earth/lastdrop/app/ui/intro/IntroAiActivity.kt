@@ -29,6 +29,7 @@ import earth.lastdrop.app.voice.HybridVoiceService
 import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.VoiceService
 import earth.lastdrop.app.voice.VoiceSettingsManager
+import com.example.lastdrop.ui.components.ScorecardBadge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,6 +74,9 @@ class IntroAiActivity : AppCompatActivity() {
     private lateinit var iconReset: ImageView
     private lateinit var iconEndGame: ImageView
     private lateinit var iconDebug: ImageView
+    
+    // Scorecard badges
+    private val scorecardBadges = arrayOfNulls<ScorecardBadge>(4)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +121,9 @@ class IntroAiActivity : AppCompatActivity() {
         
         // Setup virtual dice buttons
         setupVirtualDice()
+        
+        // Setup scorecard badges
+        setupScorecards()
 
         val selectedProfiles = intent.getStringArrayListExtra("selected_profiles") ?: arrayListOf()
         val assignedColors = intent.getStringArrayListExtra("assigned_colors") ?: arrayListOf()
@@ -419,6 +426,16 @@ class IntroAiActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnDice5).setOnClickListener { rollVirtualDice(5) }
         findViewById<Button>(R.id.btnDice6).setOnClickListener { rollVirtualDice(6) }
     }
+    
+    private fun setupScorecards() {
+        scorecardBadges[0] = findViewById(R.id.scorecard1)
+        scorecardBadges[1] = findViewById(R.id.scorecard2)
+        scorecardBadges[2] = findViewById(R.id.scorecard3)
+        scorecardBadges[3] = findViewById(R.id.scorecard4)
+        
+        // Initially hide all badges
+        scorecardBadges.forEach { it?.visibility = View.GONE }
+    }
 
     private fun rollVirtualDice(value: Int) {
         if (!gameStarted) {
@@ -449,6 +466,20 @@ class IntroAiActivity : AppCompatActivity() {
             playerPositions[i] = 1
             playerScores[i] = 0
             playerAlive[i] = true
+        }
+        
+        // Setup scorecard badges with player colors
+        for (i in profiles.indices) {
+            scorecardBadges[i]?.apply {
+                visibility = View.VISIBLE
+                setScore(0)
+                setBorderColor(Color.parseColor(profiles[i].avatarColor))
+            }
+        }
+        
+        // Hide unused badges
+        for (i in profiles.size until 4) {
+            scorecardBadges[i]?.visibility = View.GONE
         }
         
         updateGameUI()
@@ -532,8 +563,21 @@ class IntroAiActivity : AppCompatActivity() {
     }
 
     private fun updateGameUI() {
-        // Update scorecard badges (will be implemented in Phase 2.4)
-        // For now, just log
+        // Update scorecard badges with animated score changes
+        for (i in currentGameProfiles.indices) {
+            scorecardBadges[i]?.animateToScore(playerScores[i])
+            
+            // Pulse animation for active player
+            if (i == currentPlayerIndex) {
+                scorecardBadges[i]?.startPulseAnimation()
+            } else {
+                scorecardBadges[i]?.stopAnimations()
+            }
+            
+            // Dim eliminated players
+            scorecardBadges[i]?.alpha = if (playerAlive[i]) 1.0f else 0.3f
+        }
+        
         appendDebug("Scores: ${playerScores.contentToString()}")
         appendDebug("Positions: ${playerPositions.contentToString()}")
     }

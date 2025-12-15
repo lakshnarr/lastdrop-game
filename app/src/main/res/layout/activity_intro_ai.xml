@@ -187,7 +187,37 @@
             android:layout_gravity="bottom|center_horizontal"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="32dp" />
+            android:layout_marginBottom="32dp">
+
+            <!-- Player 1 Scorecard -->
+            <com.example.lastdrop.ui.components.ScorecardBadge
+                android:id="@+id/scorecard1"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_margin="8dp" />
+
+            <!-- Player 2 Scorecard -->
+            <com.example.lastdrop.ui.components.ScorecardBadge
+                android:id="@+id/scorecard2"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_margin="8dp" />
+
+            <!-- Player 3 Scorecard -->
+            <com.example.lastdrop.ui.components.ScorecardBadge
+                android:id="@+id/scorecard3"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_margin="8dp" />
+
+            <!-- Player 4 Scorecard -->
+            <com.example.lastdrop.ui.components.ScorecardBadge
+                android:id="@+id/scorecard4"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_margin="8dp" />
+
+        </LinearLayout>
 
     </FrameLayout>
 
