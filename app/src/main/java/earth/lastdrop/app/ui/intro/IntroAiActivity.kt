@@ -1,5 +1,6 @@
 package earth.lastdrop.app.ui.intro
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -12,11 +13,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import earth.lastdrop.app.ProfileManager
+import earth.lastdrop.app.ProfileSelectionActivity
 import earth.lastdrop.app.R
 import earth.lastdrop.app.PlayerProfile
+import earth.lastdrop.app.voice.HybridVoiceService
 import earth.lastdrop.app.voice.NoOpVoiceService
-import earth.lastdrop.app.voice.TextToSpeechVoiceService
 import earth.lastdrop.app.voice.VoiceService
+import earth.lastdrop.app.voice.VoiceSettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,7 +37,6 @@ class IntroAiActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnSkip: Button
     private lateinit var voiceService: VoiceService
-    private var voiceEnabled: Boolean = true
     private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,28 +44,25 @@ class IntroAiActivity : AppCompatActivity() {
         setContentView(R.layout.activity_intro_ai)
 
         profileManager = ProfileManager(this)
-        voiceEnabled = cloudiePrefs.getBoolean("cloudie_voice_enabled", true)
-        voiceService = if (voiceEnabled) {
-            runCatching {
-                TextToSpeechVoiceService(
-                    context = this,
-                    onReady = { appendDebug("🔊 Cloudie voice ready") },
-                    onError = {
-                        appendDebug("⚠️ TTS error: $it")
-                        runOnUiThread {
-                            android.widget.Toast.makeText(this, "Cloudie voice unavailable", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+        val voiceSettingsManager = VoiceSettingsManager(this)
+        val voiceSettings = voiceSettingsManager.getSettings()
+        voiceService = runCatching {
+            HybridVoiceService(
+                context = this,
+                settings = voiceSettings,
+                onReady = { appendDebug("🔊 Cloudie voice ready (${if (voiceSettings.useElevenLabs) "ElevenLabs + TTS" else "TTS only"})") },
+                onError = {
+                    appendDebug("⚠️ Voice error: $it")
+                    runOnUiThread {
+                        Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
                     }
-                )
-            }.getOrElse {
-                appendDebug("⚠️ Falling back to silent Cloudie (TTS unavailable)")
-                runOnUiThread {
-                    android.widget.Toast.makeText(this, "Cloudie voice unavailable", android.widget.Toast.LENGTH_SHORT).show()
                 }
-                NoOpVoiceService(this)
+            )
+        }.getOrElse {
+            appendDebug("⚠️ Falling back to silent Cloudie (Voice unavailable)")
+            runOnUiThread {
+                Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            appendDebug("🤫 Cloudie voice disabled from main screen")
             NoOpVoiceService(this)
         }
         cloudieImage = findViewById(R.id.cloudieImage)
@@ -95,15 +94,22 @@ class IntroAiActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        (voiceService as? TextToSpeechVoiceService)?.shutdown()
+        voiceService?.shutdown()
         super.onDestroy()
+    }
+    
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Go back to ProfileSelectionActivity, clear task stack
+        val intent = Intent(this, ProfileSelectionActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        startActivity(intent)
+        finish()
     }
 
     private fun speakLine(line: String) {
         dialogue.text = line
-        if (voiceEnabled) {
-            voiceService.speak(line)
-        }
+        voiceService.speak(line)
     }
 
     private fun appendDebug(message: String) {

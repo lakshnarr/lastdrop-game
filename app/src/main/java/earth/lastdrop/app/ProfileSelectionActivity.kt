@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
@@ -72,15 +73,10 @@ class ProfileSelectionActivity : AppCompatActivity() {
         refreshSavedGameButton()
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // If this is initial launch (not called from MainActivity), exit app instead of going to MainActivity
-        if (!isCalledFromMainActivity) {
-            // Exit the app completely
-            finishAffinity()
-        } else {
-            // Called from MainActivity - just go back
-            super.onBackPressed()
-        }
+        // Exit app when back is pressed from profile selection (first screen)
+        finishAffinity()
     }
     
     private fun createLayout(): LinearLayout {
@@ -105,13 +101,45 @@ class ProfileSelectionActivity : AppCompatActivity() {
                 })
             }
             
-            // Title
-            addView(TextView(this@ProfileSelectionActivity).apply {
-                text = "Select Players"
-                textSize = 24f
-                textAlignment = TextView.TEXT_ALIGNMENT_CENTER
-                setTextColor(Color.WHITE)
-                setPadding(0, 0, 0, 32)
+            // Title with settings icon
+            addView(LinearLayout(this@ProfileSelectionActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 32
+                }
+                
+                // Title
+                addView(TextView(this@ProfileSelectionActivity).apply {
+                    text = "Select Players"
+                    textSize = 24f
+                    setTextColor(Color.WHITE)
+                    layoutParams = LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1f
+                    )
+                })
+                
+                // Settings icon
+                addView(Button(this@ProfileSelectionActivity).apply {
+                    text = "⚙️"
+                    textSize = 24f
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.TRANSPARENT)
+                    setPadding(16, 16, 16, 16)
+                    setOnClickListener {
+                        val dialog = VoiceSettingsDialog(this@ProfileSelectionActivity, lifecycleScope)
+                        dialog.show()
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                })
             })
             
             // RecyclerView for profiles

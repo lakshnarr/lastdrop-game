@@ -65,7 +65,11 @@
             android:exported="false"
             android:label="@string/app_name"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:parentActivityName=".ui.intro.IntroAiActivity"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".ui.intro.IntroAiActivity" />
         </activity>
         
         <!-- Profile Selection Screen -->
@@ -80,37 +84,75 @@
             android:name=".ProfileStatsActivity"
             android:exported="false"
             android:label="Player Stats"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:parentActivityName=".ProfileSelectionActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".ProfileSelectionActivity" />
+        </activity>
         
             <!-- Saved Games Screen -->
-            <activity android:name=".SavedGamesActivity" />
+            <activity
+                android:name=".SavedGamesActivity"
+                android:parentActivityName=".ProfileSelectionActivity">
+                <meta-data
+                    android:name="android.support.PARENT_ACTIVITY"
+                    android:value=".ProfileSelectionActivity" />
+            </activity>
 
             <!-- AI Home Screen (legacy) -->
-            <activity android:name=".AIHomeActivity" />
+            <activity
+                android:name=".AIHomeActivity"
+                android:parentActivityName=".ProfileSelectionActivity">
+                <meta-data
+                    android:name="android.support.PARENT_ACTIVITY"
+                    android:value=".ProfileSelectionActivity" />
+            </activity>
 
             <!-- Intro AI Screen (Cloudie intro) -->
-            <activity android:name=".ui.intro.IntroAiActivity" />
+            <activity
+                android:name=".ui.intro.IntroAiActivity"
+                android:parentActivityName=".ProfileSelectionActivity">
+                <meta-data
+                    android:name="android.support.PARENT_ACTIVITY"
+                    android:value=".ProfileSelectionActivity" />
+            </activity>
 
         <!-- Game History Screen -->
         <activity
             android:name=".GameHistoryActivity"
             android:exported="false"
             android:label="Game History"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
         
         <!-- Leaderboard Screen -->
         <activity
             android:name=".LeaderboardActivity"
             android:exported="false"
             android:label="Leaderboard"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
 
         <!-- Rivalry Details Screen -->
         <activity
             android:name=".RivalryDetailActivity"
             android:exported="false"
             android:label="Rivalry"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
         
         <!-- QR Scanner with Portrait orientation -->
         <activity

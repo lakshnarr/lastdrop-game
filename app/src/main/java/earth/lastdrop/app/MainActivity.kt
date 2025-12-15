@@ -33,7 +33,8 @@ import earth.lastdrop.app.game.session.GameSessionManager
 import earth.lastdrop.app.game.session.PlayerInfo
 import earth.lastdrop.app.game.session.TileType as SessionTileType
 import earth.lastdrop.app.voice.NoOpVoiceService
-import earth.lastdrop.app.voice.TextToSpeechVoiceService
+import earth.lastdrop.app.voice.HybridVoiceService
+import earth.lastdrop.app.voice.VoiceSettingsManager
 import earth.lastdrop.app.voice.VoiceService
 import kotlinx.coroutines.delay
 import earth.lastdrop.app.ui.intro.IntroAiActivity
@@ -489,30 +490,26 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         profileManager = ProfileManager(this)
         achievementEngine = AchievementEngine(this)
         rivalryManager = RivalryManager(this)
-        voiceEnabled = cloudiePrefs.getBoolean("cloudie_voice_enabled", true)
+        val voiceSettingsManager = VoiceSettingsManager(this)
+        val voiceSettings = voiceSettingsManager.getSettings()
         voiceService = runCatching {
-            TextToSpeechVoiceService(
+            HybridVoiceService(
                 context = this,
-                onReady = { appendTestLog("🔊 Cloudie voice ready") },
+                settings = voiceSettings,
+                onReady = { appendTestLog("🔊 Cloudie voice ready (${if (voiceSettings.useElevenLabs) "ElevenLabs + TTS" else "TTS only"})") },
                 onError = {
-                    appendTestLog("⚠️ TTS error: $it")
+                    appendTestLog("⚠️ Voice error: $it")
                     runOnUiThread {
                         Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
                     }
                 }
             )
         }.getOrElse {
-            appendTestLog("⚠️ Falling back to silent Cloudie (TTS unavailable)")
+            appendTestLog("⚠️ Falling back to silent Cloudie (Voice unavailable)")
             runOnUiThread {
                 Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
             }
             NoOpVoiceService(this)
-        }
-        switchCloudieVoice.isChecked = voiceEnabled
-        switchCloudieVoice.setOnCheckedChangeListener { _, isChecked ->
-            voiceEnabled = isChecked
-            appendTestLog(if (isChecked) "🔊 Cloudie voice ON" else "🤫 Cloudie voice OFF")
-            cloudiePrefs.edit().putBoolean("cloudie_voice_enabled", isChecked).apply()
         }
         cloudiePersona = cloudiePrefs.getString("cloudie_persona", "cloudie") ?: "cloudie"
         cloudiePhraseBook = runCatching {
@@ -554,7 +551,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     diceConnected = true
                     btnConnectDice.text = "Disconnect Dice"
                     tvDiceStatus.text = "Connected to $displayName"
-                    if (voiceEnabled) runCatching { voiceService?.speak("Connected to $displayName") }
+                    runCatching { voiceService?.speak("Connected to $displayName") }
                 }
             },
             onDiceDisconnected = {
@@ -565,7 +562,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     diceConnected = false
                     btnConnectDice.text = "Connect Dice"
                     tvDiceStatus.text = "Dice disconnected"
-                    if (voiceEnabled) runCatching { voiceService?.speak("Dice disconnected") }
+                    runCatching { voiceService?.speak("Dice disconnected") }
                 }
             }
         )
@@ -610,7 +607,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         Toast.makeText(this, "ESP32 disconnected", Toast.LENGTH_SHORT).show()
                         btnConnectBoard.text = "🎮  Connect Board"
                         btnConnectBoard.isEnabled = true
-                        if (voiceEnabled) runCatching { voiceService?.speak("Board disconnected") }
+                        runCatching { voiceService?.speak("Board disconnected") }
                     }
                 }
 
@@ -836,7 +833,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         stateSyncManager.cleanup()  // Cleanup sync manager
         apiManager.cleanup()  // Cleanup API manager
         animationEventHandler.cleanup()  // Cleanup animation handler
-        (voiceService as? TextToSpeechVoiceService)?.shutdown()
+        voiceService?.shutdown()
         diceConnectionController.stopScan()
         disconnectESP32()
         stopESP32Scan()
@@ -1073,7 +1070,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             // Not connected → Show dialog immediately and start scanning inside it
             btnConnectBoard.text = "🎮  Scanning..."
             btnConnectBoard.isEnabled = false
-            if (voiceEnabled) runCatching { voiceService?.speak("Connecting to board") }
+            runCatching { voiceService?.speak("Connecting to board") }
             
             // Show live scan dialog immediately
             val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
@@ -1172,7 +1169,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         "Connected to session: ${sessionId.take(8)}...",
                         Toast.LENGTH_LONG
                     ).show()
-                    if (voiceEnabled) runCatching { voiceService?.speak("Connected to live server") }
+                    runCatching { voiceService?.speak("Connected to live server") }
                     
                     // Send another heartbeat after successful connection
                     apiManager.sendImmediateHeartbeat()
@@ -1190,7 +1187,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         "Connection failed: ${e.message}",
                         Toast.LENGTH_SHORT
                     ).show()
-                    if (voiceEnabled) runCatching { voiceService?.speak("Live server disconnected") }
+                    runCatching { voiceService?.speak("Live server disconnected") }
                 }
             }
         }
@@ -1287,10 +1284,8 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             .setTitle("Choose dice mode")
             .setItems(options) { dialog, which ->
                 playWithTwoDice = (which == 1)
-                if (voiceEnabled) {
-                    val modeAnnouncement = if (playWithTwoDice) "Two dice mode selected" else "One die mode selected"
-                    runCatching { voiceService?.speak(modeAnnouncement) }
-                }
+                val modeAnnouncement = if (playWithTwoDice) "Two dice mode selected" else "One die mode selected"
+                runCatching { voiceService?.speak(modeAnnouncement) }
                 dialog.dismiss()
                 connectDice()
             }
@@ -1465,7 +1460,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
             if (diceBatteryAnnounced.add(diceId)) {
                 val displayName = diceDisplayNames[diceId] ?: "BLDice"
-                if (voiceEnabled) runCatching { voiceService?.speak("$displayName battery $level percent") }
+                runCatching { voiceService?.speak("$displayName battery $level percent") }
             }
             
             // Use BatteryMonitor for warnings
@@ -2626,13 +2621,12 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 tvCloudieBanner.startAnimation(pulse)
             }
         }
-        if (voiceEnabled) {
-            runCatching { voiceService?.speak(line) }
-                .onFailure {
-                    cloudieSpeakErrors += 1
-                    appendTestLog("⚠️ Cloudie voice error: ${it.message}")
-                }
-        }
+        Log.d("MainActivity", "Cloudie speaking: \"$line\"")
+        runCatching { voiceService?.speak(line) }
+            .onFailure {
+                cloudieSpeakErrors += 1
+                appendTestLog("⚠️ Cloudie voice error: ${it.message}")
+            }
         appendTestLog("☁️ $line")
     }
 
@@ -2903,7 +2897,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Production"
                         btnTestMode.setBackgroundColor(0xFF6200EE.toInt())
                         layoutDiceButtons.visibility = View.GONE
-                        if (voiceEnabled) runCatching { voiceService?.speak("Production mode") }
+                        runCatching { voiceService?.speak("Production mode") }
                         
                         // Hide test console
                         tvTestLogTitle.visibility = View.GONE
@@ -2925,7 +2919,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Test Mode 1"
                         btnTestMode.setBackgroundColor(0xFFFF9800.toInt()) // Orange
                         layoutDiceButtons.visibility = View.VISIBLE
-                        if (voiceEnabled) runCatching { voiceService?.speak("Test Mode 1: virtual dice with board") }
+                        runCatching { voiceService?.speak("Test Mode 1: virtual dice with board") }
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
@@ -2947,7 +2941,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         btnTestMode.text = "Test Mode 2"
                         btnTestMode.setBackgroundColor(0xFF4CAF50.toInt()) // Green
                         layoutDiceButtons.visibility = View.VISIBLE
-                        if (voiceEnabled) runCatching { voiceService?.speak("Test Mode 2: Android and live dot HTML only") }
+                        runCatching { voiceService?.speak("Test Mode 2: Android and live dot HTML only") }
                         
                         // Show test console
                         tvTestLogTitle.visibility = View.VISIBLE
@@ -3795,13 +3789,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         tvDiceStatus.text = "Waiting for coin placement..."
                         
                         appendTestLog("📥 ESP32 response: $playerName → Tile $toTile, Score: $newScore")
-                        if (voiceEnabled) {
-                            val voiceLine = buildString {
-                                append("$playerName to tile $toTile. Score $newScore")
-                                if (chanceCardText.isNotBlank()) append(". Chance card drawn.")
-                            }
-                            runCatching { voiceService?.speak(voiceLine) }
+                        val voiceLine = buildString {
+                            append("$playerName to tile $toTile. Score $newScore")
+                            if (chanceCardText.isNotBlank()) append(". Chance card drawn.")
                         }
+                        runCatching { voiceService?.speak(voiceLine) }
                         
                         updateScoreboard()
                         
@@ -4197,8 +4189,9 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 if (gameActive && playerScores.isNotEmpty()) {
                     showEndGameDialog()
                 } else {
+                    // No active game - go back to IntroAiActivity
                     isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                    finish() // This will return to IntroAiActivity (parent)
                 }
             }
         })
