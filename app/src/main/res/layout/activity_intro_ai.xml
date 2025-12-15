@@ -365,7 +365,7 @@
             android:layout_gravity="bottom|center_horizontal"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="60dp">
 
             <!-- Player 1 Scorecard -->
             <com.example.lastdrop.ui.components.ScorecardBadge
@@ -507,7 +507,7 @@
         app:layout_constraintBottom_toTopOf="@id/dialogueSection"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="100dp" />
+        android:layout_marginBottom="8dp" />
 
     <!-- Particle Effect Overlay (on top of everything) -->
     <com.example.lastdrop.ui.components.ParticleEffectView
