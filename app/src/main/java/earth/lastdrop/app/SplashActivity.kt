@@ -17,9 +17,9 @@ class SplashActivity : AppCompatActivity() {
         // Hide action bar
         supportActionBar?.hide()
         
-        // Navigate to MainActivity after delay
+        // Navigate to ProfileSelectionActivity after delay
         Handler(Looper.getMainLooper()).postDelayed({
-            startActivity(Intent(this, MainActivity::class.java))
+            startActivity(Intent(this, ProfileSelectionActivity::class.java))
             finish()
         }, SPLASH_DELAY)
     }

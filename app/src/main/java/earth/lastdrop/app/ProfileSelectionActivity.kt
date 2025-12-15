@@ -1,5 +1,6 @@
 package earth.lastdrop.app
 
+import earth.lastdrop.app.ui.intro.IntroAiActivity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
@@ -37,6 +38,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
     private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
     private val selectedProfiles = mutableSetOf<String>() // For multiplayer
     private var isCalledFromMainActivity = false // Track where we came from
+    private var isCalledFromIntroAi = false // Track if called from IntroAi
     private var latestSavedGame: SavedGame? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,6 +46,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
         
         // Check if called from MainActivity
         isCalledFromMainActivity = intent.getBooleanExtra("FROM_MAIN_ACTIVITY", false)
+        isCalledFromIntroAi = intent.getBooleanExtra("FROM_INTRO_AI", false)
         
         // Simple layout (you'll need to create XML)
         setContentView(createLayout())
@@ -75,8 +78,13 @@ class ProfileSelectionActivity : AppCompatActivity() {
     
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // Exit app when back is pressed from profile selection (first screen)
-        finishAffinity()
+        // If called from IntroAi or MainActivity, just go back
+        if (isCalledFromIntroAi || isCalledFromMainActivity) {
+            super.onBackPressed()
+        } else {
+            // Exit app when back is pressed from profile selection (first screen from Splash)
+            finishAffinity()
+        }
     }
     
     private fun createLayout(): LinearLayout {
@@ -600,12 +608,13 @@ class ProfileSelectionActivity : AppCompatActivity() {
             selectedColors[profileId] ?: ProfileManager.GAME_COLORS[0]
         }
         
-        val resultIntent = Intent().apply {
+        // Launch IntroAiActivity with profiles and colors
+        val intent = Intent(this, IntroAiActivity::class.java).apply {
             putStringArrayListExtra("selected_profiles", ArrayList(selectedProfiles))
             putStringArrayListExtra("assigned_colors", ArrayList(orderedColors))
         }
         
-        setResult(RESULT_OK, resultIntent)
+        startActivity(intent)
         finish()
     }
 }

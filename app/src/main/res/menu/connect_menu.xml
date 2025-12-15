@@ -10,6 +10,6 @@
         android:icon="@drawable/ic_connect" />
     <item
         android:id="@+id/connect_server"
-        android:title="Test Server"
+        android:title="Connect Server"
         android:icon="@drawable/ic_refresh" />
 </menu>

@@ -713,10 +713,11 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         //     }
         // }
 
-        // Show profile selection screen unless resuming a saved game
+        // Show profile selection screen unless resuming a saved game or skipping
+        val skipProfileSelection = intent.getBooleanExtra("SKIP_PROFILE_SELECTION", false)
         if (!savedGameIdFromIntent.isNullOrBlank()) {
             consumeSavedGameIntent(savedGameIdFromIntent)
-        } else {
+        } else if (!skipProfileSelection) {
             showProfileSelection()
         }
 
