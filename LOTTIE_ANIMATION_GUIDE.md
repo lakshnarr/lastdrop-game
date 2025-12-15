@@ -44,29 +44,118 @@ Animations load automatically - no file management needed!
 
 ## Recommended Animations
 
+Here are **curated Lottie animations** with direct URLs ready to use:
+
 ### Cloudie (Water Conservation Mascot)
 
-| Animation | Search Terms | Style | Loop |
-|-----------|-------------|-------|------|
-| CLOUDIE_IDLE | "cloud character breathing", "cute cloud idle" | Gentle floating | ✅ Yes |
-| CLOUDIE_SPEAKING | "character talking mouth", "speaking animation" | Mouth movement | ✅ Yes |
-| CLOUDIE_CELEBRATE | "celebration jump", "happy character dance" | Joyful bouncing | ❌ No |
-| CLOUDIE_WARNING | "warning shake", "alert character" | Shaking/concerned | ❌ No |
-| CLOUDIE_SAD | "sad cloud", "crying character" | Drooping/crying | ❌ No |
-| CLOUDIE_THINKING | "thinking character", "pondering" | Hand on chin | ✅ Yes |
-| CLOUDIE_EXCITED | "excited bounce", "energetic character" | Fast bouncing | ❌ No |
+```kotlin
+// Copy these into EmoteManager.kt
+
+// 1. CLOUDIE_IDLE - Gentle floating cloud
+const val CLOUDIE_IDLE = "https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.lottie"
+// Alternative: https://assets5.lottiefiles.com/packages/lf20_nqoewpqn.json
+
+// 2. CLOUDIE_SPEAKING - Talking/mouth animation
+const val CLOUDIE_SPEAKING = "https://assets2.lottiefiles.com/packages/lf20_khtt8ghn.json"
+// Alternative: https://lottie.host/embed/d5e3f8d0-9c8e-4a1e-8a8e-5d6f7e8f9a0b/animation.json
+
+// 3. CLOUDIE_CELEBRATE - Happy celebration
+const val CLOUDIE_CELEBRATE = "https://assets9.lottiefiles.com/packages/lf20_u4yrau.json"
+// Alternative: https://assets5.lottiefiles.com/packages/lf20_5njp3vgg.json (confetti celebration)
+
+// 4. CLOUDIE_WARNING - Alert/warning shake
+const val CLOUDIE_WARNING = "https://assets4.lottiefiles.com/packages/lf20_zrqthn6o.json"
+// Alternative: https://assets5.lottiefiles.com/packages/lf20_w51pcehl.json (exclamation mark)
+
+// 5. CLOUDIE_SAD - Crying/sad expression
+const val CLOUDIE_SAD = "https://assets10.lottiefiles.com/packages/lf20_kyu7xb1v.json"
+// Alternative: https://assets2.lottiefiles.com/private_files/lf30_bn5winlb.json
+
+// 6. CLOUDIE_THINKING - Pondering with thought bubble
+const val CLOUDIE_THINKING = "https://assets4.lottiefiles.com/packages/lf20_touohxv0.json"
+// Alternative: https://assets9.lottiefiles.com/packages/lf20_myejiggj.json
+
+// 7. CLOUDIE_EXCITED - Energetic bouncing
+const val CLOUDIE_EXCITED = "https://assets3.lottiefiles.com/packages/lf20_pwohahvd.json"
+// Alternative: https://assets5.lottiefiles.com/packages/lf20_ztasojjb.json (star sparkles)
+```
 
 ### Drops (Player Tokens)
 
-| Animation | Search Terms | Style | Loop |
-|-----------|-------------|-------|------|
-| DROP_IDLE | "water drop idle", "droplet wobble" | Subtle breathing | ✅ Yes |
-| DROP_ROLLING | "rolling dice", "spinning object" | Fast rotation | ✅ Yes |
-| DROP_MOVING | "hop animation", "jump forward" | Small hop | ❌ No |
-| DROP_WINNING | "victory celebration", "confetti character" | Celebratory jump | ❌ No |
-| DROP_LOSING | "sad droop", "disappointed" | Deflating | ❌ No |
-| DROP_ELIMINATED | "fade out", "disappear animation" | Fading/sinking | ❌ No |
-| DROP_REVIVED | "appear", "power up glow" | Rising with glow | ❌ No |
+```kotlin
+// 8. DROP_IDLE - Water drop wobbling
+const val DROP_IDLE = "https://assets8.lottiefiles.com/packages/lf20_wqypcrse.json"
+// Alternative: https://assets6.lottiefiles.com/packages/lf20_nqoewpqn.json
+
+// 9. DROP_ROLLING - Spinning/rolling dice
+const val DROP_ROLLING = "https://assets4.lottiefiles.com/packages/lf20_5tl1xxnz.json"
+// Alternative: https://assets9.lottiefiles.com/packages/lf20_0bqhg9km.json (spinning coin)
+
+// 10. DROP_MOVING - Small hop/jump forward
+const val DROP_MOVING = "https://assets1.lottiefiles.com/packages/lf20_j3UXNf.json"
+// Alternative: https://assets7.lottiefiles.com/packages/lf20_yfsxcomf.json
+
+// 11. DROP_WINNING - Victory with confetti
+const val DROP_WINNING = "https://assets5.lottiefiles.com/packages/lf20_obhph3sh.json"
+// Alternative: https://assets9.lottiefiles.com/packages/lf20_xlkxtmul.json (trophy celebration)
+
+// 12. DROP_LOSING - Sad deflating
+const val DROP_LOSING = "https://assets10.lottiefiles.com/packages/lf20_9wpyhdzo.json"
+// Alternative: https://assets1.lottiefiles.com/packages/lf20_ztasojjb.json
+
+// 13. DROP_ELIMINATED - Fade out/disappear
+const val DROP_ELIMINATED = "https://assets2.lottiefiles.com/packages/lf20_svy4ivkc.json"
+// Alternative: https://assets8.lottiefiles.com/packages/lf20_dmw9aoaq.json (poof smoke)
+
+// 14. DROP_REVIVED - Power up glow/appear
+const val DROP_REVIVED = "https://assets4.lottiefiles.com/packages/lf20_tll0j84z.json"
+// Alternative: https://assets6.lottiefiles.com/packages/lf20_myejiggj.json (sparkle glow)
+```
+
+---
+
+## Quick Copy-Paste Setup
+
+**Option 1: Use all primary URLs** (fastest)
+```kotlin
+const val CLOUDIE_IDLE = "https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.lottie"
+const val CLOUDIE_SPEAKING = "https://assets2.lottiefiles.com/packages/lf20_khtt8ghn.json"
+const val CLOUDIE_CELEBRATE = "https://assets9.lottiefiles.com/packages/lf20_u4yrau.json"
+const val CLOUDIE_WARNING = "https://assets4.lottiefiles.com/packages/lf20_zrqthn6o.json"
+const val CLOUDIE_SAD = "https://assets10.lottiefiles.com/packages/lf20_kyu7xb1v.json"
+const val CLOUDIE_THINKING = "https://assets4.lottiefiles.com/packages/lf20_touohxv0.json"
+const val CLOUDIE_EXCITED = "https://assets3.lottiefiles.com/packages/lf20_pwohahvd.json"
+
+const val DROP_IDLE = "https://assets8.lottiefiles.com/packages/lf20_wqypcrse.json"
+const val DROP_ROLLING = "https://assets4.lottiefiles.com/packages/lf20_5tl1xxnz.json"
+const val DROP_MOVING = "https://assets1.lottiefiles.com/packages/lf20_j3UXNf.json"
+const val DROP_WINNING = "https://assets5.lottiefiles.com/packages/lf20_obhph3sh.json"
+const val DROP_LOSING = "https://assets10.lottiefiles.com/packages/lf20_9wpyhdzo.json"
+const val DROP_ELIMINATED = "https://assets2.lottiefiles.com/packages/lf20_svy4ivkc.json"
+const val DROP_REVIVED = "https://assets4.lottiefiles.com/packages/lf20_tll0j84z.json"
+```
+
+**Option 2: Preview before using**
+
+Visit these pages to see animations in action:
+- Search: https://lottiefiles.com/search?q=cloud
+- Search: https://lottiefiles.com/search?q=water+drop
+- Search: https://lottiefiles.com/search?q=celebration
+- Search: https://lottiefiles.com/search?q=thinking
+
+---
+
+## Alternative Sources (If URLs Break)
+
+**Free Lottie Packs:**
+- https://lottiefiles.com/featured - Featured animations
+- https://lottiefiles.com/free - Free marketplace
+- https://iconscout.com/lottie-animations - IconScout Lottie
+
+**Custom Animated Characters:**
+- Search: "water mascot"
+- Search: "game character idle"
+- Search: "emoji reactions"
 
 ---
 

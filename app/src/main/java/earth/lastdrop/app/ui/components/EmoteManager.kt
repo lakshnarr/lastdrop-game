@@ -20,23 +20,23 @@ class EmoteManager(private val context: Context) {
         // Animation URLs from LottieFiles.com (can be changed anytime)
         // Format: https://lottie.host/[id]/[hash].json or .lottie
         
-        // Cloudie animations
-        const val CLOUDIE_IDLE = "https://lottie.host/embed/YOUR_IDLE_ID/YOUR_HASH.json"
-        const val CLOUDIE_SPEAKING = "https://lottie.host/embed/YOUR_SPEAKING_ID/YOUR_HASH.json"
-        const val CLOUDIE_CELEBRATE = "https://lottie.host/embed/YOUR_CELEBRATE_ID/YOUR_HASH.json"
-        const val CLOUDIE_WARNING = "https://lottie.host/embed/YOUR_WARNING_ID/YOUR_HASH.json"
-        const val CLOUDIE_SAD = "https://lottie.host/embed/YOUR_SAD_ID/YOUR_HASH.json"
-        const val CLOUDIE_THINKING = "https://lottie.host/embed/YOUR_THINKING_ID/YOUR_HASH.json"
-        const val CLOUDIE_EXCITED = "https://lottie.host/embed/YOUR_EXCITED_ID/YOUR_HASH.json"
+        // Cloudie animations - Water conservation mascot
+        const val CLOUDIE_IDLE = "https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.lottie"
+        const val CLOUDIE_SPEAKING = "https://assets2.lottiefiles.com/packages/lf20_khtt8ghn.json"
+        const val CLOUDIE_CELEBRATE = "https://assets9.lottiefiles.com/packages/lf20_u4yrau.json"
+        const val CLOUDIE_WARNING = "https://assets4.lottiefiles.com/packages/lf20_zrqthn6o.json"
+        const val CLOUDIE_SAD = "https://assets10.lottiefiles.com/packages/lf20_kyu7xb1v.json"
+        const val CLOUDIE_THINKING = "https://assets4.lottiefiles.com/packages/lf20_touohxv0.json"
+        const val CLOUDIE_EXCITED = "https://assets3.lottiefiles.com/packages/lf20_pwohahvd.json"
         
-        // Drop animations
-        const val DROP_IDLE = "https://lottie.host/embed/YOUR_DROP_IDLE_ID/YOUR_HASH.json"
-        const val DROP_ROLLING = "https://lottie.host/embed/YOUR_ROLLING_ID/YOUR_HASH.json"
-        const val DROP_MOVING = "https://lottie.host/embed/YOUR_MOVING_ID/YOUR_HASH.json"
-        const val DROP_WINNING = "https://lottie.host/embed/YOUR_WINNING_ID/YOUR_HASH.json"
-        const val DROP_LOSING = "https://lottie.host/embed/YOUR_LOSING_ID/YOUR_HASH.json"
-        const val DROP_ELIMINATED = "https://lottie.host/embed/YOUR_ELIMINATED_ID/YOUR_HASH.json"
-        const val DROP_REVIVED = "https://lottie.host/embed/YOUR_REVIVED_ID/YOUR_HASH.json"
+        // Drop animations - Player tokens
+        const val DROP_IDLE = "https://assets8.lottiefiles.com/packages/lf20_wqypcrse.json"
+        const val DROP_ROLLING = "https://assets4.lottiefiles.com/packages/lf20_5tl1xxnz.json"
+        const val DROP_MOVING = "https://assets1.lottiefiles.com/packages/lf20_j3UXNf.json"
+        const val DROP_WINNING = "https://assets5.lottiefiles.com/packages/lf20_obhph3sh.json"
+        const val DROP_LOSING = "https://assets10.lottiefiles.com/packages/lf20_9wpyhdzo.json"
+        const val DROP_ELIMINATED = "https://assets2.lottiefiles.com/packages/lf20_svy4ivkc.json"
+        const val DROP_REVIVED = "https://assets4.lottiefiles.com/packages/lf20_tll0j84z.json"
     }
 
     /**
