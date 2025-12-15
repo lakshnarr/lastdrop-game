@@ -150,7 +150,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Cloudie Animation (will be replaced with LottieAnimationView in Phase 3) -->
+        <!-- Cloudie Animation -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -158,12 +158,11 @@
             android:orientation="vertical"
             android:gravity="center">
 
-            <ImageView
-                android:id="@+id/cloudieImage"
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:contentDescription="Cloudie"
-                android:src="@android:drawable/ic_dialog_info" />
+            <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/cloudieAnimation"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:scaleType="centerInside" />
 
             <!-- Cloudie Scorecard Badge -->
             <TextView
@@ -179,7 +178,7 @@
                 android:layout_marginTop="8dp" />
         </LinearLayout>
 
-        <!-- Player Drops Row (will contain LottieAnimationViews in Phase 3) -->
+        <!-- Player Drops Row -->
         <LinearLayout
             android:id="@+id/dropsRow"
             android:layout_width="wrap_content"

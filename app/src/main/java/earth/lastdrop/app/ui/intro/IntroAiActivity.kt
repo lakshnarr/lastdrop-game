@@ -30,6 +30,8 @@ import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.VoiceService
 import earth.lastdrop.app.voice.VoiceSettingsManager
 import com.example.lastdrop.ui.components.ScorecardBadge
+import com.example.lastdrop.ui.components.EmoteManager
+import com.airbnb.lottie.LottieAnimationView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -41,11 +43,12 @@ import androidx.core.view.children
 class IntroAiActivity : AppCompatActivity() {
 
     private lateinit var profileManager: ProfileManager
-    private lateinit var cloudieImage: ImageView
+    private lateinit var cloudieAnimation: LottieAnimationView
     private lateinit var dialogue: TextView
     private lateinit var dropsRow: LinearLayout
     private lateinit var voiceService: VoiceService
     private lateinit var virtualDicePanel: LinearLayout
+    private lateinit var emoteManager: EmoteManager
     private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
     
     // Game Engine & State
@@ -104,10 +107,13 @@ class IntroAiActivity : AppCompatActivity() {
             }
             NoOpVoiceService(this)
         }
-        cloudieImage = findViewById(R.id.cloudieImage)
+        cloudieAnimation = findViewById(R.id.cloudieAnimation)
         dialogue = findViewById(R.id.cloudieDialogue)
         dropsRow = findViewById(R.id.dropsRow)
         virtualDicePanel = findViewById(R.id.virtualDicePanel)
+        
+        // Initialize EmoteManager for Lottie animations
+        emoteManager = EmoteManager(this)
         
         // Initialize Game Engine
         gameEngine = GameEngine()
@@ -166,10 +172,10 @@ class IntroAiActivity : AppCompatActivity() {
     }
 
     private fun setInitialStates() {
-        cloudieImage.translationY = -80f
-        cloudieImage.scaleX = 0.8f
-        cloudieImage.scaleY = 0.8f
-        cloudieImage.alpha = 0f
+        cloudieAnimation.translationY = -80f
+        cloudieAnimation.scaleX = 0.8f
+        cloudieAnimation.scaleY = 0.8f
+        cloudieAnimation.alpha = 0f
 
         dropsRow.children.forEach { child ->
             child.translationY = -40f
@@ -178,8 +184,11 @@ class IntroAiActivity : AppCompatActivity() {
     }
 
     private fun playEntranceAnimations() {
+        // Start Cloudie idle animation
+        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_IDLE)
+        
         // Cloudie flies in and grows
-        cloudieImage.animate()
+        cloudieAnimation.animate()
             .translationY(0f)
             .scaleX(1f)
             .scaleY(1f)
