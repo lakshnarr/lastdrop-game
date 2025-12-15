@@ -212,6 +212,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var btnClearLog: Button
     private lateinit var btnCopyLog: Button
     private lateinit var layoutLogButtons: LinearLayout
+    private var isReturningToIntroAi = false // Flag to suppress voice during exit to IntroAi
 
     // ---------- Game / players ----------
     private var lastRoll: Int? = null
@@ -562,7 +563,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     diceConnected = false
                     btnConnectDice.text = "Connect Dice"
                     tvDiceStatus.text = "Dice disconnected"
-                    runCatching { voiceService?.speak("Dice disconnected") }
+                    // Only speak if not returning to IntroAi
+                    if (!isReturningToIntroAi) {
+                        runCatching { voiceService?.speak("Dice disconnected") }
+                    }
                 }
             }
         )
@@ -715,8 +719,65 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
         // Show profile selection screen unless resuming a saved game or skipping
         val skipProfileSelection = intent.getBooleanExtra("SKIP_PROFILE_SELECTION", false)
+        val profileIdsFromIntent = intent.getStringArrayListExtra("selected_profiles")
+        val colorsFromIntent = intent.getStringArrayListExtra("assigned_colors")
+        
         if (!savedGameIdFromIntent.isNullOrBlank()) {
             consumeSavedGameIntent(savedGameIdFromIntent)
+        } else if (profileIdsFromIntent != null && profileIdsFromIntent.isNotEmpty()) {
+            // Coming from IntroAi with profiles - start game directly
+            Log.d(TAG, "Starting game with ${profileIdsFromIntent.size} profiles from IntroAi")
+            
+            // Apply connection states from IntroAi
+            val useBluetoothDice = intent.getBooleanExtra("use_bluetooth_dice", true)
+            val twoDiceMode = intent.getBooleanExtra("play_with_two_dice", false)
+            
+            // Set virtual dice mode
+            virtualDiceEnabled = !useBluetoothDice
+            switchDiceMode?.isChecked = virtualDiceEnabled
+            
+            // Update UI based on mode
+            if (virtualDiceEnabled) {
+                layoutVirtualDiceContainer?.visibility = View.VISIBLE
+                tvDiceModeLabel?.text = "Virtual Dice"
+                Log.d(TAG, "Synced to Virtual dice mode from IntroAi")
+            } else {
+                layoutVirtualDiceContainer?.visibility = View.GONE
+                tvDiceModeLabel?.text = "Bluetooth Dice"
+                Log.d(TAG, "Synced to Bluetooth dice mode from IntroAi")
+            }
+            
+            playWithTwoDice = twoDiceMode
+            
+            Log.d(TAG, "Synced connection states: virtualDice=$virtualDiceEnabled, twoDice=$twoDiceMode")
+            
+            // Start game with profiles
+            startGameWithProfiles(profileIdsFromIntent, colorsFromIntent ?: emptyList())
+            
+            // Restore game state if provided
+            val currentPlayerIndex = intent.getIntExtra("current_player_index", -1)
+            if (currentPlayerIndex >= 0 && intent.getBooleanExtra("game_started", false)) {
+                currentPlayer = currentPlayerIndex
+                
+                // Restore positions
+                intent.getIntegerArrayListExtra("player_positions")?.let { positions ->
+                    positions.forEachIndexed { index, pos ->
+                        val name = playerNames.getOrNull(index) ?: "Player ${index + 1}"
+                        playerPositions[name] = pos
+                    }
+                }
+                
+                // Restore scores
+                intent.getIntegerArrayListExtra("player_scores")?.let { scores ->
+                    scores.forEachIndexed { index, score ->
+                        val name = playerNames.getOrNull(index) ?: "Player ${index + 1}"
+                        playerScores[name] = score
+                    }
+                }
+                
+                updateTurnIndicatorDisplay()
+                Log.d(TAG, "Restored game state from IntroAi: player=$currentPlayer")
+            }
         } else if (!skipProfileSelection) {
             showProfileSelection()
         }
@@ -4190,12 +4251,55 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 if (gameActive && playerScores.isNotEmpty()) {
                     showEndGameDialog()
                 } else {
-                    // No active game - go back to IntroAiActivity
+                    // Return game state to IntroAiActivity if it was the caller
+                    returnGameStateToIntroAi()
                     isEnabled = false
                     finish() // This will return to IntroAiActivity (parent)
                 }
             }
         })
+    }
+    
+    private fun returnGameStateToIntroAi() {
+        // Set flag to suppress voice announcements during exit
+        isReturningToIntroAi = true
+        
+        val resultIntent = Intent().apply {
+            // Pass current game state back
+            putExtra("current_player_index", currentPlayer)
+            putExtra("game_started", gameActive)
+            putExtra("play_with_two_dice", playWithTwoDice)
+            
+            // Pass connection states back
+            putExtra("use_bluetooth_dice", !virtualDiceEnabled) // True if using Bluetooth, false if virtual
+            putExtra("dice_connected", diceConnected)
+            putExtra("esp32_connected", esp32Connected)
+            
+            Log.d(TAG, "Returning connection states: virtualDice=$virtualDiceEnabled, dice=$diceConnected, board=$esp32Connected, twoDice=$playWithTwoDice")
+            
+            // Convert positions map to array list
+            val positionsList = ArrayList<Int>()
+            for (i in 0 until playerCount) {
+                val name = playerNames.getOrNull(i) ?: "Player ${i + 1}"
+                positionsList.add(playerPositions[name] ?: 1)
+            }
+            putIntegerArrayListExtra("player_positions", positionsList)
+            
+            // Convert scores map to array list
+            val scoresList = ArrayList<Int>()
+            for (i in 0 until playerCount) {
+                val name = playerNames.getOrNull(i) ?: "Player ${i + 1}"
+                scoresList.add(playerScores[name] ?: 0)
+            }
+            putIntegerArrayListExtra("player_scores", scoresList)
+            
+            // Player alive status (all alive by default in MainActivity - no elimination tracking)
+            val aliveArray = BooleanArray(playerCount) { true }
+            putExtra("player_alive", aliveArray)
+            
+            Log.d(TAG, "Returning game state: player=$currentPlayer, positions=$positionsList, scores=$scoresList")
+        }
+        setResult(RESULT_OK, resultIntent)
     }
 
     private fun showEndGameDialog() {
@@ -4213,6 +4317,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
                 .setNegativeButton("Exit") { _, _ ->
                     gameActive = false
+                    returnGameStateToIntroAi()
                     finish()
                 }
                 .setNeutralButton("Cancel", null)

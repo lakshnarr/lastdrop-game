@@ -67,6 +67,10 @@ import android.util.Log
 
 class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
+    companion object {
+        private const val REQUEST_CODE_MAIN_ACTIVITY = 2001
+    }
+
     private lateinit var profileManager: ProfileManager
     private lateinit var cloudieAnimation: LottieAnimationView
     private lateinit var dialogue: TextView
@@ -83,6 +87,8 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // Game Engine & State
     private lateinit var gameEngine: GameEngine
     private val currentGameProfiles = mutableListOf<PlayerProfile>()
+    private val selectedProfileIds = mutableListOf<String>() // Store original profile IDs
+    private val assignedColors = mutableListOf<String>() // Store original color assignments
     private var currentPlayerIndex = 0
     private val playerPositions = IntArray(4) { 1 } // Track positions (1-based)
     private val playerScores = IntArray(4) { 0 }    // Track scores
@@ -106,6 +112,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private val diceResults = HashMap<Int, Int>()
     private val diceColorMap = HashMap<Int, String>()
     private var useBluetoothDice = true  // Toggle between Bluetooth and Virtual dice (default: Bluetooth)
+    private var isSyncingState = false // Flag to prevent callbacks during state sync
     
     // Database
     private lateinit var savedGameDao: SavedGameDao
@@ -204,7 +211,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         setupScorecards()
 
         val selectedProfiles = intent.getStringArrayListExtra("selected_profiles") ?: arrayListOf()
-        val assignedColors = intent.getStringArrayListExtra("assigned_colors") ?: arrayListOf()
+        val colors = intent.getStringArrayListExtra("assigned_colors") ?: arrayListOf()
 
         if (selectedProfiles.isEmpty()) {
             Toast.makeText(this, "No players provided", Toast.LENGTH_SHORT).show()
@@ -212,8 +219,14 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             return
         }
 
+        // Store profile IDs and colors for later use
+        selectedProfileIds.clear()
+        selectedProfileIds.addAll(selectedProfiles)
+        assignedColors.clear()
+        assignedColors.addAll(colors)
+
         setInitialStates()
-        bindPlayers(selectedProfiles, assignedColors)
+        bindPlayers(selectedProfiles, colors)
         playIntroLines()
         playEntranceAnimations()
     }
@@ -232,6 +245,96 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         startActivity(intent)
         finish()
+    }
+    
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        // Handle return from MainActivity with game state sync
+        if (requestCode == REQUEST_CODE_MAIN_ACTIVITY && resultCode == RESULT_OK && data != null) {
+            android.util.Log.d("IntroAiActivity", "Received game state from MainActivity")
+            
+            // Set sync flag to prevent disconnection callbacks
+            isSyncingState = true
+            
+            // Sync game state
+            currentPlayerIndex = data.getIntExtra("current_player_index", currentPlayerIndex)
+            gameStarted = data.getBooleanExtra("game_started", gameStarted)
+            playWithTwoDice = data.getBooleanExtra("play_with_two_dice", playWithTwoDice)
+            
+            // Sync connection states
+            val syncedUseBluetoothDice = data.getBooleanExtra("use_bluetooth_dice", useBluetoothDice)
+            val syncedDiceConnected = data.getBooleanExtra("dice_connected", diceConnected)
+            val syncedEsp32Connected = data.getBooleanExtra("esp32_connected", esp32Connected)
+            
+            // Apply virtual dice mode if changed (silently, no messages)
+            if (useBluetoothDice != syncedUseBluetoothDice) {
+                useBluetoothDice = syncedUseBluetoothDice
+                if (useBluetoothDice) {
+                    virtualDiceView?.visibility = View.GONE
+                    android.util.Log.d("IntroAiActivity", "Synced to Bluetooth dice mode")
+                } else {
+                    virtualDiceView?.visibility = View.VISIBLE
+                    android.util.Log.d("IntroAiActivity", "Synced to Virtual dice mode")
+                }
+            }
+            
+            // Silently sync connection states (no toasts or voice messages)
+            diceConnected = syncedDiceConnected
+            esp32Connected = syncedEsp32Connected
+            
+            android.util.Log.d("IntroAiActivity", "Synced connection states: virtualDice=${!useBluetoothDice}, dice=$diceConnected, board=$esp32Connected")
+            
+            // Sync positions
+            data.getIntegerArrayListExtra("player_positions")?.let { positions ->
+                positions.forEachIndexed { index, pos ->
+                    if (index < playerPositions.size) {
+                        playerPositions[index] = pos
+                    }
+                }
+            }
+            
+            // Sync scores
+            data.getIntegerArrayListExtra("player_scores")?.let { scores ->
+                scores.forEachIndexed { index, score ->
+                    if (index < playerScores.size) {
+                        playerScores[index] = score
+                    }
+                }
+            }
+            
+            // Sync alive status
+            data.getBooleanArrayExtra("player_alive")?.let { alive ->
+                alive.forEachIndexed { index, isAlive ->
+                    if (index < playerAlive.size) {
+                        playerAlive[index] = isAlive
+                    }
+                }
+            }
+            
+            // Clear sync flag
+            isSyncingState = false
+            
+            // Update UI with synced state
+            updateAllScorecards()
+            
+            Toast.makeText(this, "Game state synced from Classic mode", Toast.LENGTH_SHORT).show()
+            soundManager.playSound(SoundEffect.SCORE_GAIN)
+        }
+        
+        // Handle profile selection result (existing code)
+        if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
+            val profileIds = data.getStringArrayListExtra("selected_profiles") ?: return
+            val colors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+            
+            selectedProfileIds.clear()
+            selectedProfileIds.addAll(profileIds)
+            assignedColors.clear()
+            assignedColors.addAll(colors)
+            
+            bindPlayers(profileIds, colors)
+        }
     }
 
     private fun speakLine(line: String) {
@@ -366,21 +469,35 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             showConnectMenu(it) 
         }
 
-        // Board - go to MainActivity (full board view)
+        // Classic Mode - go to MainActivity (traditional board gameplay)
         iconBoard.setOnClickListener {
-            android.util.Log.d("IntroAiActivity", "Board icon clicked - Opening MainActivity")
+            android.util.Log.d("IntroAiActivity", "Classic Mode icon clicked - Opening MainActivity")
             soundManager.playSound(SoundEffect.BUTTON_CLICK)
-            Toast.makeText(this, "Board Icon: Opening MainActivity", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Switching to Classic Mode", Toast.LENGTH_SHORT).show()
             
             val intent = Intent(this, MainActivity::class.java)
-            // Pass flag to skip profile selection
-            intent.putExtra("SKIP_PROFILE_SELECTION", true)
-            // Pass current profiles if game is started
-            if (currentGameProfiles.isNotEmpty()) {
-                val profileIds = ArrayList(currentGameProfiles.map { it.playerId })
-                intent.putStringArrayListExtra("selected_profiles", profileIds)
+            // Pass profile IDs and colors to MainActivity
+            if (selectedProfileIds.isNotEmpty()) {
+                intent.putStringArrayListExtra("selected_profiles", ArrayList(selectedProfileIds))
+                intent.putStringArrayListExtra("assigned_colors", ArrayList(assignedColors))
+                android.util.Log.d("IntroAiActivity", "Passing ${selectedProfileIds.size} profiles with colors: $assignedColors")
             }
-            startActivity(intent)
+            // Pass current game state to MainActivity
+            intent.putExtra("current_player_index", currentPlayerIndex)
+            intent.putExtra("game_started", gameStarted)
+            intent.putIntegerArrayListExtra("player_positions", ArrayList(playerPositions.toList()))
+            intent.putIntegerArrayListExtra("player_scores", ArrayList(playerScores.toList()))
+            intent.putExtra("player_alive", playerAlive)
+            intent.putExtra("play_with_two_dice", playWithTwoDice)
+            
+            // Pass connection states
+            intent.putExtra("use_bluetooth_dice", useBluetoothDice)
+            intent.putExtra("dice_connected", diceConnected)
+            intent.putExtra("esp32_connected", esp32Connected)
+            
+            android.util.Log.d("IntroAiActivity", "Connection states: virtualDice=${!useBluetoothDice}, dice=$diceConnected, board=$esp32Connected")
+            
+            startActivityForResult(intent, REQUEST_CODE_MAIN_ACTIVITY)
         }
 
         // Save - save game state
@@ -585,7 +702,10 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 onDiceDisconnected = {
                     runOnUiThread {
                         diceConnected = false
-                        Toast.makeText(this, "Dice disconnected", Toast.LENGTH_SHORT).show()
+                        // Only show message if not syncing state from MainActivity
+                        if (!isSyncingState) {
+                            Toast.makeText(this, "Dice disconnected", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             )
@@ -981,6 +1101,19 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         appendDebug("Scores: ${playerScores.contentToString()}")
         appendDebug("Positions: ${playerPositions.contentToString()}")
+    }
+    
+    private fun updateAllScorecards() {
+        // Update all scorecard badges with current scores
+        for (i in 0 until currentGameProfiles.size) {
+            scorecardBadges[i]?.animateToScore(playerScores[i])
+            
+            // Update visual state based on alive status
+            scorecardBadges[i]?.animate()
+                ?.alpha(if (playerAlive[i]) 1.0f else 0.3f)
+                ?.setDuration(300)
+                ?.start()
+        }
     }
 
     private fun updateLastEventText(playerName: String, diceValue: Int, result: TurnResult) {
