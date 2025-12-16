@@ -28,15 +28,16 @@
 #include <queue>
 
 // ==================== HARDWARE CONFIGURATION ====================
-#define LED_PIN 5
-#define NUM_LEDS 80
-#define LEDS_PER_TILE 4
+#define LED_PIN 18  // Changed from GPIO 5 to GPIO 18 (more stable)
+#define NUM_LEDS 100  // 20 tiles × 5 LEDs (1 dummy + 4 players per tile)
+#define LEDS_PER_TILE 5  // Pattern: [dummy, P0, P1, P2, P3] per tile
 #define NUM_TILES 20
 #define NUM_PLAYERS 4
 
 // Hall sensor pins (GPIO 12-31, adjust based on your wiring)
+// Note: GPIO 5 now used instead of GPIO 18 (which is now LED data pin)
 const int hallPins[NUM_TILES] = {
-  12, 13, 14, 15, 16, 17, 18, 19, 21, 22,
+  12, 13, 14, 15, 16, 17, 5, 19, 21, 22,
   23, 25, 26, 27, 32, 33, 34, 35, 36, 39
 };
 
@@ -226,6 +227,13 @@ bool blinkState = false;
 unsigned long lastBlinkTime = 0;
 const unsigned long BLINK_INTERVAL = 500;
 
+// Forward declarations for LED rendering functions
+void renderPlayers();
+void renderBackground();
+int getPlayerLED(int tile, int playerId);
+void animatePlayerElimination(int playerId);
+void animateWinner(int winnerId);
+
 void updateConnectionStatusLEDs() {
   if (millis() - lastConnectionLEDUpdate < CONNECTION_LED_INTERVAL) {
     return;
@@ -234,10 +242,13 @@ void updateConnectionStatusLEDs() {
   
   switch (currentConnectionMode) {
     case MODE_DISCONNECTED:
-      // Light sea blue blink (all LEDs)
+      // Light blue blink (only tile 1 player LEDs, not dummy)
       if (blinkState) {
-        for (int i = 0; i < NUM_LEDS; i++) {
-          strip.setPixelColor(i, strip.Color(32, 178, 170));  // Light sea blue
+        strip.clear();
+        // Tile 1 has LEDs at indices 0-4: [dummy, P1, P2, P3, P4]
+        // Blink only player LEDs (indices 1-4)
+        for (int i = 1; i <= 4; i++) {
+          strip.setPixelColor(i, strip.Color(100, 200, 255));  // Light blue
         }
       } else {
         strip.clear();
@@ -247,10 +258,12 @@ void updateConnectionStatusLEDs() {
       break;
       
     case MODE_PAIRING:
-      // Purple pulse (fade in/out on all LEDs)
+      // Purple pulse (fade in/out on tile 1 player LEDs only)
       {
         int brightness = (connectionLEDStep < 128) ? connectionLEDStep * 2 : (255 - connectionLEDStep) * 2;
-        for (int i = 0; i < NUM_LEDS; i++) {
+        strip.clear();
+        // Only pulse tile 1 player LEDs (indices 1-4)
+        for (int i = 1; i <= 4; i++) {
           strip.setPixelColor(i, strip.Color(brightness, 0, brightness));  // Purple
         }
         connectionLEDStep = (connectionLEDStep + 16) % 256;
@@ -259,14 +272,21 @@ void updateConnectionStatusLEDs() {
       break;
       
     case MODE_CONNECTED:
-      // Initialization lap (single LED traveling around board)
+      // Success animation - flash tile 1 green 3 times
       {
-        strip.clear();
-        int ledIndex = connectionLEDStep % NUM_LEDS;
-        strip.setPixelColor(ledIndex, strip.Color(0, 255, 255));  // Cyan
-        connectionLEDStep++;
-        if (connectionLEDStep >= NUM_LEDS * 2) {
-          // Completed 2 laps, switch to READY mode
+        if (connectionLEDStep < 6) {  // 6 steps = 3 blinks (on/off/on/off/on/off)
+          if (connectionLEDStep % 2 == 0) {
+            // Flash green on tile 1 player LEDs
+            strip.clear();
+            for (int i = 1; i <= 4; i++) {
+              strip.setPixelColor(i, strip.Color(0, 255, 0));  // Green
+            }
+          } else {
+            strip.clear();
+          }
+          connectionLEDStep++;
+        } else {
+          // Completed success animation, switch to READY mode
           currentConnectionMode = MODE_READY;
           connectionLEDStep = 0;
           strip.clear();
@@ -276,22 +296,32 @@ void updateConnectionStatusLEDs() {
       break;
       
     case MODE_READY:
-      // Player LED blink (only active player LEDs)
-      if (blinkState) {
-        for (int p = 0; p < activePlayerCount; p++) {
-          int tile = players[p].currentTile;
-          if (tile >= 1 && tile <= NUM_TILES) {
-            int ledStart = (tile - 1) * LEDS_PER_TILE;
-            for (int j = 0; j < LEDS_PER_TILE; j++) {
-              strip.setPixelColor(ledStart + j, PLAYER_COLORS[p]);
+      // Show player positions only if game is active AND coins are placed
+      bool gameActive = false;
+      for (int i = 0; i < NUM_PLAYERS; i++) {
+        if (players[i].coinPlaced) {
+          gameActive = true;
+          break;
+        }
+      }
+      
+      if (gameActive) {
+        // Game in progress - show actual positions
+        renderPlayers();
+      } else {
+        // Pre-game: Show all active players on tile 1 with their configured colors
+        strip.clear();
+        for (int i = 0; i < activePlayerCount; i++) {
+          if (players[i].alive) {
+            int ledIndex = getPlayerLED(1, i);  // All players start on tile 1
+            if (ledIndex >= 0) {
+              strip.setPixelColor(ledIndex, players[i].color);
             }
           }
         }
-      } else {
-        strip.clear();
+        strip.show();
       }
-      blinkState = !blinkState;
-      strip.show();
+      }
       break;
   }
 }
@@ -323,7 +353,7 @@ void validateGameState();
 void handleUndo(JsonDocument& doc);
 void handleReset();
 void sendStatus();
-void animateMove(int fromTile, int toTile, uint32_t color);
+void animateMove(int fromTile, int toTile, uint32_t color, int playerId);
 void setTileColor(int tile, uint32_t color);
 void renderBackground();
 void renderPlayers();
@@ -343,8 +373,24 @@ class MyServerCallbacks: public BLEServerCallbacks {
       Serial.print("Connection time: ");
       Serial.println(millis());
       
+      // Clear any old game state from previous session
+      for (int i = 0; i < NUM_PLAYERS; i++) {
+        players[i].currentTile = 1;
+        players[i].score = 10;
+        players[i].alive = true;
+        players[i].coinPlaced = false;  // Critical: ensure no ghost coins
+        players[i].color = PLAYER_COLORS[i];
+      }
+      lastMove.hasUndo = false;
+      Serial.println("✓ Game state reset for new session");
+      
       // Send ready message
       sendBLEResponse("{\"event\":\"ready\",\"message\":\"ESP32 Test Mode Ready\",\"firmware\":\"v2.0-testmode\"}");
+      
+      // Request game state sync from Android (in case of reconnection during active game)
+      delay(500);  // Wait for Android to be ready
+      sendBLEResponse("{\"event\":\"request_state\",\"message\":\"Requesting game state sync\"}");
+      Serial.println("📤 Requesting game state from Android...");
     };
 
     void onDisconnect(BLEServer* pServer) {
@@ -549,6 +595,8 @@ void processCommandQueue() {
     handleUnpair();
   } else if (strcmp(command, "config") == 0) {
     handleConfig(doc);
+  } else if (strcmp(command, "sync_state") == 0) {
+    handleSyncState(doc);
   } else if (strcmp(command, "update_settings") == 0) {
     handleUpdateSettings(doc);
   } else if (strcmp(command, "status") == 0) {
@@ -702,6 +750,84 @@ void handleConfig(JsonDocument& doc) {
   pTxCharacteristic->notify();
   
   Serial.println("✓ Config applied\n");
+}
+
+// ==================== HANDLE STATE SYNC ====================
+void handleSyncState(JsonDocument& doc) {
+  Serial.println("\n🔄 Processing STATE SYNC command...");
+  resetIdleTimer();
+  
+  if (!doc.containsKey("gameActive") || !doc["gameActive"]) {
+    Serial.println("  No active game - skipping state sync");
+    return;
+  }
+  
+  // Sync player count and colors
+  int playerCount = doc["playerCount"];
+  JsonArray colorsArray = doc["colors"];
+  JsonArray positionsArray = doc["positions"];
+  JsonArray scoresArray = doc["scores"];
+  JsonArray aliveArray = doc["alive"];
+  
+  if (playerCount < 2 || playerCount > NUM_PLAYERS) {
+    Serial.printf("  ⚠️ Invalid player count: %d\n", playerCount);
+    return;
+  }
+  
+  activePlayerCount = playerCount;
+  Serial.printf("  Active Players: %d\n", activePlayerCount);
+  
+  // Restore each player's state
+  for (int i = 0; i < activePlayerCount; i++) {
+    // Update color
+    if (i < colorsArray.size()) {
+      const char* colorHex = colorsArray[i];
+      uint32_t color = (uint32_t)strtol(colorHex, NULL, 16);
+      players[i].color = color;
+      Serial.printf("  Player %d color: #%s\n", i, colorHex);
+    }
+    
+    // Update position
+    if (i < positionsArray.size()) {
+      players[i].currentTile = positionsArray[i];
+      Serial.printf("  Player %d position: Tile %d\n", i, players[i].currentTile);
+    }
+    
+    // Update score
+    if (i < scoresArray.size()) {
+      players[i].score = scoresArray[i];
+      Serial.printf("  Player %d score: %d\n", i, players[i].score);
+    }
+    
+    // Update alive status
+    if (i < aliveArray.size()) {
+      players[i].alive = aliveArray[i];
+      players[i].coinPlaced = aliveArray[i];  // If alive, coin is placed
+      Serial.printf("  Player %d alive: %s\n", i, players[i].alive ? "Yes" : "No");
+    }
+  }
+  
+  // Turn off inactive players
+  for (int i = activePlayerCount; i < NUM_PLAYERS; i++) {
+    players[i].alive = false;
+    players[i].color = 0x000000;
+  }
+  
+  // Render restored state immediately
+  currentConnectionMode = MODE_READY;
+  renderPlayers();
+  
+  // Send confirmation
+  StaticJsonDocument<256> response;
+  response["event"] = "sync_complete";
+  response["message"] = "Game state restored";
+  
+  String output;
+  serializeJson(response, output);
+  pTxCharacteristic->setValue(output.c_str());
+  pTxCharacteristic->notify();
+  
+  Serial.println("✓ Game state synchronized\n");
 }
 
 // ==================== HANDLE UPDATE SETTINGS ====================
@@ -976,7 +1102,7 @@ void handleRoll(JsonDocument& doc) {
   // Animate movement
   currentPlayer = playerId;
   expectedTile = newTile;
-  animateMove(currentTile, newTile, PLAYER_COLORS[playerId]);
+  animateMove(currentTile, newTile, PLAYER_COLORS[playerId], playerId);
 
   const bool skipCoinWait = (!PRODUCTION_MODE && TEST_MODE_1);
 
@@ -1074,7 +1200,7 @@ void handleUndo(JsonDocument& doc) {
   // Animate reverse movement
   currentPlayer = playerId;
   expectedTile = toTile;
-  animateMove(fromTile, toTile, PLAYER_COLORS[playerId]);
+  animateMove(fromTile, toTile, PLAYER_COLORS[playerId], playerId);
   
   // Start waiting for coin at old position
   waitingForCoin = true;
@@ -1377,30 +1503,52 @@ void scanAllTiles() {
 }
 
 // ==================== LED ANIMATIONS ====================
-void animateMove(int fromTile, int toTile, uint32_t color) {
+void animateMove(int fromTile, int toTile, uint32_t color, int playerId) {
   int step = (toTile > fromTile) ? 1 : -1;
   
   for (int tile = fromTile; tile != toTile + step; tile += step) {
     if (tile < 1 || tile > NUM_TILES) continue;
     
-    // Clear previous position
+    // Clear previous position (only player's LED)
     if (tile != fromTile) {
-      setTileColor(tile - step, TILE_COLORS[tile - step - 1]);
+      int prevLedIndex = getPlayerLED(tile - step, playerId);
+      if (prevLedIndex >= 0) {
+        strip.setPixelColor(prevLedIndex, TILE_COLORS[tile - step - 1]);
+      }
     }
     
-    // Light up current position
-    setTileColor(tile, color);
+    // Light up current position (only player's LED)
+    int currentLedIndex = getPlayerLED(tile, playerId);
+    if (currentLedIndex >= 0) {
+      strip.setPixelColor(currentLedIndex, color);
+    }
     strip.show();
     
     delay(200);
   }
 }
 
+// Get LED index for specific player on specific tile
+// Tile is 1-based (1-20), playerId is 0-based (0-3)
+int getPlayerLED(int tile, int playerId) {
+  if (tile < 1 || tile > NUM_TILES) return -1;
+  if (playerId < 0 || playerId >= NUM_PLAYERS) return -1;
+  
+  // LED strip physical mapping: [dummy, P0, P1, P2, P3] per tile (5 LEDs)
+  // When user says "LED 2", they mean physical LED #2 = array index 1
+  // Tile 1: indices 0-4 (dummy=0, P0=1, P1=2, P2=3, P3=4)
+  // Tile 2: indices 5-9 (dummy=5, P0=6, P1=7, P2=8, P3=9)
+  // Formula: (tile-1)*5 + 1 + playerId
+  return (tile - 1) * LEDS_PER_TILE + 1 + playerId;
+}
+
 void setTileColor(int tile, uint32_t color) {
   if (tile < 1 || tile > NUM_TILES) return;
   
+  // Set background color for player LEDs only (skip dummy LED)
   int startLED = (tile - 1) * LEDS_PER_TILE;
-  for (int i = 0; i < LEDS_PER_TILE; i++) {
+  // Set player LEDs (indices 1-4 within the tile)
+  for (int i = 1; i <= NUM_PLAYERS; i++) {
     strip.setPixelColor(startLED + i, color);
   }
 }
@@ -1415,9 +1563,13 @@ void renderBackground() {
 void renderPlayers() {
   renderBackground();
   
+  // Light up only each player's specific LED on their current tile
   for (int i = 0; i < NUM_PLAYERS; i++) {
     if (players[i].alive && players[i].coinPlaced) {
-      setTileColor(players[i].currentTile, players[i].color);
+      int ledIndex = getPlayerLED(players[i].currentTile, i);
+      if (ledIndex >= 0) {
+        strip.setPixelColor(ledIndex, players[i].color);
+      }
     }
   }
   
@@ -1433,26 +1585,32 @@ void animatePlayerElimination(int playerId) {
   // Blink the player's LED in all 20 tiles (1 LED per tile) 3 times
   for (int blink = 0; blink < 3; blink++) {
     // Turn ON all player LEDs across board
-    for (int tile = 0; tile < NUM_TILES; tile++) {
-      int ledIndex = tile * LEDS_PER_TILE + playerId;  // Each player has their own LED slot (0-3)
-      strip.setPixelColor(ledIndex, playerColor);
+    for (int tile = 1; tile <= NUM_TILES; tile++) {
+      int ledIndex = getPlayerLED(tile, playerId);
+      if (ledIndex >= 0) {
+        strip.setPixelColor(ledIndex, playerColor);
+      }
     }
     strip.show();
     delay(300);
     
     // Turn OFF all player LEDs
-    for (int tile = 0; tile < NUM_TILES; tile++) {
-      int ledIndex = tile * LEDS_PER_TILE + playerId;
-      strip.setPixelColor(ledIndex, 0);  // Black (off)
+    for (int tile = 1; tile <= NUM_TILES; tile++) {
+      int ledIndex = getPlayerLED(tile, playerId);
+      if (ledIndex >= 0) {
+        strip.setPixelColor(ledIndex, 0);  // Black (off)
+      }
     }
     strip.show();
     delay(300);
   }
   
   // Final state: All player LEDs OFF permanently
-  for (int tile = 0; tile < NUM_TILES; tile++) {
-    int ledIndex = tile * LEDS_PER_TILE + playerId;
-    strip.setPixelColor(ledIndex, 0);
+  for (int tile = 1; tile <= NUM_TILES; tile++) {
+    int ledIndex = getPlayerLED(tile, playerId);
+    if (ledIndex >= 0) {
+      strip.setPixelColor(ledIndex, 0);
+    }
   }
   strip.show();
   
@@ -1551,19 +1709,17 @@ void animateWinner(int winnerId) {
 }
 
 void startupAnimation() {
-  // Rainbow sweep
+  // Quick rainbow sweep
   for (int i = 0; i < NUM_LEDS; i++) {
     strip.setPixelColor(i, strip.ColorHSV(i * 65536L / NUM_LEDS));
     strip.show();
     delay(10);
   }
-  delay(500);
+  delay(200);
   
-  // Fade to background
-  renderBackground();
-  
-  // Show saved player positions
-  renderPlayers();
+  // Clear all LEDs - connection status will handle blinking tile 1
+  strip.clear();
+  strip.show();
 }
 
 // ==================== HELPER FUNCTIONS ====================

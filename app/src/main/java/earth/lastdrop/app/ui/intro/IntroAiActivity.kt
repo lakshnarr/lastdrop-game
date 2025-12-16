@@ -805,7 +805,47 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun handleESP32Response(jsonResponse: String) {
         // Parse ESP32 JSON responses (coin_placed, misplacement, etc.)
         appendDebug("ESP32: $jsonResponse")
-        // Will be fully implemented with game state sync in Phase 2.4
+        
+        // Handle pair_success to send config
+        try {
+            val json = org.json.JSONObject(jsonResponse)
+            val event = json.optString("event", "")
+            if (event == "pair_success") {
+                sendConfigToESP32()
+                android.util.Log.d("IntroAiActivity", "Sent config after pairing")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("IntroAiActivity", "Error parsing ESP32 response", e)
+        }
+    }
+    
+    private fun sendConfigToESP32() {
+        if (currentGameProfiles.isEmpty()) {
+            android.util.Log.w("IntroAiActivity", "No players configured, cannot send config")
+            return
+        }
+        
+        val colors = currentGameProfiles.map { profile ->
+            // Remove # prefix if present and ensure uppercase
+            val cleanColor = profile.avatarColor.removePrefix("#").uppercase()
+            
+            // Validate it's a valid hex color (6 characters)
+            if (cleanColor.length == 6 && cleanColor.all { it in "0123456789ABCDEF" }) {
+                cleanColor
+            } else {
+                android.util.Log.w("IntroAiActivity", "Invalid color format '${profile.avatarColor}' for ${profile.name}, defaulting to white")
+                "FFFFFF"
+            }
+        }
+
+        val config = org.json.JSONObject().apply {
+            put("command", "config")
+            put("playerCount", currentGameProfiles.size)
+            put("colors", org.json.JSONArray(colors))
+        }
+
+        esp32Manager?.sendCommand(config.toString())
+        android.util.Log.d("IntroAiActivity", "Sent config: ${currentGameProfiles.size} players, colors: $colors (raw avatarColors: ${currentGameProfiles.map { it.avatarColor }})")
     }
 
     private fun showServerConnectionInfo() {

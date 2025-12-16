@@ -3628,14 +3628,21 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun sendConfigToESP32() {
         if (testModeEnabled) return // Skip ESP32 in test mode
         
+        Log.d(TAG, "sendConfigToESP32: playerCount=$playerCount, playerColors=$playerColors")
+        
         val colors = playerColors.take(playerCount).map { color ->
-            when (color) {
+            val hexColor = when (color.lowercase()) {
                 "red" -> "FF0000"
                 "green" -> "00FF00"
                 "blue" -> "0000FF"
                 "yellow" -> "FFFF00"
-                else -> "FFFFFF"
+                else -> {
+                    Log.w(TAG, "Unknown color '$color', defaulting to white")
+                    "FFFFFF"
+                }
             }
+            Log.d(TAG, "Mapped color '$color' -> $hexColor")
+            hexColor
         }
 
         val config = org.json.JSONObject().apply {
@@ -3645,6 +3652,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         sendToESP32(config.toString())
+        Log.d(TAG, "Sent config to ESP32: $playerCount players with colors: $colors")
     }
     
     /**
@@ -4090,6 +4098,10 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                             appendTestLog("✅ PIN validated: $message")
                             Toast.makeText(this, "✅ $message", Toast.LENGTH_SHORT).show()
                         }
+                        
+                        // Send player configuration to ESP32 after successful pairing
+                        sendConfigToESP32()
+                        Log.d(TAG, "Sent config to ESP32: $playerCount players")
                     }
                     // Silently process subsequent pair_success events (ESP32 compatibility)
                 }
