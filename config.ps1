@@ -3,8 +3,8 @@ $global:ArduinoCli = "C:\Users\ADMIN\AppData\Local\Programs\Arduino IDE\resource
 $global:AndroidSdkPath = "C:\Users\ADMIN\AppData\Local\Android\Sdk"
 $global:JavaHome = "C:\Program Files\Android\Android Studio\jbr"
 $global:AdbPath = "$AndroidSdkPath\platform-tools\adb.exe"
-$global:ESP32Board = "esp32:esp32:esp32"
-$global:ESP32Port = "COM7"
+$global:ESP32Board = "esp32:esp32:esp32s3"
+$global:ESP32Port = "COM10"
 $global:ESP32BaudRate = 115200
 $global:ProjectRoot = "D:\PERSONAL\lakhna\DEVELOPMENT\LastDrop"
 $global:ESP32Firmware = "$ProjectRoot\sketch_ble\sketch_ble.ino"
@@ -53,12 +53,13 @@ function Test-JavaHome {
 }
 
 function Test-ESP32Port {
-    $port = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match "COM7" }
+    $portName = $global:ESP32Port
+    $port = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match [regex]::Escape($portName) }
     if ($port) {
-        Write-Host "✓ ESP32 port COM7 ready" -ForegroundColor Green
+        Write-Host "✓ ESP32 port $portName ready" -ForegroundColor Green
         return $true
     }
-    Write-Host "✗ ESP32 port COM7 not found" -ForegroundColor Red
+    Write-Host "✗ ESP32 port $portName not found" -ForegroundColor Red
     return $false
 }
 
@@ -92,20 +93,71 @@ function Start-ESP32Monitor {
     }
 }
 
+function Get-ESPToolPath {
+    # Prefer the newest esptool.exe bundled with the installed ESP32 Arduino core
+    $toolRoot = "C:\Users\ADMIN\AppData\Local\Arduino15\packages\esp32\tools\esptool_py"
+    if (-not (Test-Path $toolRoot)) {
+        return $null
+    }
+
+    $candidates = Get-ChildItem $toolRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object { [version]$_.Name } -Descending |
+        ForEach-Object {
+            $exe = Join-Path $_.FullName "esptool.exe"
+            if (Test-Path $exe) { $exe }
+        }
+
+    return $candidates | Select-Object -First 1
+}
+
+function Erase-ESP32Flash {
+    param([string]$Port = $global:ESP32Port)
+
+    $esptool = Get-ESPToolPath
+    if (-not $esptool) {
+        Write-Host "✗ esptool.exe not found under Arduino15 ESP32 tools" -ForegroundColor Red
+        return $false
+    }
+
+    Write-Host "🗑️  Full flash erase (this takes ~10-60s)..." -ForegroundColor Yellow
+    Write-Host "Tool: $esptool" -ForegroundColor Gray
+    Write-Host "Port: $Port" -ForegroundColor Gray
+
+    & $esptool --chip esp32s3 --port $Port erase_flash
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✓ Flash erased successfully" -ForegroundColor Green
+        Start-Sleep -Seconds 2
+        return $true
+    }
+
+    Write-Host "✗ Flash erase failed" -ForegroundColor Red
+    return $false
+}
+
 function Upload-ESP32Firmware {
+    param(
+        [string]$Sketch = $global:ESP32Firmware,
+        [switch]$SkipErase
+    )
+    
     Write-Host "🔧 Compiling and uploading ESP32 firmware..." -ForegroundColor Cyan
-    Write-Host "Sketch: $global:ESP32Firmware" -ForegroundColor Gray
+    Write-Host "Sketch: $Sketch" -ForegroundColor Gray
     Write-Host "Board: $global:ESP32Board" -ForegroundColor Gray
     Write-Host "Port: $global:ESP32Port`n" -ForegroundColor Gray
     
-    & $global:ArduinoCli compile --fqbn $global:ESP32Board $global:ESP32Firmware
+    # Erase flash first (unless -SkipErase is specified)
+    if (-not $SkipErase) {
+        Erase-ESP32Flash | Out-Null
+    }
+    
+    & $global:ArduinoCli compile --fqbn $global:ESP32Board $Sketch
     if ($LASTEXITCODE -ne 0) {
         Write-Host "✗ Compilation failed" -ForegroundColor Red
         return $false
     }
     
     Write-Host "`n📤 Uploading to ESP32..." -ForegroundColor Cyan
-    & $global:ArduinoCli upload -p $global:ESP32Port --fqbn $global:ESP32Board $global:ESP32Firmware
+    & $global:ArduinoCli upload -p $global:ESP32Port --fqbn $global:ESP32Board $Sketch
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Upload successful!" -ForegroundColor Green
         return $true

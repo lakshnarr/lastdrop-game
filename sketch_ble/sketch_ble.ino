@@ -21,6 +21,8 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <BLESecurity.h>
+#include <Wire.h>
+#include <Adafruit_MCP23X17.h>
 #include <Adafruit_NeoPixel.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
@@ -28,18 +30,56 @@
 #include <queue>
 
 // ==================== HARDWARE CONFIGURATION ====================
-#define LED_PIN 18  // Changed from GPIO 5 to GPIO 18 (more stable)
-#define NUM_LEDS 100  // 20 tiles × 5 LEDs (1 dummy + 4 players per tile)
-#define LEDS_PER_TILE 5  // Pattern: [dummy, P0, P1, P2, P3] per tile
+#define LED_PIN 16  // GPIO16 → AHCT125 data
+#define LED_OE_PIN 47  // GPIO47 → AHCT125 OE (active LOW)
+#define NUM_LEDS 137  // Total LEDs in perimeter strip
 #define NUM_TILES 20
 #define NUM_PLAYERS 4
 
-// Hall sensor pins (GPIO 12-31, adjust based on your wiring)
-// Note: GPIO 5 now used instead of GPIO 18 (which is now LED data pin)
-const int hallPins[NUM_TILES] = {
-  12, 13, 14, 15, 16, 17, 5, 19, 21, 22,
-  23, 25, 26, 27, 32, 33, 34, 35, 36, 39
+// LED mapping: Each tile has 4 LEDs (R, G, B, Y), with decorative LEDs between tiles
+// Tile format: [Red, Green, Blue, Yellow]
+// Corner LEDs for connection status: 0, 36, 70, 104
+const int TILE_LED_START[NUM_TILES] = {
+  2,   // Tile 1:  LEDs 2-5   (R=2, G=3, B=4, Y=5)
+  8,   // Tile 2:  LEDs 8-11
+  14,  // Tile 3:  LEDs 14-17
+  20,  // Tile 4:  LEDs 20-23
+  26,  // Tile 5:  LEDs 26-29
+  32,  // Tile 6:  LEDs 32-35
+  42,  // Tile 7:  LEDs 42-45
+  48,  // Tile 8:  LEDs 48-51
+  54,  // Tile 9:  LEDs 54-57
+  60,  // Tile 10: LEDs 60-63
+  71,  // Tile 11: LEDs 71-74
+  76,  // Tile 12: LEDs 76-79
+  82,  // Tile 13: LEDs 82-85
+  88,  // Tile 14: LEDs 88-91
+  94,  // Tile 15: LEDs 94-97
+  100, // Tile 16: LEDs 100-103
+  111, // Tile 17: LEDs 111-114
+  117, // Tile 18: LEDs 117-120
+  123, // Tile 19: LEDs 123-126
+  129  // Tile 20: LEDs 129-132
 };
+
+const int CORNER_LEDS[4] = {0, 36, 70, 104};  // Connection status indicators
+
+// ==================== I2C & HALL SENSOR CONFIGURATION ====================
+#define SDA_PIN 13
+#define SCL_PIN 14
+#define MCP_ADDR 0x27
+
+// MCP23017 Port B tiles (PB0-PB7)
+const uint8_t MCP_PORTB_TILES[8] = {1, 20, 19, 18, 16, 14, 17, 15};
+
+// MCP23017 Port A tiles (PA0-PA7)
+const uint8_t MCP_PORTA_TILES[8] = {2, 3, 4, 5, 13, 7, 8, 6};
+
+// Direct ESP32 GPIO tiles (4 tiles not on MCP)
+const uint8_t DIRECT_GPIO_PINS[4] = {17, 18, 8, 9};
+const uint8_t DIRECT_GPIO_TILES[4] = {9, 10, 11, 12};
+
+Adafruit_MCP23X17 mcp;
 
 // ==================== BLE CONFIGURATION ====================
 #define SERVICE_UUID        "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -242,13 +282,11 @@ void updateConnectionStatusLEDs() {
   
   switch (currentConnectionMode) {
     case MODE_DISCONNECTED:
-      // Light blue blink (only tile 1 player LEDs, not dummy)
+      // Light blue blink on corner LEDs (0, 36, 70, 104)
       if (blinkState) {
         strip.clear();
-        // Tile 1 has LEDs at indices 0-4: [dummy, P1, P2, P3, P4]
-        // Blink only player LEDs (indices 1-4)
-        for (int i = 1; i <= 4; i++) {
-          strip.setPixelColor(i, strip.Color(100, 200, 255));  // Light blue
+        for (int i = 0; i < 4; i++) {
+          strip.setPixelColor(CORNER_LEDS[i], strip.Color(100, 200, 255));  // Light blue
         }
       } else {
         strip.clear();
@@ -258,13 +296,12 @@ void updateConnectionStatusLEDs() {
       break;
       
     case MODE_PAIRING:
-      // Purple pulse (fade in/out on tile 1 player LEDs only)
+      // Purple pulse on corner LEDs
       {
         int brightness = (connectionLEDStep < 128) ? connectionLEDStep * 2 : (255 - connectionLEDStep) * 2;
         strip.clear();
-        // Only pulse tile 1 player LEDs (indices 1-4)
-        for (int i = 1; i <= 4; i++) {
-          strip.setPixelColor(i, strip.Color(brightness, 0, brightness));  // Purple
+        for (int i = 0; i < 4; i++) {
+          strip.setPixelColor(CORNER_LEDS[i], strip.Color(brightness, 0, brightness));  // Purple
         }
         connectionLEDStep = (connectionLEDStep + 16) % 256;
         strip.show();
@@ -272,14 +309,13 @@ void updateConnectionStatusLEDs() {
       break;
       
     case MODE_CONNECTED:
-      // Success animation - flash tile 1 green 3 times
+      // Success animation - flash corner LEDs green 3 times
       {
-        if (connectionLEDStep < 6) {  // 6 steps = 3 blinks (on/off/on/off/on/off)
+        if (connectionLEDStep < 6) {  // 6 steps = 3 blinks
           if (connectionLEDStep % 2 == 0) {
-            // Flash green on tile 1 player LEDs
             strip.clear();
-            for (int i = 1; i <= 4; i++) {
-              strip.setPixelColor(i, strip.Color(0, 255, 0));  // Green
+            for (int i = 0; i < 4; i++) {
+              strip.setPixelColor(CORNER_LEDS[i], strip.Color(0, 255, 0));  // Green
             }
           } else {
             strip.clear();
@@ -320,7 +356,6 @@ void updateConnectionStatusLEDs() {
           }
         }
         strip.show();
-      }
       }
       break;
   }
@@ -430,15 +465,50 @@ void setup() {
   esp_task_wdt_add(NULL);
   Serial.println("✓ Watchdog enabled (30s timeout)");
 
+  // Initialize LED Output Enable (AHCT125)
+  pinMode(LED_OE_PIN, OUTPUT);
+  digitalWrite(LED_OE_PIN, HIGH);  // Disable output during init
+  Serial.println("✓ LED OE disabled during init");
+
   // Initialize LED strip
   strip.begin();
   strip.setBrightness(100);
   strip.show();
+  
+  delay(500);  // Settle time
+  digitalWrite(LED_OE_PIN, LOW);  // Enable output (active LOW)
+  Serial.println("✓ LED OE enabled");
 
-  // Initialize Hall sensors
-  for (int i = 0; i < NUM_TILES; i++) {
-    pinMode(hallPins[i], INPUT);
+  // Initialize I2C and MCP23017
+  Serial.println("Initializing I2C and MCP23017...");
+  Wire.begin(SDA_PIN, SCL_PIN);
+  
+  if (!mcp.begin_I2C(MCP_ADDR)) {
+    Serial.println("✗ ERROR: MCP23017 not found at 0x27!");
+    Serial.println("  Check wiring: SDA=GPIO13, SCL=GPIO14, VCC=3.3V");
+  } else {
+    Serial.println("✓ MCP23017 found at 0x27");
+    
+    // Configure MCP Port B (8 tiles with pull-ups)
+    for (uint8_t i = 0; i < 8; i++) {
+      mcp.pinMode(i + 8, INPUT_PULLUP);  // Port B = pins 8-15
+    }
+    Serial.println("  - Port B configured (8 tiles)");
+    
+    // Configure MCP Port A (8 tiles with pull-ups)
+    for (uint8_t i = 0; i < 8; i++) {
+      mcp.pinMode(i, INPUT_PULLUP);  // Port A = pins 0-7
+    }
+    Serial.println("  - Port A configured (8 tiles)");
   }
+  
+  // Initialize direct ESP32 GPIO Hall sensors (4 tiles)
+  Serial.println("Initializing direct ESP32 Hall sensor pins...");
+  for (uint8_t i = 0; i < 4; i++) {
+    pinMode(DIRECT_GPIO_PINS[i], INPUT_PULLUP);
+    Serial.printf("  - GPIO%d → Tile %d\n", DIRECT_GPIO_PINS[i], DIRECT_GPIO_TILES[i]);
+  }
+  Serial.println("✓ All Hall sensors ready");
 
   // Initialize preferences
   preferences.begin("lastdrop", false);
@@ -1345,15 +1415,41 @@ void sendStatus() {
 bool isCoinPresent(int tile) {
   if (tile < 1 || tile > NUM_TILES) return false;
   
-  // Convert 1-based tile to 0-based Hall sensor index
-  int sensorIndex = tile - 1;
-  
-  // Hall sensor reads LOW when magnet is near
+  // Hall sensor reads LOW when magnet is near (active LOW with pull-up)
   int readings = 0;
+  
   for (int i = 0; i < 5; i++) {
-    if (digitalRead(hallPins[sensorIndex]) == LOW) {
-      readings++;
+    bool detected = false;
+    
+    // Check MCP Port B tiles (1, 20, 19, 18, 16, 14, 17, 15)
+    for (uint8_t j = 0; j < 8; j++) {
+      if (MCP_PORTB_TILES[j] == tile) {
+        detected = (mcp.digitalRead(j + 8) == LOW);
+        break;
+      }
     }
+    
+    // Check MCP Port A tiles (2, 3, 4, 5, 13, 7, 8, 6)
+    if (!detected) {
+      for (uint8_t j = 0; j < 8; j++) {
+        if (MCP_PORTA_TILES[j] == tile) {
+          detected = (mcp.digitalRead(j) == LOW);
+          break;
+        }
+      }
+    }
+    
+    // Check direct ESP32 GPIO tiles (9, 10, 11, 12)
+    if (!detected) {
+      for (uint8_t j = 0; j < 4; j++) {
+        if (DIRECT_GPIO_TILES[j] == tile) {
+          detected = (digitalRead(DIRECT_GPIO_PINS[j]) == LOW);
+          break;
+        }
+      }
+    }
+    
+    if (detected) readings++;
     delay(2);
   }
   
@@ -1529,26 +1625,22 @@ void animateMove(int fromTile, int toTile, uint32_t color, int playerId) {
 }
 
 // Get LED index for specific player on specific tile
-// Tile is 1-based (1-20), playerId is 0-based (0-3)
+// Tile is 1-based (1-20), playerId is 0-based (0-3 = R, G, B, Y)
 int getPlayerLED(int tile, int playerId) {
   if (tile < 1 || tile > NUM_TILES) return -1;
   if (playerId < 0 || playerId >= NUM_PLAYERS) return -1;
   
-  // LED strip physical mapping: [dummy, P0, P1, P2, P3] per tile (5 LEDs)
-  // When user says "LED 2", they mean physical LED #2 = array index 1
-  // Tile 1: indices 0-4 (dummy=0, P0=1, P1=2, P2=3, P3=4)
-  // Tile 2: indices 5-9 (dummy=5, P0=6, P1=7, P2=8, P3=9)
-  // Formula: (tile-1)*5 + 1 + playerId
-  return (tile - 1) * LEDS_PER_TILE + 1 + playerId;
+  // Use lookup table: TILE_LED_START[tile-1] gives first LED of that tile
+  // Each tile has 4 consecutive LEDs for R, G, B, Y
+  return TILE_LED_START[tile - 1] + playerId;
 }
 
 void setTileColor(int tile, uint32_t color) {
   if (tile < 1 || tile > NUM_TILES) return;
   
-  // Set background color for player LEDs only (skip dummy LED)
-  int startLED = (tile - 1) * LEDS_PER_TILE;
-  // Set player LEDs (indices 1-4 within the tile)
-  for (int i = 1; i <= NUM_PLAYERS; i++) {
+  // Set all 4 player LEDs for this tile to the same background color
+  int startLED = TILE_LED_START[tile - 1];
+  for (int i = 0; i < NUM_PLAYERS; i++) {
     strip.setPixelColor(startLED + i, color);
   }
 }
