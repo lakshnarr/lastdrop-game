@@ -986,6 +986,14 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         sendToESP32(config.toString())
     }
 
+    private fun sendResetToESP32() {
+        if (!esp32Connected) return
+        val resetCmd = JSONObject().apply {
+            put("command", "reset")
+        }
+        sendToESP32(resetCmd.toString())
+    }
+
     private fun sendToESP32(jsonString: String) {
         if (!esp32Connected) return
         boardConnectionController.send(jsonString)
@@ -1002,6 +1010,10 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             if (event == "pair_success") {
                 sendConfigToESP32()
                 android.util.Log.d("IntroAiActivity", "Sent config after pairing")
+            }
+            if (event == "config_complete") {
+                sendResetToESP32()
+                android.util.Log.d("IntroAiActivity", "Sent reset after config_complete to move LEDs to start")
             }
         } catch (e: Exception) {
             android.util.Log.e("IntroAiActivity", "Error parsing ESP32 response", e)

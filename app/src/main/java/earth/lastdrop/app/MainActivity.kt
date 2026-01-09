@@ -289,7 +289,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 BluetoothDevice.ACTION_PAIRING_REQUEST -> {
-                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val device = getBluetoothDeviceExtra(intent, BluetoothDevice.EXTRA_DEVICE)
                     val pairingVariant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR)
                     
                     Log.d(TAG, "Pairing request: variant=$pairingVariant, device=${device?.address}")
@@ -335,7 +335,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     }
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
-                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val device = getBluetoothDeviceExtra(intent, BluetoothDevice.EXTRA_DEVICE)
                     val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
                     val prevBondState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
                     
@@ -373,6 +373,15 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     }
                 }
             }
+        }
+    }
+
+    private fun getBluetoothDeviceExtra(intent: Intent, key: String): BluetoothDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(key, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(key)
         }
     }
     
@@ -4460,13 +4469,22 @@ class Dice(private val id: Int, val device: BluetoothDevice) {
         readChar?.let {
             gatt?.setCharacteristicNotification(it, true)
             val descriptor = it.getDescriptor(CCCDUUID)
-            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            gatt?.writeDescriptor(descriptor)
+            descriptor?.let { desc ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt?.writeDescriptor(desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt?.writeDescriptor(desc)
+                }
+            }
         }
     }
 
+    @Suppress("DEPRECATION")
     fun onEvent() {
-        readChar?.value?.let {
+        readChar?.getValue()?.let {
             GoDiceSDK.incomingPacket(id, GoDiceSDK.DiceType.D6, it)
         }
     }
@@ -4476,8 +4494,14 @@ class Dice(private val id: Int, val device: BluetoothDevice) {
             writeInProgress = false
             writes.poll()?.let { value ->
                 writeChar?.let { char ->
-                    char.value = value
-                    gatt?.writeCharacteristic(char)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        gatt?.writeCharacteristic(char, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        char.value = value
+                        @Suppress("DEPRECATION")
+                        gatt?.writeCharacteristic(char)
+                    }
                     writeInProgress = true
                 }
             }
