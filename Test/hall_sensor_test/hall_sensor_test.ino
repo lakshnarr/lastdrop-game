@@ -1,17 +1,28 @@
-// A3144 Hall Sensor Module Test on ESP32 with INTERNAL PULL-UP
+// A3144 Hall Sensor Module Test on ESP32 with EXTERNAL PULL-UP
 // 
-// Wiring:
+// ISOLATED 4-TILE TEST (Tiles 9-12 ONLY)
+// All other tiles disconnected for focused testing
+// 
+// Wiring (for each of the 4 sensors):
 // 1. A3144 Pin 1 (VCC) -> ESP32 3V3
 // 2. A3144 Pin 2 (GND) -> ESP32 GND  
-// 3. A3144 Pin 3 (OUT) -> ESP32 GPIO26
+// 3. A3144 Pin 3 (OUT) -> ESP32 GPIO (17, 18, 8, 9)
+// 4. 10kΩ resistor between A3144 Pin 3 (OUT) and 3V3 (EXTERNAL pull-up)
 //
-// Internal pull-up resistor (~45kΩ) used - no external resistor needed
+// Pin Mapping (4 tiles only):
+// - GPIO 17 -> Tile 9
+// - GPIO 18 -> Tile 10
+// - GPIO 8  -> Tile 11
+// - GPIO 9  -> Tile 12
+//
+// IMPORTANT: Internal pull-ups DISABLED - using external 10kΩ resistors
 
 #include <Adafruit_NeoPixel.h>
 
-const int HALL_PIN = 26;
-int lastValue = -1;
-int changeCount = 0;
+const int HALL_PINS[4] = {17, 18, 8, 9};
+const int TILE_NUMBERS[4] = {9, 10, 11, 12};
+int lastValues[4] = {-1, -1, -1, -1};
+int changeCounts[4] = {0, 0, 0, 0};
 
 // Try multiple configurations for RGB LED
 Adafruit_NeoPixel led48(1, 48, NEO_GRB + NEO_KHZ800);
@@ -43,46 +54,77 @@ void setup() {
   pinMode(2, OUTPUT);
   digitalWrite(2, LOW);
 
-  pinMode(HALL_PIN, INPUT_PULLUP);  // Internal pull-up resistor
+  // Initialize all 4 Hall sensor pins with NO internal pull-up (using external 10kΩ resistors)
+  for (int i = 0; i < 4; i++) {
+    pinMode(HALL_PINS[i], INPUT);  // NO PULLUP - external resistor used
+    lastValues[i] = digitalRead(HALL_PINS[i]);
+  }
   
-  Serial.println("\n=== A3144 Hall Sensor Test (Internal Pull-Up) ===");
-  Serial.println("Wiring:");
-  Serial.println("  - A3144 Pin 1 -> 3V3");
-  Serial.println("  - A3144 Pin 2 -> GND");
-  Serial.println("  - A3144 Pin 3 -> GPIO26");
-  Serial.println("  - Internal pull-up enabled (no external resistor)");
-  Serial.println("\nBring magnet close and try both sides!");
-  Serial.println("Watching for changes...\n");
+  Serial.println("\n=== A3144 Hall Sensor Test (EXTERNAL 10kΩ Pull-Up) ===");
+  Serial.println("ISOLATED TEST: 4 Tiles Only (9, 10, 11, 12)");
+  Serial.println("All other tiles disconnected");
+  Serial.println("\nWiring for each sensor:");
+  Serial.println("  - A3144 Pin 1 (VCC) -> 3V3");
+  Serial.println("  - A3144 Pin 2 (GND) -> GND");
+  Serial.println("  - A3144 Pin 3 (OUT) -> GPIO + 10kΩ resistor to 3V3");
+  Serial.println("\nPin Mapping (4 tiles ONLY):");
+  Serial.println("  - GPIO 17 -> Tile 9");
+  Serial.println("  - GPIO 18 -> Tile 10");
+  Serial.println("  - GPIO 8  -> Tile 11");
+  Serial.println("  - GPIO 9  -> Tile 12");
+  Serial.println("\nInternal pull-ups DISABLED - using external resistors");
+  Serial.println("Bring magnet close to any sensor and try both sides!");
   Serial.println("Watching for changes...\n");
   
-  lastValue = digitalRead(HALL_PIN);
-  Serial.print("Starting value: ");
-  Serial.println(lastValue);
+  for (int i = 0; i < 4; i++) {
+    Serial.print("GPIO ");
+    Serial.print(HALL_PINS[i]);
+    Serial.print(" (Tile ");
+    Serial.print(TILE_NUMBERS[i]);
+    Serial.print(") starting value: ");
+    Serial.println(lastValues[i]);
+  }
+  Serial.println();
 }
 
 void loop() {
-  int v = digitalRead(HALL_PIN);
-  
-  // Only print when value changes
-  if (v != lastValue) {
-    changeCount++;
-    Serial.print(">>> CHANGE DETECTED #");
-    Serial.print(changeCount);
-    Serial.print(" : HALL_PIN = ");
-    Serial.print(v);
-    Serial.println(v == 0 ? " (MAGNET DETECTED!)" : " (no magnet)");
-    lastValue = v;
+  // Read all 4 Hall sensors
+  for (int i = 0; i < 4; i++) {
+    int v = digitalRead(HALL_PINS[i]);
+    
+    // Only print when value changes
+    if (v != lastValues[i]) {
+      changeCounts[i]++;
+      Serial.print(">>> TILE ");
+      Serial.print(TILE_NUMBERS[i]);
+      Serial.print(" (GPIO ");
+      Serial.print(HALL_PINS[i]);
+      Serial.print(") CHANGE #");
+      Serial.print(changeCounts[i]);
+      Serial.print(" : ");
+      Serial.print(v);
+      Serial.println(v == 0 ? " (MAGNET DETECTED!)" : " (no magnet)");
+      lastValues[i] = v;
+    }
   }
   
-  // Also print periodic status every 2 seconds
+  // Print periodic status every 3 seconds
   static unsigned long lastPrint = 0;
-  if (millis() - lastPrint > 2000) {
-    Serial.print("Current: ");
-    Serial.print(v);
-    Serial.print(" | Changes: ");
-    Serial.println(changeCount);
+  if (millis() - lastPrint > 3000) {
+    Serial.println("--- Status ---");
+    for (int i = 0; i < 4; i++) {
+      Serial.print("Tile ");
+      Serial.print(TILE_NUMBERS[i]);
+      Serial.print(" (GPIO ");
+      Serial.print(HALL_PINS[i]);
+      Serial.print("): ");
+      Serial.print(lastValues[i]);
+      Serial.print(" | Changes: ");
+      Serial.println(changeCounts[i]);
+    }
+    Serial.println();
     lastPrint = millis();
   }
 
-  delay(50);  // Faster polling
+  delay(50);  // Poll every 50ms
 }

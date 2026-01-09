@@ -31,38 +31,39 @@
 
 // ==================== HARDWARE CONFIGURATION ====================
 #define LED_PIN 16  // GPIO16 → AHCT125 data
-#define LED_OE_PIN 47  // GPIO47 → AHCT125 OE (active LOW)
-#define NUM_LEDS 137  // Total LEDs in perimeter strip
+#define LED_OE_PIN 48  // GPIO48 → AHCT125 OE (active LOW)
+#define NUM_LEDS 136  // Total LEDs in perimeter strip (0-135, LED 0 removed due to loose connection)
 #define NUM_TILES 20
 #define NUM_PLAYERS 4
 
 // LED mapping: Each tile has 4 LEDs (R, G, B, Y), with decorative LEDs between tiles
 // Tile format: [Red, Green, Blue, Yellow]
-// Corner LEDs for connection status: 0, 36, 70, 104
+// Corner LEDs for connection status: 0, 34, 68, 102
+// NOTE: DIN wire soldered between LED 0 DOUT and LED 1 DIN, all positions shifted -1
 const int TILE_LED_START[NUM_TILES] = {
-  2,   // Tile 1:  LEDs 2-5   (R=2, G=3, B=4, Y=5)
-  8,   // Tile 2:  LEDs 8-11
-  14,  // Tile 3:  LEDs 14-17
-  20,  // Tile 4:  LEDs 20-23
-  26,  // Tile 5:  LEDs 26-29
-  32,  // Tile 6:  LEDs 32-35
-  42,  // Tile 7:  LEDs 42-45
-  48,  // Tile 8:  LEDs 48-51
-  54,  // Tile 9:  LEDs 54-57
-  60,  // Tile 10: LEDs 60-63
-  71,  // Tile 11: LEDs 71-74
-  76,  // Tile 12: LEDs 76-79
-  82,  // Tile 13: LEDs 82-85
-  88,  // Tile 14: LEDs 88-91
-  94,  // Tile 15: LEDs 94-97
-  100, // Tile 16: LEDs 100-103
-  111, // Tile 17: LEDs 111-114
-  117, // Tile 18: LEDs 117-120
-  123, // Tile 19: LEDs 123-126
-  129  // Tile 20: LEDs 129-132
+  0,   // Tile 1:  LEDs 0-3   (R=0, G=1, B=2, Y=3)
+  6,   // Tile 2:  LEDs 6-9
+  12,  // Tile 3:  LEDs 12-15
+  18,  // Tile 4:  LEDs 18-21
+  24,  // Tile 5:  LEDs 24-27
+  30,  // Tile 6:  LEDs 30-33
+  40,  // Tile 7:  LEDs 40-43
+  46,  // Tile 8:  LEDs 46-49
+  52,  // Tile 9:  LEDs 52-55
+  58,  // Tile 10: LEDs 58-61
+  69,  // Tile 11: LEDs 69-72
+  74,  // Tile 12: LEDs 74-77
+  80,  // Tile 13: LEDs 80-83
+  86,  // Tile 14: LEDs 86-89
+  92,  // Tile 15: LEDs 92-95
+  98,  // Tile 16: LEDs 98-101
+  109, // Tile 17: LEDs 109-112
+  115, // Tile 18: LEDs 115-118
+  121, // Tile 19: LEDs 121-124
+  127  // Tile 20: LEDs 127-130
 };
 
-const int CORNER_LEDS[4] = {0, 36, 70, 104};  // Connection status indicators
+const int CORNER_LEDS[4] = {0, 33, 69, 101};  // Connection status indicators
 
 // ==================== I2C & HALL SENSOR CONFIGURATION ====================
 #define SDA_PIN 13
@@ -107,6 +108,11 @@ Adafruit_MCP23X17 mcp;
 const bool PRODUCTION_MODE = false;      // Set to false to enable test behaviors
 const bool TEST_MODE_1 = true;         // When PRODUCTION_MODE is false and this is true, ESP auto-confirms coin placement and returns chance card details without waiting for Hall sensors
 
+// ==================== HALL SENSOR OPERATIONAL FLAGS ====================
+bool HALL_SENSOR_OPERATIONAL = false;   // Set to true to use real Hall sensors, false to use timer delay
+const unsigned long TURN_DELAY_MS = 5000;   // 5 seconds default turn delay when Hall sensors disabled (configurable via BLE)
+unsigned long currentTurnDelayMs = TURN_DELAY_MS;  // Runtime configurable delay
+
 // Android device MAC address whitelist (find via Android Bluetooth settings)
 const String TRUSTED_ANDROID_MACS[] = {
   "AA:BB:CC:DD:EE:FF",  // Your phone's BLE MAC address
@@ -134,26 +140,26 @@ struct TileDefinition {
 
 // 20-Tile Board Definition (matching RULEBOOK.md)
 const TileDefinition BOARD[NUM_TILES] = {
-  {1,  "Start Point",          TYPE_START},
-  {2,  "Sunny Patch",          TYPE_PENALTY},
-  {3,  "Rain Dock",            TYPE_WATER_DOCK},
-  {4,  "Leak Lane",            TYPE_PENALTY},
-  {5,  "Storm Zone",           TYPE_DISASTER},
-  {6,  "Cloud Hill",           TYPE_BONUS},
-  {7,  "Oil Spill Bay",        TYPE_DISASTER},
-  {8,  "Riverbank Road",       TYPE_NORMAL},
-  {9,  "Marsh Land",           TYPE_CHANCE},
-  {10, "Drought Desert",       TYPE_DISASTER},
-  {11, "Clean Well",           TYPE_WATER_DOCK},
-  {12, "Waste Dump",           TYPE_DISASTER},
-  {13, "Sanctuary Stop",       TYPE_CHANCE},
-  {14, "Sewage Drain Street",  TYPE_PENALTY},
-  {15, "Filter Plant",         TYPE_WATER_DOCK},
-  {16, "Mangrove Mile",        TYPE_CHANCE},
-  {17, "Heatwave Road",        TYPE_PENALTY},
-  {18, "Spring Fountain",      TYPE_SUPER_DOCK},
-  {19, "Eco Garden",           TYPE_NORMAL},
-  {20, "Great Reservoir",      TYPE_NORMAL}
+  {1,  "Launch Pad",           TYPE_START},
+  {2,  "Nature Guardian",      TYPE_BONUS},
+  {3,  "Polluting Factory",    TYPE_PENALTY},
+  {4,  "Flower Garden",        TYPE_BONUS},
+  {5,  "Tree Cutting",         TYPE_DISASTER},
+  {6,  "Marsh Swamp",          TYPE_CHANCE},
+  {7,  "Recycled Water",       TYPE_WATER_DOCK},
+  {8,  "Wasted Water",         TYPE_PENALTY},
+  {9,  "River Robber",         TYPE_DISASTER},
+  {10, "Lilly Pond",           TYPE_BONUS},
+  {11, "Sanctuary Cove",       TYPE_CHANCE},
+  {12, "Shrinking Lake",       TYPE_DISASTER},
+  {13, "Crystal Glacier",      TYPE_BONUS},
+  {14, "Dry City",             TYPE_PENALTY},
+  {15, "Rain Harvest",         TYPE_BONUS},
+  {16, "Mangrove Trail",       TYPE_CHANCE},
+  {17, "Wasted Well",          TYPE_PENALTY},
+  {18, "Evergreen Forest",     TYPE_WATER_DOCK},
+  {19, "Plant Grower",         TYPE_BONUS},
+  {20, "Dirty Water Lane",     TYPE_PENALTY}
 };
 
 struct ChanceCard {
@@ -164,42 +170,58 @@ struct ChanceCard {
 
 // 20 Chance Cards (matching RULEBOOK.md Elimination Mode)
 const ChanceCard CHANCE_CARDS[20] = {
-  {1,  "You fixed a tap leak",                    +2},
-  {2,  "Rainwater harvested",                     +2},
-  {3,  "You planted two trees",                   +1},
-  {4,  "Cool clouds formed",                      +1},
-  {5,  "You cleaned a riverbank",                 +1},
-  {6,  "Discovered a tiny spring",                +3},
-  {7,  "You saved a wetland animal",              +1},
-  {8,  "You reused RO water",                     +1},
-  {9,  "Used bucket instead of shower",           +2},
-  {10, "Drip irrigation success",                 +2},
-  {11, "Skip next penalty",                        0},  // Special
-  {12, "Move forward 2 tiles",                     0},  // Special
-  {13, "Swap positions with next player",          0},  // Special
-  {14, "Water Shield (next damage=0)",             0},  // Special
-  {15, "You left tap running",                    -1},
-  {16, "Your bottle spilled",                     -1},
-  {17, "Pipe burst nearby",                       -3},
-  {18, "Heat wave dries water",                   -2},
-  {19, "Sewage contamination",                    -2},
-  {20, "Flood washed away water",                 -3}
+  {1,  "Fixed tap leak",                      +2},
+  {2,  "Rain harvested",                      +2},
+  {3,  "Planted trees",                       +1},
+  {4,  "Clouds formed",                       +1},
+  {5,  "Preserved riverbank",                 +2},
+  {6,  "Cleaned well",                        +2},
+  {7,  "Saved plant",                         +1},
+  {8,  "Recycled water",                      +1},
+  {9,  "Bucket bath",                         +2},
+  {10, "Drip irrigation",                     +2},
+  {11, "Skip penalty",                         0},  // Special: Immunity
+  {12, "Move forward 2",                       0},  // Special: Move 2 tiles
+  {13, "Swap with next",                       0},  // Special: Next player plays twice
+  {14, "Water Shield",                         0},  // Special: Immunity
+  {15, "Left tap running",                    -1},
+  {16, "Bottle spilled",                      -1},
+  {17, "Pipe burst",                          -3},
+  {18, "Climate dries water",                 -2},
+  {19, "Sewage contamination",                -2},
+  {20, "Wasted papers",                       -3}
 };
 
 // ==================== LED COLORS ====================
+// Colors matching the new tile scheme:
+// Mixed (tile 1), Teal (tiles 2, 19), Orange (tiles 3, 8, 14, 17, 20), 
+// Light Green (tiles 4, 10, 13, 15), Red (tiles 5, 9, 12), 
+// Purple (tiles 6, 11, 16), Dark Green (tiles 7, 18)
 const uint32_t TILE_COLORS[NUM_TILES] = {
-  0x2E8B57, 0x3CB371, 0x90EE90, 0x98FB98, 0xADFF2F,  // 0-4 Green shades
-  0xFFFF00, 0xFFD700, 0xFFA500, 0xFF8C00, 0xFF6347,  // 5-9 Yellow to Orange
-  0xFF4500, 0xFF0000, 0xDC143C, 0xB22222, 0x8B0000,  // 10-14 Red shades
-  0x800080, 0x9932CC, 0xBA55D3, 0xDA70D6, 0xEE82EE   // 15-19 Purple shades
+  0x40E0D0, // 1: Launch Pad (Mixed - using Teal/Turquoise)
+  0x008080, // 2: Nature Guardian (Teal)
+  0xFF8C00, // 3: Polluting Factory (Orange)
+  0x90EE90, // 4: Flower Garden (Light Green)
+  0xFF0000, // 5: Tree Cutting (Red)
+  0x800080, // 6: Marsh Swamp (Purple)
+  0x228B22, // 7: Recycled Water (Dark Green)
+  0xFFA500, // 8: Wasted Water (Orange)
+  0xDC143C, // 9: River Robber (Red)
+  0x98FB98, // 10: Lilly Pond (Light Green)
+  0x9932CC, // 11: Sanctuary Cove (Purple)
+  0xB22222, // 12: Shrinking Lake (Red)
+  0xADFF2F, // 13: Crystal Glacier (Light Green)
+  0xFF6347, // 14: Dry City (Orange)
+  0x7FFF00, // 15: Rain Harvest (Light Green)
+  0xBA55D3, // 16: Mangrove Trail (Purple)
+  0xFF4500, // 17: Wasted Well (Orange)
+  0x2E8B57, // 18: Evergreen Forest (Dark Green)
+  0x20B2AA, // 19: Plant Grower (Teal)
+  0xFF7F50  // 20: Dirty Water Lane (Orange)
 };
 
-const uint32_t PLAYER_COLORS[NUM_PLAYERS] = {
-  0xFF0000,  // Player 0: Red
-  0x0000FF,  // Player 1: Blue
-  0x00FF00,  // Player 2: Green
-  0xFFFF00   // Player 3: Yellow
-};
+// Player colors (will be initialized in setup() with strip.Color())
+uint32_t PLAYER_COLORS[NUM_PLAYERS];
 
 // ==================== GLOBAL OBJECTS ====================
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -263,7 +285,8 @@ struct UndoState {
 } lastMove;
 
 // ==================== LED CONTROL ====================
-bool blinkState = false;
+bool blinkState = false;  // For coin waiting animation
+bool connectionBlinkState = false;  // For connection status animation
 unsigned long lastBlinkTime = 0;
 const unsigned long BLINK_INTERVAL = 500;
 
@@ -283,7 +306,7 @@ void updateConnectionStatusLEDs() {
   switch (currentConnectionMode) {
     case MODE_DISCONNECTED:
       // Light blue blink on corner LEDs (0, 36, 70, 104)
-      if (blinkState) {
+      if (connectionBlinkState) {
         strip.clear();
         for (int i = 0; i < 4; i++) {
           strip.setPixelColor(CORNER_LEDS[i], strip.Color(100, 200, 255));  // Light blue
@@ -291,7 +314,7 @@ void updateConnectionStatusLEDs() {
       } else {
         strip.clear();
       }
-      blinkState = !blinkState;
+      connectionBlinkState = !connectionBlinkState;
       strip.show();
       break;
       
@@ -475,40 +498,95 @@ void setup() {
   strip.setBrightness(100);
   strip.show();
   
+  // Initialize default player colors using NeoPixel Color() function
+  PLAYER_COLORS[0] = strip.Color(255, 0, 0);    // Player 0: Red
+  PLAYER_COLORS[1] = strip.Color(0, 0, 255);    // Player 1: Blue
+  PLAYER_COLORS[2] = strip.Color(0, 255, 0);    // Player 2: Green
+  PLAYER_COLORS[3] = strip.Color(255, 255, 0);  // Player 3: Yellow
+  Serial.println("✓ Player colors initialized");
+  
   delay(500);  // Settle time
   digitalWrite(LED_OE_PIN, LOW);  // Enable output (active LOW)
   Serial.println("✓ LED OE enabled");
 
   // Initialize I2C and MCP23017
+  Serial.println("======================================");
   Serial.println("Initializing I2C and MCP23017...");
+  Serial.printf("  I2C SDA: GPIO%d\n", SDA_PIN);
+  Serial.printf("  I2C SCL: GPIO%d\n", SCL_PIN);
+  Serial.printf("  MCP Address: 0x%02X\n", MCP_ADDR);
+  Serial.println("======================================");
+  
   Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.setClock(100000);  // 100kHz for stability
+  delay(100);
+  
+  // I2C bus scan
+  Serial.println("Scanning I2C bus...");
+  int devicesFound = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    uint8_t error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.printf("  Found device at 0x%02X\n", addr);
+      devicesFound++;
+    }
+  }
+  Serial.printf("I2C scan complete: %d device(s) found\n\n", devicesFound);
   
   if (!mcp.begin_I2C(MCP_ADDR)) {
     Serial.println("✗ ERROR: MCP23017 not found at 0x27!");
-    Serial.println("  Check wiring: SDA=GPIO13, SCL=GPIO14, VCC=3.3V");
+    Serial.println("  Check wiring:");
+    Serial.println("    - VCC → 3.3V");
+    Serial.println("    - GND → Common GND");
+    Serial.println("    - SDA → GPIO13");
+    Serial.println("    - SCL → GPIO14");
+    Serial.println("    - A0/A1/A2 → All HIGH (for 0x27)");
+    Serial.println("  Continuing without Hall sensor support...");
+    HALL_SENSOR_OPERATIONAL = false;
   } else {
-    Serial.println("✓ MCP23017 found at 0x27");
+    Serial.println("✓ MCP23017 detected at 0x27");
     
-    // Configure MCP Port B (8 tiles with pull-ups)
+    // Configure MCP Port B (8 tiles) - pins PB0-PB7 (MCP pins 8-15)
+    Serial.println("\nConfiguring Port B (8 Hall sensors):");
     for (uint8_t i = 0; i < 8; i++) {
       mcp.pinMode(i + 8, INPUT_PULLUP);  // Port B = pins 8-15
+      Serial.printf("  PB%d → Tile %d (INPUT_PULLUP)\n", i, MCP_PORTB_TILES[i]);
     }
-    Serial.println("  - Port B configured (8 tiles)");
+    Serial.println("  Port B: All 8 pins configured as INPUT_PULLUP");
     
-    // Configure MCP Port A (8 tiles with pull-ups)
+    // Configure MCP Port A (8 tiles) - pins PA0-PA7 (MCP pins 0-7)
+    Serial.println("\nConfiguring Port A (8 Hall sensors):");
     for (uint8_t i = 0; i < 8; i++) {
       mcp.pinMode(i, INPUT_PULLUP);  // Port A = pins 0-7
+      Serial.printf("  PA%d → Tile %d (INPUT_PULLUP)\n", i, MCP_PORTA_TILES[i]);
     }
-    Serial.println("  - Port A configured (8 tiles)");
+    Serial.println("  Port A: All 8 pins configured as INPUT_PULLUP");
+    
+    Serial.println("\n✓ MCP23017 configuration complete");
+    Serial.println("  A3144 Hall sensors: Active-LOW (output pulls LOW when magnet present)");
+    Serial.println("  MCP internal pull-ups: ENABLED (pulls pins HIGH when no magnet)");
   }
   
   // Initialize direct ESP32 GPIO Hall sensors (4 tiles)
-  Serial.println("Initializing direct ESP32 Hall sensor pins...");
+  Serial.println("\n======================================");
+  Serial.println("Initializing Direct GPIO Hall Sensors");
+  Serial.println("======================================");
   for (uint8_t i = 0; i < 4; i++) {
     pinMode(DIRECT_GPIO_PINS[i], INPUT_PULLUP);
-    Serial.printf("  - GPIO%d → Tile %d\n", DIRECT_GPIO_PINS[i], DIRECT_GPIO_TILES[i]);
+    int initialState = digitalRead(DIRECT_GPIO_PINS[i]);
+    Serial.printf("  GPIO%d → Tile %d (INPUT_PULLUP) | Initial: %s\n", 
+                  DIRECT_GPIO_PINS[i], DIRECT_GPIO_TILES[i], 
+                  initialState ? "HIGH" : "LOW");
   }
-  Serial.println("✓ All Hall sensors ready");
+  
+  Serial.println("\n✓ All Hall sensors initialized");
+  Serial.printf("\nHall Sensor Mode: %s\n", 
+                HALL_SENSOR_OPERATIONAL ? "ENABLED (waiting for coin)" : "DISABLED (timer delay)");
+  if (!HALL_SENSOR_OPERATIONAL) {
+    Serial.printf("  Turn Delay: %lu seconds\n", currentTurnDelayMs / 1000);
+  }
+  Serial.println();
 
   // Initialize preferences
   preferences.begin("lastdrop", false);
@@ -796,23 +874,59 @@ void handleConfig(JsonDocument& doc) {
     if (i < colorsArray.size()) {
       const char* colorHex = colorsArray[i];
       // Convert hex string to uint32_t (format: "RRGGBB")
-      uint32_t color = (uint32_t)strtol(colorHex, NULL, 16);
+      uint32_t hexValue = (uint32_t)strtol(colorHex, NULL, 16);
+      
+      // Extract R, G, B components
+      uint8_t r = (hexValue >> 16) & 0xFF;
+      uint8_t g = (hexValue >> 8) & 0xFF;
+      uint8_t b = hexValue & 0xFF;
+      
+      // Use NeoPixel's Color() function for proper GRB format
+      uint32_t color = strip.Color(r, g, b);
       players[i].color = color;
       
-      Serial.printf("  Player %d color: #%s (0x%06X)\n", i, colorHex, color);
+      Serial.printf("  Player %d color: #%s → R=%d G=%d B=%d → 0x%08X\n", 
+                    i, colorHex, r, g, b, color);
+      
+      // Test: Light up player's LED immediately to verify color
+      int testLed = getPlayerLED(1, i);  // Show on tile 1
+      if (testLed >= 0) {
+        strip.setPixelColor(testLed, color);
+        strip.show();
+        delay(300);  // Brief flash to verify
+        Serial.printf("  → Test LED %d lit with configured color\n", testLed);
+      }
+    }
+  }
+  
+  // Check for Hall sensor mode configuration
+  if (doc.containsKey("hallSensorMode")) {
+    HALL_SENSOR_OPERATIONAL = doc["hallSensorMode"];
+    Serial.printf("  Hall Sensor Mode: %s\n", 
+                  HALL_SENSOR_OPERATIONAL ? "ENABLED" : "DISABLED");
+  }
+  
+  // Check for turn delay configuration (in seconds)
+  if (doc.containsKey("turnDelaySeconds")) {
+    int delaySeconds = doc["turnDelaySeconds"];
+    if (delaySeconds >= 1 && delaySeconds <= 300) {  // 1s to 5 minutes
+      currentTurnDelayMs = delaySeconds * 1000;
+      Serial.printf("  Turn Delay: %d seconds\n", delaySeconds);
     }
   }
   
   // Turn off LEDs for inactive players
   for (int i = activePlayerCount; i < NUM_PLAYERS; i++) {
     players[i].alive = false;
-    players[i].color = 0x000000;  // Black (off)
+    players[i].color = strip.Color(0, 0, 0);  // Black (off)
   }
   
   // Send confirmation
-  StaticJsonDocument<256> response;
+  StaticJsonDocument<384> response;
   response["event"] = "config_complete";
   response["playerCount"] = activePlayerCount;
+  response["hallSensorMode"] = HALL_SENSOR_OPERATIONAL;
+  response["turnDelaySeconds"] = currentTurnDelayMs / 1000;
   
   String output;
   serializeJson(response, output);
@@ -1033,46 +1147,64 @@ void handleRoll(JsonDocument& doc) {
       break;
       
     case TYPE_BONUS:
-      scoreChange = +1;
-      Serial.println("  Effect: BONUS +1 point");
+      // ECO SAVE (+1), SHIELD (+1), or bonus based on tile
+      if (newTile == 2) {
+        scoreChange = +1;
+        Serial.println("  Effect: SHIELD +1 point (Nature Guardian, +Immunity)");
+      } else if (newTile == 4 || newTile == 10) {
+        scoreChange = +1;
+        Serial.println("  Effect: ECO SAVE +1 point");
+      } else if (newTile == 13 || newTile == 15) {
+        scoreChange = +2;
+        Serial.println("  Effect: ECO SAVE +2 points");
+      } else if (newTile == 19) {
+        scoreChange = +1;
+        Serial.println("  Effect: SHIELD +1 point (Plant Grower)");
+      } else {
+        scoreChange = +1;
+        Serial.println("  Effect: BONUS +1 point");
+      }
       break;
       
     case TYPE_PENALTY:
-      // Penalty tiles: -1 or -2 based on tile
-      if (newTile == 2 || newTile == 4) {
+      // LOSS tiles: -1 or -2 based on tile
+      if (newTile == 8) {
         scoreChange = -1;
-        Serial.println("  Effect: PENALTY -1 point");
+        Serial.println("  Effect: LOSS -1 point (Wasted Water)");
       } else {
         scoreChange = -2;
-        Serial.println("  Effect: PENALTY -2 points");
+        Serial.println("  Effect: LOSS -2 points");
       }
       break;
       
     case TYPE_DISASTER:
-      // Disaster tiles: -2, -3, or -4 based on tile
-      if (newTile == 12) {
-        scoreChange = -2;
-        Serial.println("  Effect: DISASTER -2 points");
-      } else if (newTile == 5 || newTile == 10) {
+      // GREAT CRISIS tiles: -3, -4, or -5 based on tile
+      if (newTile == 5) {
         scoreChange = -3;
-        Serial.println("  Effect: DISASTER -3 points");
-      } else {  // Tile 7
+        Serial.println("  Effect: GREAT CRISIS -3 points (Tree Cutting)");
+      } else if (newTile == 9) {
+        scoreChange = -5;
+        Serial.println("  Effect: GREAT CRISIS -5 points (River Robber)");
+      } else if (newTile == 12) {
         scoreChange = -4;
-        Serial.println("  Effect: DISASTER -4 points");
+        Serial.println("  Effect: GREAT CRISIS -4 points (Shrinking Lake)");
+      } else {
+        scoreChange = -3;
+        Serial.println("  Effect: GREAT CRISIS -3 points");
       }
       break;
       
     case TYPE_WATER_DOCK:
-      // Water Dock tiles: +1, +2, or +3 based on tile
-      if (newTile == 15) {
-        scoreChange = +1;
-        Serial.println("  Effect: WATER DOCK +1 point");
-      } else if (newTile == 11) {
-        scoreChange = +2;
-        Serial.println("  Effect: WATER DOCK +2 points");
-      } else {  // Tile 3
+      // MIGHTY SAVE tiles: +3 or +4 based on tile
+      if (newTile == 7) {
         scoreChange = +3;
-        Serial.println("  Effect: WATER DOCK +3 points");
+        Serial.println("  Effect: MIGHTY SAVE +3 points (Recycled Water)");
+      } else if (newTile == 18) {
+        scoreChange = +4;
+        Serial.println("  Effect: MIGHTY SAVE +4 points (Evergreen Forest)");
+      } else {
+        scoreChange = +3;
+        Serial.println("  Effect: MIGHTY SAVE +3 points");
       }
       break;
       
@@ -1172,7 +1304,10 @@ void handleRoll(JsonDocument& doc) {
   // Animate movement
   currentPlayer = playerId;
   expectedTile = newTile;
-  animateMove(currentTile, newTile, PLAYER_COLORS[playerId], playerId);
+  animateMove(currentTile, newTile, players[playerId].color, playerId);
+  
+  // Restore all player LEDs after animation
+  renderPlayers();
 
   const bool skipCoinWait = (!PRODUCTION_MODE && TEST_MODE_1);
 
@@ -1189,8 +1324,12 @@ void handleRoll(JsonDocument& doc) {
     sendCoinPlacedResponse(playerId, newTile, false, "Test Mode 1: placement auto-confirmed");
 
     Serial.println("✓ Roll processed (Test Mode 1) - coin auto-confirmed\n");
-  } else {
-    // Production/normal behavior: wait for Hall sensor confirmation
+  } else if (HALL_SENSOR_OPERATIONAL) {
+    // Hall Sensor Mode: Wait for physical coin detection
+    Serial.println("\n⏳ HALL SENSOR MODE - Waiting for coin placement...");
+    Serial.printf("  Player %d must place coin on Tile %d\n", playerId, newTile);
+    Serial.println("  Hall sensor will detect magnet automatically");
+    
     waitingForCoin = true;
     coinWaitStartTime = millis();
     saveGameState();
@@ -1198,7 +1337,21 @@ void handleRoll(JsonDocument& doc) {
     sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore,
                      chanceCardNumber, chanceCardDesc, players[playerId].alive, true);
 
-    Serial.println("✓ Roll processed, waiting for coin placement\n");
+    Serial.println("✓ Roll processed, waiting for Hall sensor confirmation\n");
+  } else {
+    // Timer Delay Mode: Auto-confirm after delay
+    Serial.println("\n⏱️  TIMER DELAY MODE - No Hall sensor wait");
+    Serial.printf("  Turn delay: %lu seconds\n", currentTurnDelayMs / 1000);
+    Serial.printf("  ESP will auto-confirm coin after %lu ms\n", currentTurnDelayMs);
+    
+    waitingForCoin = true;  // Still set flag for timing logic
+    coinWaitStartTime = millis();
+    saveGameState();
+
+    sendRollResponse(playerId, currentTile, newTile, tile, scoreChange, oldScore, newScore,
+                     chanceCardNumber, chanceCardDesc, players[playerId].alive, false);
+
+    Serial.println("✓ Roll processed, timer started\n");
   }
 }
 
@@ -1270,7 +1423,10 @@ void handleUndo(JsonDocument& doc) {
   // Animate reverse movement
   currentPlayer = playerId;
   expectedTile = toTile;
-  animateMove(fromTile, toTile, PLAYER_COLORS[playerId], playerId);
+  animateMove(fromTile, toTile, players[playerId].color, playerId);
+  
+  // Restore all player LEDs after animation
+  renderPlayers();
   
   // Start waiting for coin at old position
   waitingForCoin = true;
@@ -1413,10 +1569,15 @@ void sendStatus() {
 
 // ==================== COIN DETECTION ====================
 bool isCoinPresent(int tile) {
-  if (tile < 1 || tile > NUM_TILES) return false;
+  if (tile < 1 || tile > NUM_TILES) {
+    Serial.printf("[Hall] Invalid tile: %d\n", tile);
+    return false;
+  }
   
   // Hall sensor reads LOW when magnet is near (active LOW with pull-up)
   int readings = 0;
+  String sensorType = "";
+  int sensorPin = -1;
   
   for (int i = 0; i < 5; i++) {
     bool detected = false;
@@ -1424,26 +1585,44 @@ bool isCoinPresent(int tile) {
     // Check MCP Port B tiles (1, 20, 19, 18, 16, 14, 17, 15)
     for (uint8_t j = 0; j < 8; j++) {
       if (MCP_PORTB_TILES[j] == tile) {
-        detected = (mcp.digitalRead(j + 8) == LOW);
+        bool state = (mcp.digitalRead(j + 8) == LOW);
+        detected = state;
+        sensorType = "MCP_PORTB";
+        sensorPin = j;
+        if (i == 0) {  // Log first reading only
+          Serial.printf("[Hall] Tile %d → MCP PB%d: %s\n", tile, j, state ? "LOW (magnet)" : "HIGH (no magnet)");
+        }
         break;
       }
     }
     
     // Check MCP Port A tiles (2, 3, 4, 5, 13, 7, 8, 6)
-    if (!detected) {
+    if (!detected && sensorType == "") {
       for (uint8_t j = 0; j < 8; j++) {
         if (MCP_PORTA_TILES[j] == tile) {
-          detected = (mcp.digitalRead(j) == LOW);
+          bool state = (mcp.digitalRead(j) == LOW);
+          detected = state;
+          sensorType = "MCP_PORTA";
+          sensorPin = j;
+          if (i == 0) {  // Log first reading only
+            Serial.printf("[Hall] Tile %d → MCP PA%d: %s\n", tile, j, state ? "LOW (magnet)" : "HIGH (no magnet)");
+          }
           break;
         }
       }
     }
     
     // Check direct ESP32 GPIO tiles (9, 10, 11, 12)
-    if (!detected) {
+    if (!detected && sensorType == "") {
       for (uint8_t j = 0; j < 4; j++) {
         if (DIRECT_GPIO_TILES[j] == tile) {
-          detected = (digitalRead(DIRECT_GPIO_PINS[j]) == LOW);
+          bool state = (digitalRead(DIRECT_GPIO_PINS[j]) == LOW);
+          detected = state;
+          sensorType = "ESP32_GPIO";
+          sensorPin = DIRECT_GPIO_PINS[j];
+          if (i == 0) {  // Log first reading only
+            Serial.printf("[Hall] Tile %d → GPIO%d: %s\n", tile, DIRECT_GPIO_PINS[j], state ? "LOW (magnet)" : "HIGH (no magnet)");
+          }
           break;
         }
       }
@@ -1453,30 +1632,64 @@ bool isCoinPresent(int tile) {
     delay(2);
   }
   
-  return readings >= 3;
+  bool coinPresent = (readings >= 3);
+  Serial.printf("[Hall] Tile %d result: %d/5 readings LOW → %s\n", 
+                tile, readings, coinPresent ? "COIN DETECTED" : "NO COIN");
+  
+  return coinPresent;
 }
 
 void checkCoinPlacement() {
   if (!waitingForCoin || currentPlayer < 0 || expectedTile < 1) return;
   
-  if (isCoinPresent(expectedTile)) {
-    Serial.println("\n✓ Coin detected!");
-    Serial.printf("  Player %d at Tile %d\n", currentPlayer, expectedTile);
-    
-    players[currentPlayer].coinPlaced = true;
-    waitingForCoin = false;
-    
-    // Stop blinking, show solid color
-    setTileColor(expectedTile, PLAYER_COLORS[currentPlayer]);
-    strip.show();
-    
-    saveGameState();
-    
-    // Send coin placed confirmation
-    sendCoinPlacedResponse(currentPlayer, expectedTile);
-    
-    currentPlayer = -1;
-    expectedTile = -1;
+  unsigned long elapsed = millis() - coinWaitStartTime;
+  
+  if (HALL_SENSOR_OPERATIONAL) {
+    // Hall Sensor Mode: Check for physical coin
+    if (isCoinPresent(expectedTile)) {
+      Serial.println("\n🧲 COIN DETECTED VIA HALL SENSOR!");
+      Serial.printf("  Player %d at Tile %d\n", currentPlayer, expectedTile);
+      Serial.printf("  Detection time: %lu ms\n", elapsed);
+      
+      players[currentPlayer].coinPlaced = true;
+      waitingForCoin = false;
+      
+      // Stop blinking, show solid color
+      setTileColor(expectedTile, PLAYER_COLORS[currentPlayer]);
+      strip.show();
+      
+      saveGameState();
+      
+      // Send coin placed confirmation
+      sendCoinPlacedResponse(currentPlayer, expectedTile, true, "Hall sensor detected magnet");
+      
+      currentPlayer = -1;
+      expectedTile = -1;
+    }
+  } else {
+    // Timer Delay Mode: Auto-confirm after delay
+    if (elapsed >= currentTurnDelayMs) {
+      Serial.println("\n⏱️  TURN DELAY COMPLETE - AUTO-CONFIRMING COIN!");
+      Serial.printf("  Player %d at Tile %d\n", currentPlayer, expectedTile);
+      Serial.printf("  Delay duration: %lu ms (%lu seconds)\n", 
+                    currentTurnDelayMs, currentTurnDelayMs / 1000);
+      
+      players[currentPlayer].coinPlaced = true;
+      waitingForCoin = false;
+      
+      // Stop blinking, show solid color
+      setTileColor(expectedTile, PLAYER_COLORS[currentPlayer]);
+      strip.show();
+      
+      saveGameState();
+      
+      // Send coin placed confirmation
+      sendCoinPlacedResponse(currentPlayer, expectedTile, false, 
+                             "Timer delay complete - coin auto-confirmed");
+      
+      currentPlayer = -1;
+      expectedTile = -1;
+    }
   }
 }
 
@@ -1600,21 +1813,24 @@ void scanAllTiles() {
 
 // ==================== LED ANIMATIONS ====================
 void animateMove(int fromTile, int toTile, uint32_t color, int playerId) {
-  int step = (toTile > fromTile) ? 1 : -1;
+  // Always animate forward (clockwise) on circular board: 1→2→...→20→1→2...
+  int currentTile = fromTile;
   
-  for (int tile = fromTile; tile != toTile + step; tile += step) {
-    if (tile < 1 || tile > NUM_TILES) continue;
-    
-    // Clear previous position (only player's LED)
-    if (tile != fromTile) {
-      int prevLedIndex = getPlayerLED(tile - step, playerId);
-      if (prevLedIndex >= 0) {
-        strip.setPixelColor(prevLedIndex, TILE_COLORS[tile - step - 1]);
-      }
+  while (currentTile != toTile) {
+    // Clear previous position (turn off player's LED)
+    int prevLedIndex = getPlayerLED(currentTile, playerId);
+    if (prevLedIndex >= 0) {
+      strip.setPixelColor(prevLedIndex, 0);  // Turn off (black)
     }
     
-    // Light up current position (only player's LED)
-    int currentLedIndex = getPlayerLED(tile, playerId);
+    // Move forward (with wraparound: 20→1)
+    currentTile++;
+    if (currentTile > NUM_TILES) {
+      currentTile = 1;  // Wrap from tile 20 to tile 1
+    }
+    
+    // Light up new position (only player's LED)
+    int currentLedIndex = getPlayerLED(currentTile, playerId);
     if (currentLedIndex >= 0) {
       strip.setPixelColor(currentLedIndex, color);
     }
@@ -1646,18 +1862,19 @@ void setTileColor(int tile, uint32_t color) {
 }
 
 void renderBackground() {
-  for (int tile = 1; tile <= NUM_TILES; tile++) {
-    setTileColor(tile, TILE_COLORS[tile - 1]);
+  // Turn OFF all LEDs (blank board)
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, 0);  // Black (off)
   }
   strip.show();
 }
 
 void renderPlayers() {
-  renderBackground();
+  renderBackground();  // Clear all LEDs first
   
-  // Light up only each player's specific LED on their current tile
-  for (int i = 0; i < NUM_PLAYERS; i++) {
-    if (players[i].alive && players[i].coinPlaced) {
+  // Light up ALL active/alive players' LEDs on their current tiles
+  for (int i = 0; i < activePlayerCount; i++) {
+    if (players[i].alive) {
       int ledIndex = getPlayerLED(players[i].currentTile, i);
       if (ledIndex >= 0) {
         strip.setPixelColor(ledIndex, players[i].color);

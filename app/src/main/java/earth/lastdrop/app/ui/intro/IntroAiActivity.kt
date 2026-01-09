@@ -12,8 +12,16 @@ import android.widget.TextView
 import android.widget.Toast
 import android.widget.PopupMenu
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
+import earth.lastdrop.app.BoardPreferencesManager
+import earth.lastdrop.app.BoardSelectionDialog
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import earth.lastdrop.app.ProfileManager
@@ -26,7 +34,6 @@ import earth.lastdrop.app.PlayerProfile
 import earth.lastdrop.app.GameEngine
 import earth.lastdrop.app.ChanceCard
 import earth.lastdrop.app.TurnResult
-import earth.lastdrop.app.ESP32ConnectionManager
 import earth.lastdrop.app.BoardScanManager
 import earth.lastdrop.app.VirtualDiceView
 import earth.lastdrop.app.DiceConnectionController
@@ -64,6 +71,8 @@ import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import android.util.Log
+import java.util.UUID
+import earth.lastdrop.app.BoardConnectionController
 
 class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
@@ -104,7 +113,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     
     // BLE Managers
     private var bluetoothAdapter: BluetoothAdapter? = null
-    private var esp32Manager: ESP32ConnectionManager? = null
+    private var boardScanManager: BoardScanManager? = null
+    private lateinit var boardPreferencesManager: BoardPreferencesManager
+    private lateinit var boardConnectionController: BoardConnectionController
     private var esp32Connected = false
     private var diceConnectionController: DiceConnectionController? = null
     private var playWithTwoDice = false
@@ -143,6 +154,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         profileManager = ProfileManager(this)
         val db = LastDropDatabase.getInstance(this)
         savedGameDao = db.savedGameDao()
+        boardPreferencesManager = BoardPreferencesManager(this)
         
         val voiceSettingsManager = VoiceSettingsManager(this)
         val voiceSettings = voiceSettingsManager.getSettings()
@@ -195,6 +207,48 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager
         bluetoothAdapter = bluetoothManager?.adapter
         
+        // Initialize BoardScanManager (match MainActivity behavior)
+        boardScanManager = BoardScanManager(
+            context = this,
+            bluetoothAdapter = bluetoothAdapter,
+            scope = lifecycleScope,
+            onBoardFound = { boards -> showBoardSelectionDialog(boards) },
+            onBoardSelected = { device -> handleBoardSelected(device) },
+            onLogMessage = { message -> appendDebug(message) }
+        )
+        BoardScanManager.TRUSTED_ADDRESSES = MainActivity.TRUSTED_ESP32_ADDRESSES
+
+        // Initialize BoardConnectionController (reuse Classic flow)
+        boardConnectionController = BoardConnectionController(
+            context = this,
+            scope = lifecycleScope,
+            serviceUuid = MainActivity.ESP32_SERVICE_UUID,
+            txUuid = MainActivity.ESP32_CHAR_TX_UUID,
+            rxUuid = MainActivity.ESP32_CHAR_RX_UUID,
+            cccdUuid = MainActivity.CCCDUUID,
+            onLog = { message -> appendDebug(message) },
+            onConnected = { device ->
+                esp32Connected = true
+                runOnUiThread {
+                    Toast.makeText(this, "Board connected", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDisconnected = { _ ->
+                esp32Connected = false
+                runOnUiThread {
+                    Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onMessage = { message -> handleESP32Response(message) },
+            onServicesReady = {
+                runOnUiThread {
+                    Toast.makeText(this, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                }
+                sendPairCommandToESP32()
+                sendConfigToESP32()
+            }
+        )
+        
         // Initialize GoDice SDK
         GoDiceSDK.listener = this
         
@@ -226,6 +280,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         assignedColors.addAll(colors)
 
         setInitialStates()
+        boardScanManager?.stopScan()
         bindPlayers(selectedProfiles, colors)
         playIntroLines()
         playEntranceAnimations()
@@ -233,7 +288,8 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     override fun onDestroy() {
         voiceService?.shutdown()
-        esp32Manager?.disconnect()
+        boardScanManager?.stopScan()
+        boardConnectionController.disconnect()
         soundManager.release()
         super.onDestroy()
     }
@@ -662,6 +718,12 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
     
     private fun startDiceConnection() {
+        // Ensure BLE permissions before attempting connection
+        if (!ensureBlePermissions()) {
+            Toast.makeText(this, "Bluetooth permissions required to connect to dice", Toast.LENGTH_LONG).show()
+            return
+        }
+        
         val adapter = bluetoothAdapter
         if (adapter == null) {
             Toast.makeText(this, "Bluetooth not supported", Toast.LENGTH_LONG).show()
@@ -728,17 +790,132 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
     }
 
+    private fun ensureBlePermissions(): Boolean {
+        val needed = mutableListOf<String>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_SCAN
+                ) != PackageManager.PERMISSION_GRANTED
+            ) needed += Manifest.permission.BLUETOOTH_SCAN
+
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) needed += Manifest.permission.BLUETOOTH_CONNECT
+        } else {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) needed += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+
+        if (needed.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
+            return false
+        }
+        return true
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == 1001) {
+            val allGranted = grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+
+            if (allGranted) {
+                Toast.makeText(this, "Bluetooth permissions granted. Please try connecting again.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Bluetooth permissions are required to connect to dice and board",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     private fun connectESP32Board() {
-        // Check if ESP32 manager already exists and is connected
-        if (esp32Manager != null && esp32Connected) {
-            Toast.makeText(this, "ESP32 already connected ✅", Toast.LENGTH_SHORT).show()
+        // Ensure BLE permissions before attempting connection
+        if (!ensureBlePermissions()) {
+            Toast.makeText(this, "Bluetooth permissions required to connect to board", Toast.LENGTH_LONG).show()
             return
         }
         
-        // Show scanning dialog
+        // Already connected → offer disconnect
+        if (esp32Connected) {
+            boardConnectionController.disconnect()
+            esp32Connected = false
+            Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Scanning for LASTDROP-* boards...", Toast.LENGTH_SHORT).show()
+
+        val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
+            context = this,
+            preferencesManager = boardPreferencesManager,
+            onBoardSelected = { device ->
+                appendDebug("Selected board: ${device.name}")
+                boardScanManager?.stopScan()
+                connectToDevice(device)
+            },
+            onCancel = {
+                appendDebug("Board scan cancelled")
+                boardScanManager?.stopScan()
+            }
+        )
+
+        boardScanManager?.setDiscoveryCallback(
+            onDiscovered = { device -> runOnUiThread { liveScanDialog.addBoard(device) } },
+            onComplete = { runOnUiThread {
+                if (boardScanManager?.getDiscoveredBoards()?.isEmpty() == true) {
+                    liveScanDialog.showNoBoards()
+                }
+            } }
+        )
+
+        boardScanManager?.startScan()
+    }
+
+    private fun showBoardSelectionDialog(boards: List<BluetoothDevice>) {
+        runOnUiThread {
+            BoardSelectionDialog.show(
+                context = this,
+                boards = boards,
+                preferencesManager = boardPreferencesManager,
+                onBoardSelected = { device ->
+                    appendDebug("Selected board: ${device.name}")
+                    boardScanManager?.stopScan()
+                    connectToDevice(device)
+                },
+                onRescan = {
+                    appendDebug("Rescanning boards...")
+                    boardScanManager?.rescan()
+                },
+                onManageBoards = {
+                    // Optional: could show saved boards dialog; not needed in AI flow
+                }
+            )
+        }
+    }
+
+    private fun handleBoardSelected(device: BluetoothDevice) {
+        connectToDevice(device)
+    }
+
+    private fun connectToDevice(device: BluetoothDevice) {
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Scanning for ESP32 Board")
-            .setMessage("Looking for LASTDROP-* boards...\n\nMake sure your board is powered on.")
+            .setTitle("Connecting to Board")
+            .setMessage("Connecting to ${device.name}...")
             .setCancelable(false)
             .create()
         dialog.show()
@@ -746,45 +923,17 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         lifecycleScope.launch {
             delay(500) // Brief delay for visual feedback
             
-            // Initialize ESP32 manager if needed
-            if (esp32Manager == null) {
-                esp32Manager = ESP32ConnectionManager(
-                    context = this@IntroAiActivity,
-                    bluetoothAdapter = bluetoothAdapter,
-                    onConnectionStateChanged = { connected ->
-                        esp32Connected = connected
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            val status = if (connected) "Connected ✅" else "Disconnected ❌"
-                            Toast.makeText(this@IntroAiActivity, "ESP32 $status", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onLogMessage = { message ->
-                        appendDebug(message)
-                    },
-                    onCharacteristicChanged = { jsonResponse ->
-                        handleESP32Response(jsonResponse)
-                    }
-                )
-            }
+            // Stop scanning
+            boardScanManager?.stopScan()
             
-            // Attempt connection
+            // Attempt connection using BoardConnectionController (same as Classic)
             try {
-                esp32Manager?.connect()
+                boardConnectionController.connect(device)
                 delay(2000) // Give time for connection
                 
                 withContext(Dispatchers.Main) {
                     dialog.dismiss()
-                    if (esp32Connected) {
-                        androidx.appcompat.app.AlertDialog.Builder(this@IntroAiActivity)
-                            .setTitle("ESP32 Connected")
-                            .setMessage("Physical board is ready!\n\nNote: Coin placement tracking is available in MainActivity for full game integration.")
-                            .setPositiveButton("OK", null)
-                            .setNeutralButton("Open MainActivity") { _, _ ->
-                                val intent = Intent(this@IntroAiActivity, MainActivity::class.java)
-                                startActivity(intent)
-                            }
-                            .show()
-                    } else {
+                    if (!esp32Connected) {
                         androidx.appcompat.app.AlertDialog.Builder(this@IntroAiActivity)
                             .setTitle("Connection Failed")
                             .setMessage("Could not find ESP32 board.\n\n• Check board is powered on\n• Board should advertise as LASTDROP-*\n• Try again or use MainActivity for advanced scanning")
@@ -800,6 +949,44 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
         }
+    }
+
+    private fun sendPairCommandToESP32() {
+        if (!esp32Connected) return
+        // Pair PIN mirrors Classic; fallback to default if not saved
+        val pairPayload = JSONObject().apply {
+            put("command", "pair")
+            put("password", "654321")
+        }
+        sendToESP32(pairPayload.toString())
+    }
+
+    private fun sendConfigToESP32() {
+        if (!esp32Connected) return
+
+        val playerCount = selectedProfileIds.size.coerceAtMost(4)
+        val colors = assignedColors.take(playerCount).map { color ->
+            when (color.lowercase()) {
+                "red" -> "FF0000"
+                "green" -> "00FF00"
+                "blue" -> "0000FF"
+                "yellow" -> "FFFF00"
+                else -> color.removePrefix("#").takeIf { it.length == 6 } ?: "FFFFFF"
+            }
+        }
+
+        val config = JSONObject().apply {
+            put("command", "config")
+            put("playerCount", playerCount)
+            put("colors", JSONArray(colors))
+        }
+
+        sendToESP32(config.toString())
+    }
+
+    private fun sendToESP32(jsonString: String) {
+        if (!esp32Connected) return
+        boardConnectionController.send(jsonString)
     }
 
     private fun handleESP32Response(jsonResponse: String) {
@@ -819,35 +1006,6 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
     }
     
-    private fun sendConfigToESP32() {
-        if (currentGameProfiles.isEmpty()) {
-            android.util.Log.w("IntroAiActivity", "No players configured, cannot send config")
-            return
-        }
-        
-        val colors = currentGameProfiles.map { profile ->
-            // Remove # prefix if present and ensure uppercase
-            val cleanColor = profile.avatarColor.removePrefix("#").uppercase()
-            
-            // Validate it's a valid hex color (6 characters)
-            if (cleanColor.length == 6 && cleanColor.all { it in "0123456789ABCDEF" }) {
-                cleanColor
-            } else {
-                android.util.Log.w("IntroAiActivity", "Invalid color format '${profile.avatarColor}' for ${profile.name}, defaulting to white")
-                "FFFFFF"
-            }
-        }
-
-        val config = org.json.JSONObject().apply {
-            put("command", "config")
-            put("playerCount", currentGameProfiles.size)
-            put("colors", org.json.JSONArray(colors))
-        }
-
-        esp32Manager?.sendCommand(config.toString())
-        android.util.Log.d("IntroAiActivity", "Sent config: ${currentGameProfiles.size} players, colors: $colors (raw avatarColors: ${currentGameProfiles.map { it.avatarColor }})")
-    }
-
     private fun showServerConnectionInfo() {
         // Same workflow as MainActivity - show QR scan dialog
         LiveServerUiHelper.showConnectDialog(this) {

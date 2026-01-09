@@ -5,58 +5,58 @@
 
 // Tile names for the 20-tile board
 export const TILE_NAMES = [
-  "START", "Sunny Patch", "Rain Dock", "Leak Lane", "Storm Zone",
-  "Cloud Hill", "Oil Spill Bay", "Riverbank Road", "Marsh Land", "Drought Desert",
-  "Clean Well", "Waste Dump", "Sanctuary Stop", "Sewage Drain Street", "Filter Plant",
-  "Mangrove Mile", "Heatwave Road", "Spring Fountain", "Eco Garden", "Great Reservoir"
+  "LAUNCH PAD", "NATURE GUARDIAN", "POLLUTING FACTORY", "FLOWER GARDEN", "TREE CUTTING",
+  "MARSH SWAMP", "RECYCLED WATER", "WASTED WATER", "RIVER ROBBER", "LILLY POND",
+  "SANCTUARY COVE", "SHRINKING LAKE", "CRYSTAL GLACIER", "DRY CITY", "RAIN HARVEST",
+  "MANGROVE TRAIL", "WASTED WELL", "EVERGREEN FOREST", "PLANT GROWER", "DIRTY WATER LANE"
 ];
 
 // Tile effects: water drop changes per tile
 export const TILE_EFFECTS = {
-  1: 0,   // Start Point
-  2: -1,  // Sunny Patch
-  3: 3,   // Rain Dock
-  4: -1,  // Leak Lane
-  5: -3,  // Storm Zone
-  6: 1,   // Cloud Hill
-  7: -4,  // Oil Spill Bay
-  8: 0,   // Riverbank Road
-  9: 'chance',  // Marsh Land
-  10: -3, // Drought Desert
-  11: 2,  // Clean Well
-  12: -2, // Waste Dump
-  13: 'chance', // Sanctuary Stop
-  14: -2, // Sewage Drain Street
-  15: 1,  // Filter Plant
-  16: 'chance', // Mangrove Mile
-  17: -2, // Heatwave Road
-  18: 4,  // Spring Fountain
-  19: 0,  // Eco Garden
-  20: 0   // Great Reservoir
+  1: 0,   // Launch Pad (START: +10 start, +5 pass)
+  2: 1,   // Nature Guardian (SHIELD: +1 & Immunity)
+  3: -2,  // Polluting Factory (LOSS: -2)
+  4: 1,   // Flower Garden (ECO SAVE: +1)
+  5: -3,  // Tree Cutting (GREAT CRISIS: -3)
+  6: 'chance',  // Marsh Swamp (MYSTERY: Chance Card)
+  7: 3,   // Recycled Water (MIGHTY SAVE: +3)
+  8: -1,  // Wasted Water (LOSS: -1)
+  9: -5,  // River Robber (GREAT CRISIS: -5)
+  10: 1,  // Lilly Pond (ECO SAVE: +1)
+  11: 'chance', // Sanctuary Cove (MYSTERY: Chance Card)
+  12: -4, // Shrinking Lake (GREAT CRISIS: -4)
+  13: 2,  // Crystal Glacier (ECO SAVE: +2)
+  14: -2, // Dry City (LOSS: -2)
+  15: 2,  // Rain Harvest (ECO SAVE: +2)
+  16: 'chance', // Mangrove Trail (MYSTERY: Chance Card)
+  17: -2, // Wasted Well (LOSS: -2)
+  18: 4,  // Evergreen Forest (MIGHTY SAVE: +4)
+  19: 1,  // Plant Grower (SHIELD: +1)
+  20: -2  // Dirty Water Lane (LOSS: -2)
 };
 
 // Chance card effects (water drop changes)
 export const CHANCE_CARD_EFFECTS = {
   "1": 2,   // Fixed tap leak
-  "2": 2,   // Rainwater harvested
+  "2": 2,   // Rain harvested
   "3": 1,   // Planted trees
-  "4": 1,   // Cool clouds
-  "5": 1,   // Cleaned riverbank
-  "6": 3,   // Discovered spring
-  "7": 1,   // Saved wetland animal
-  "8": 1,   // Reused RO water
-  "9": 2,   // Bucket instead of shower
+  "4": 1,   // Clouds formed
+  "5": 2,   // Preserved riverbank
+  "6": 2,   // Cleaned well
+  "7": 1,   // Saved plant
+  "8": 1,   // Recycled water
+  "9": 2,   // Bucket bath
   "10": 2,  // Drip irrigation
-  "11": 0,  // Skip next penalty
-  "12": 0,  // Move forward 2 tiles
-  "13": 0,  // Swap positions
-  "14": 0,  // Water Shield
+  "11": 0,  // Skip penalty (Immunity)
+  "12": 0,  // Move forward 2
+  "13": 0,  // Swap with next (next player plays twice)
+  "14": 0,  // Water Shield (Immunity)
   "15": -1, // Left tap running
   "16": -1, // Bottle spilled
   "17": -3, // Pipe burst
-  "18": -2, // Heat wave
+  "18": -2, // Climate dries water
   "19": -2, // Sewage contamination
-  "20": -3  // Flood
+  "20": -3  // Wasted papers
 };
 
 // Board tile layout (grid positions)

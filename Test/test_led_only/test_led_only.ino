@@ -6,10 +6,10 @@
 
 #include <Adafruit_NeoPixel.h>
 
-#define LED_PIN    16   // GPIO16 → AHCT125
-#define LED_OE_PIN 47   // GPIO47 → AHCT125 OE (active LOW)
+#define LED_PIN    16   // GPIO16 → AHCT125 data
+#define LED_OE_PIN 48   // GPIO48 → AHCT125 OE (active LOW) - CORRECTED!
 #define LED_COUNT  137
-#define ONBOARD_LED 48  // ESP32-S3 onboard RGB LED
+#define ONBOARD_LED 2   // ESP32-S3 onboard RGB LED (not 48)
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 

@@ -3,7 +3,7 @@ $global:ArduinoCli = "C:\Users\ADMIN\AppData\Local\Programs\Arduino IDE\resource
 $global:AndroidSdkPath = "C:\Users\ADMIN\AppData\Local\Android\Sdk"
 $global:JavaHome = "C:\Program Files\Android\Android Studio\jbr"
 $global:AdbPath = "$AndroidSdkPath\platform-tools\adb.exe"
-$global:ESP32Board = "esp32:esp32:esp32s3"
+$global:ESP32Board = "esp32:esp32:esp32s3:CDCOnBoot=cdc"
 $global:ESP32Port = "COM10"
 $global:ESP32BaudRate = 115200
 $global:ProjectRoot = "D:\PERSONAL\lakhna\DEVELOPMENT\LastDrop"

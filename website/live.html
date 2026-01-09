@@ -1565,7 +1565,7 @@
     console.log('[live] Session parameters:', { boardId: activeBoardId, sessionId: activeSessionId });
     console.log('[live] API URL:', LIVE_STATE_URL);
     
-    const tileNames = ["START","Tile 2","Tile 3","Tile 4","Tile 5","Tile 6","Tile 7","Tile 8","Tile 9","Tile 10","Tile 11","Tile 12","Tile 13","Tile 14","Tile 15","Tile 16","Tile 17","Tile 18","Tile 19","Tile 20"];
+    const tileNames = ["LAUNCH PAD","NATURE GUARDIAN","POLLUTING FACTORY","FLOWER GARDEN","TREE CUTTING","MARSH SWAMP","RECYCLED WATER","WASTED WATER","RIVER ROBBER","LILLY POND","SANCTUARY COVE","SHRINKING LAKE","CRYSTAL GLACIER","DRY CITY","RAIN HARVEST","MANGROVE TRAIL","WASTED WELL","EVERGREEN FOREST","PLANT GROWER","DIRTY WATER LANE"];
     let demoMode = false;
 
     // Audio System
@@ -1737,7 +1737,7 @@
           tile.dataset.tile = tileNum;
           const inner = document.createElement("div");
           inner.className = "tile-inner";
-          inner.style.backgroundImage = `url('/assets/tiles/tile-${tileNum}.jpg')`;
+          inner.style.backgroundImage = `url('/assets/tiles/tile-${tileNum}.svg')`;
           const label = document.createElement("div");
           label.className = "tile-label";
           label.textContent = tileNames[tileNum-1] || ("Tile "+tileNum);

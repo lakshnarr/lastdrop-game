@@ -148,7 +148,7 @@ class ESP32ConnectionManager(
      * Connect to discovered ESP32 device
      */
     @SuppressLint("MissingPermission")
-    private fun connectToDevice(device: BluetoothDevice) {
+    fun connectToDevice(device: BluetoothDevice) {
         Log.d(TAG, "Connecting to ESP32: ${device.address}")
         
         gatt = device.connectGatt(context, false, object : BluetoothGattCallback() {
