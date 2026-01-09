@@ -253,8 +253,8 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 runOnUiThread {
                     Toast.makeText(this, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
                 }
+                // Match Classic: only send pair on services ready, config follows pair_success
                 sendPairCommandToESP32()
-                sendConfigToESP32()
             }
         )
         
@@ -1003,17 +1003,33 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Parse ESP32 JSON responses (coin_placed, misplacement, etc.)
         appendDebug("ESP32: $jsonResponse")
         
-        // Handle pair_success to send config
         try {
             val json = org.json.JSONObject(jsonResponse)
             val event = json.optString("event", "")
-            if (event == "pair_success") {
-                sendConfigToESP32()
-                android.util.Log.d("IntroAiActivity", "Sent config after pairing")
-            }
-            if (event == "config_complete") {
-                sendResetToESP32()
-                android.util.Log.d("IntroAiActivity", "Sent reset after config_complete to move LEDs to start")
+            
+            when (event) {
+                "pair_success" -> {
+                    // Match Classic: send config after successful pairing
+                    android.util.Log.d("IntroAiActivity", "Pair success - sending config")
+                    sendConfigToESP32()
+                }
+                "config_complete" -> {
+                    // Match Classic: send reset after config to move LEDs to start tile
+                    android.util.Log.d("IntroAiActivity", "Config complete - sending reset (gameStarted=$gameStarted)")
+                    if (gameStarted) {
+                        // Small delay to let ESP32 process config fully
+                        lifecycleScope.launch {
+                            delay(200)
+                            sendResetToESP32()
+                        }
+                    }
+                }
+                "reset_complete" -> {
+                    android.util.Log.d("IntroAiActivity", "Reset complete - LEDs should be at start")
+                    runOnUiThread {
+                        Toast.makeText(this, "Board ready - LEDs at start", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         } catch (e: Exception) {
             android.util.Log.e("IntroAiActivity", "Error parsing ESP32 response", e)
