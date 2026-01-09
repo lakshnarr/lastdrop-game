@@ -18,8 +18,9 @@ import java.util.concurrent.TimeUnit
  */
 class ElevenLabsService(
     private val apiKey: String,
-    private val voiceId: String = "pNInz6obpgDQGcFmaJgB" // Default: Adam (British male)
+    voiceIdParam: String = "pNInz6obpgDQGcFmaJgB" // Default: Adam (British male)
 ) {
+    private val voiceId: String = voiceIdParam
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

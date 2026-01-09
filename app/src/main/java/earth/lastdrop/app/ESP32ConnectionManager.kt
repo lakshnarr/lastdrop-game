@@ -73,9 +73,23 @@ class ESP32ConnectionManager(
         
         onLogMessage("🔍 Scanning for ESP32...")
         
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
+        // Check if Bluetooth is enabled
+        if (bluetoothAdapter == null) {
+            Toast.makeText(context, "Bluetooth not supported on this device", Toast.LENGTH_LONG).show()
+            onLogMessage("❌ Bluetooth not supported")
+            return
+        }
+        
+        if (!bluetoothAdapter.isEnabled) {
+            Toast.makeText(context, "Please enable Bluetooth in Settings", Toast.LENGTH_LONG).show()
+            onLogMessage("❌ Bluetooth is OFF - Please enable it")
+            return
+        }
+        
+        val scanner = bluetoothAdapter.bluetoothLeScanner
         if (scanner == null) {
-            Toast.makeText(context, "Bluetooth scanner not available", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Bluetooth LE scanner not available. Try restarting Bluetooth.", Toast.LENGTH_LONG).show()
+            onLogMessage("❌ BLE scanner unavailable - Try restarting Bluetooth")
             return
         }
         

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tablet dimensions (600dp - 720dp width) -->
+    
+    <!-- Text sizes - slightly larger for tablets -->
+    <dimen name="text_title">28sp</dimen>
+    <dimen name="text_subtitle">20sp</dimen>
+    <dimen name="text_body">18sp</dimen>
+    <dimen name="text_small">16sp</dimen>
+    <dimen name="text_tiny">14sp</dimen>
+    
+    <!-- Button sizes -->
+    <dimen name="button_height_primary">60dp</dimen>
+    <dimen name="button_height_secondary">52dp</dimen>
+    <dimen name="button_corner_radius">18dp</dimen>
+    
+    <!-- Spacing - more generous on tablets -->
+    <dimen name="spacing_tiny">6dp</dimen>
+    <dimen name="spacing_small">12dp</dimen>
+    <dimen name="spacing_normal">20dp</dimen>
+    <dimen name="spacing_large">32dp</dimen>
+    <dimen name="spacing_xlarge">40dp</dimen>
+    
+    <!-- Card/Dialog -->
+    <dimen name="card_corner_radius">28dp</dimen>
+    <dimen name="card_elevation">20dp</dimen>
+    <dimen name="card_padding">32dp</dimen>
+    <dimen name="card_margin">32dp</dimen>
+    
+    <!-- Icon sizes -->
+    <dimen name="icon_small">32dp</dimen>
+    <dimen name="icon_medium">64dp</dimen>
+    <dimen name="icon_large">96dp</dimen>
+    <dimen name="icon_xlarge">144dp</dimen>
+    
+    <!-- Progress indicator -->
+    <dimen name="progress_size">56dp</dimen>
+</resources>
