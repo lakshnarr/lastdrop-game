@@ -4484,7 +4484,13 @@ class Dice(private val id: Int, val device: BluetoothDevice) {
 
     @Suppress("DEPRECATION")
     fun onEvent() {
-        readChar?.getValue()?.let {
+        val value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            readChar?.value
+        } else {
+            @Suppress("DEPRECATION")
+            readChar?.value
+        }
+        value?.let {
             GoDiceSDK.incomingPacket(id, GoDiceSDK.DiceType.D6, it)
         }
     }

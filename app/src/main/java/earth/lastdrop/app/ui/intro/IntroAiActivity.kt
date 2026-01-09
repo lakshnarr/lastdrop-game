@@ -1092,6 +1092,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             playerScores[i] = 0
             playerAlive[i] = true
         }
+
+        // Align board LEDs to start tile, matching Classic reset behavior
+        sendResetToESP32()
         
         // Setup scorecard badges with player colors
         for (i in profiles.indices) {
@@ -1521,6 +1524,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         // Update UI
         updateGameUI()
+
+        // Reset board LEDs to the starting tile for all players
+        sendResetToESP32()
         
         // Play celebration
         soundManager.playSound(SoundEffect.GAME_WIN)
