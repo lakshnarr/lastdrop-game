@@ -16,6 +16,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -75,10 +76,6 @@ import java.util.UUID
 import earth.lastdrop.app.BoardConnectionController
 
 class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
-
-    companion object {
-        private const val REQUEST_CODE_MAIN_ACTIVITY = 2001
-    }
 
     private lateinit var profileManager: ProfileManager
     private lateinit var cloudieAnimation: LottieAnimationView
@@ -146,6 +143,18 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     
     // Scorecard badges
     private val scorecardBadges = arrayOfNulls<ScorecardBadge>(4)
+
+    private val classicModeLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data ?: return@registerForActivityResult
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        handleClassicModeResult(data)
+    }
+
+    private val profileSelectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data ?: return@registerForActivityResult
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        handleProfileSelectionResult(data)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -303,94 +312,87 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         finish()
     }
     
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        
-        // Handle return from MainActivity with game state sync
-        if (requestCode == REQUEST_CODE_MAIN_ACTIVITY && resultCode == RESULT_OK && data != null) {
-            android.util.Log.d("IntroAiActivity", "Received game state from MainActivity")
-            
-            // Set sync flag to prevent disconnection callbacks
-            isSyncingState = true
-            
-            // Sync game state
-            currentPlayerIndex = data.getIntExtra("current_player_index", currentPlayerIndex)
-            gameStarted = data.getBooleanExtra("game_started", gameStarted)
-            playWithTwoDice = data.getBooleanExtra("play_with_two_dice", playWithTwoDice)
-            
-            // Sync connection states
-            val syncedUseBluetoothDice = data.getBooleanExtra("use_bluetooth_dice", useBluetoothDice)
-            val syncedDiceConnected = data.getBooleanExtra("dice_connected", diceConnected)
-            val syncedEsp32Connected = data.getBooleanExtra("esp32_connected", esp32Connected)
-            
-            // Apply virtual dice mode if changed (silently, no messages)
-            if (useBluetoothDice != syncedUseBluetoothDice) {
-                useBluetoothDice = syncedUseBluetoothDice
-                if (useBluetoothDice) {
-                    virtualDiceView?.visibility = View.GONE
-                    android.util.Log.d("IntroAiActivity", "Synced to Bluetooth dice mode")
-                } else {
-                    virtualDiceView?.visibility = View.VISIBLE
-                    android.util.Log.d("IntroAiActivity", "Synced to Virtual dice mode")
-                }
+    private fun handleClassicModeResult(data: Intent) {
+        android.util.Log.d("IntroAiActivity", "Received game state from MainActivity")
+
+        // Set sync flag to prevent disconnection callbacks
+        isSyncingState = true
+
+        // Sync game state
+        currentPlayerIndex = data.getIntExtra("current_player_index", currentPlayerIndex)
+        gameStarted = data.getBooleanExtra("game_started", gameStarted)
+        playWithTwoDice = data.getBooleanExtra("play_with_two_dice", playWithTwoDice)
+
+        // Sync connection states
+        val syncedUseBluetoothDice = data.getBooleanExtra("use_bluetooth_dice", useBluetoothDice)
+        val syncedDiceConnected = data.getBooleanExtra("dice_connected", diceConnected)
+        val syncedEsp32Connected = data.getBooleanExtra("esp32_connected", esp32Connected)
+
+        // Apply virtual dice mode if changed (silently, no messages)
+        if (useBluetoothDice != syncedUseBluetoothDice) {
+            useBluetoothDice = syncedUseBluetoothDice
+            if (useBluetoothDice) {
+                virtualDiceView?.visibility = View.GONE
+                android.util.Log.d("IntroAiActivity", "Synced to Bluetooth dice mode")
+            } else {
+                virtualDiceView?.visibility = View.VISIBLE
+                android.util.Log.d("IntroAiActivity", "Synced to Virtual dice mode")
             }
-            
-            // Silently sync connection states (no toasts or voice messages)
-            diceConnected = syncedDiceConnected
-            esp32Connected = syncedEsp32Connected
-            
-            android.util.Log.d("IntroAiActivity", "Synced connection states: virtualDice=${!useBluetoothDice}, dice=$diceConnected, board=$esp32Connected")
-            
-            // Sync positions
-            data.getIntegerArrayListExtra("player_positions")?.let { positions ->
-                positions.forEachIndexed { index, pos ->
-                    if (index < playerPositions.size) {
-                        playerPositions[index] = pos
-                    }
-                }
-            }
-            
-            // Sync scores
-            data.getIntegerArrayListExtra("player_scores")?.let { scores ->
-                scores.forEachIndexed { index, score ->
-                    if (index < playerScores.size) {
-                        playerScores[index] = score
-                    }
-                }
-            }
-            
-            // Sync alive status
-            data.getBooleanArrayExtra("player_alive")?.let { alive ->
-                alive.forEachIndexed { index, isAlive ->
-                    if (index < playerAlive.size) {
-                        playerAlive[index] = isAlive
-                    }
-                }
-            }
-            
-            // Clear sync flag
-            isSyncingState = false
-            
-            // Update UI with synced state
-            updateAllScorecards()
-            
-            Toast.makeText(this, "Game state synced from Classic mode", Toast.LENGTH_SHORT).show()
-            soundManager.playSound(SoundEffect.SCORE_GAIN)
         }
-        
-        // Handle profile selection result (existing code)
-        if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
-            val profileIds = data.getStringArrayListExtra("selected_profiles") ?: return
-            val colors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
-            
-            selectedProfileIds.clear()
-            selectedProfileIds.addAll(profileIds)
-            assignedColors.clear()
-            assignedColors.addAll(colors)
-            
-            bindPlayers(profileIds, colors)
+
+        // Silently sync connection states (no toasts or voice messages)
+        diceConnected = syncedDiceConnected
+        esp32Connected = syncedEsp32Connected
+
+        android.util.Log.d("IntroAiActivity", "Synced connection states: virtualDice=${!useBluetoothDice}, dice=$diceConnected, board=$esp32Connected")
+
+        // Sync positions
+        data.getIntegerArrayListExtra("player_positions")?.let { positions ->
+            positions.forEachIndexed { index, pos ->
+                if (index < playerPositions.size) {
+                    playerPositions[index] = pos
+                }
+            }
         }
+
+        // Sync scores
+        data.getIntegerArrayListExtra("player_scores")?.let { scores ->
+            scores.forEachIndexed { index, score ->
+                if (index < playerScores.size) {
+                    playerScores[index] = score
+                }
+            }
+        }
+
+        // Sync alive status
+        data.getBooleanArrayExtra("player_alive")?.let { alive ->
+            alive.forEachIndexed { index, isAlive ->
+                if (index < playerAlive.size) {
+                    playerAlive[index] = isAlive
+                }
+            }
+        }
+
+        // Clear sync flag
+        isSyncingState = false
+
+        // Update UI with synced state
+        updateAllScorecards()
+
+        Toast.makeText(this, "Game state synced from Classic mode", Toast.LENGTH_SHORT).show()
+        soundManager.playSound(SoundEffect.SCORE_GAIN)
+    }
+
+    private fun handleProfileSelectionResult(data: Intent) {
+        val profileIds = data.getStringArrayListExtra("selected_profiles") ?: return
+        val colors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+
+        selectedProfileIds.clear()
+        selectedProfileIds.addAll(profileIds)
+        assignedColors.clear()
+        assignedColors.addAll(colors)
+
+        bindPlayers(profileIds, colors)
     }
 
     private fun speakLine(line: String) {
@@ -553,7 +555,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             
             android.util.Log.d("IntroAiActivity", "Connection states: virtualDice=${!useBluetoothDice}, dice=$diceConnected, board=$esp32Connected")
             
-            startActivityForResult(intent, REQUEST_CODE_MAIN_ACTIVITY)
+            classicModeLauncher.launch(intent)
         }
 
         // Save - save game state
@@ -577,7 +579,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             Toast.makeText(this, "Players Icon: Opening Profile Selection", Toast.LENGTH_LONG).show()
             val intent = Intent(this, ProfileSelectionActivity::class.java)
             intent.putExtra("FROM_INTRO_AI", true)
-            startActivityForResult(intent, 1001)
+            profileSelectionLauncher.launch(intent)
         }
 
         // History (placeholder - will be implemented later)

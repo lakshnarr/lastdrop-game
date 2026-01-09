@@ -68,9 +68,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         private const val API_BASE_URL = "https://lastdrop.earth/api"
         private const val API_KEY = BuildConfig.API_KEY
         private const val TAG = "LastDrop"
-        private const val REQUEST_CODE_PROFILES = 1001
         private const val REQUEST_CAMERA_PERMISSION = 1002
-        private const val REQUEST_CODE_INTRO_AI = 1003
         
         // Generate unique session ID for multi-device support
         private val SESSION_ID = java.util.UUID.randomUUID().toString()
@@ -470,6 +468,20 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
 
+    private val profileSelectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data ?: return@registerForActivityResult
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            handleProfileSelectionResult(data)
+        }
+
+    private val introAiLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data ?: return@registerForActivityResult
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            handleIntroAiResult(data)
+        }
+
     // ------------------------------------------------------------------------
     //  Lifecycle
     // ------------------------------------------------------------------------
@@ -792,45 +804,37 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // tryAutoReconnect()
     }
     
+    private fun handleProfileSelectionResult(data: Intent) {
+        val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
+        val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+
+        if (profileIds.isNotEmpty()) {
+            val introIntent = Intent(this, IntroAiActivity::class.java).apply {
+                putStringArrayListExtra("selected_profiles", ArrayList(profileIds))
+                putStringArrayListExtra("assigned_colors", ArrayList(assignedColors))
+            }
+            introAiLauncher.launch(introIntent)
+        } else {
+            Toast.makeText(
+                this@MainActivity,
+                "No players selected. Please select profiles to start.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun handleIntroAiResult(data: Intent) {
+        val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
+        val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
+        if (profileIds.isNotEmpty()) {
+            startGameWithProfiles(profileIds, assignedColors)
+        }
+    }
+
     /**
-     * Handle activity results (Profile Selection and QR code scan)
+     * Handle activity results (QR code scan)
      */
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        // Handle profile selection result
-        if (requestCode == REQUEST_CODE_PROFILES) {
-            if (resultCode == RESULT_OK && data != null) {
-                val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
-                val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
-
-                if (profileIds.isNotEmpty()) {
-                    // Route to intro AI screen before the main board
-                    val introIntent = Intent(this, IntroAiActivity::class.java).apply {
-                        putStringArrayListExtra("selected_profiles", ArrayList(profileIds))
-                        putStringArrayListExtra("assigned_colors", ArrayList(assignedColors))
-                    }
-                    startActivityForResult(introIntent, REQUEST_CODE_INTRO_AI)
-                } else {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "No players selected. Please select profiles to start.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-            return
-        }
-
-        if (requestCode == REQUEST_CODE_INTRO_AI) {
-            if (resultCode == RESULT_OK && data != null) {
-                val profileIds = data.getStringArrayListExtra("selected_profiles") ?: emptyList()
-                val assignedColors = data.getStringArrayListExtra("assigned_colors") ?: emptyList()
-                if (profileIds.isNotEmpty()) {
-                    startGameWithProfiles(profileIds, assignedColors)
-                }
-            }
-            return
-        }
-        
         val handled = LiveServerUiHelper.handleQrActivityResult(
             activity = this,
             requestCode = requestCode,
@@ -1268,7 +1272,7 @@ class MainActivity : AppCompatActivity(), GoDiceSDK.Listener {
         if (!isInitialLaunch) {
             intent.putExtra("FROM_MAIN_ACTIVITY", true)
         }
-        startActivityForResult(intent, REQUEST_CODE_PROFILES)
+        profileSelectionLauncher.launch(intent)
     }
 
     /**
