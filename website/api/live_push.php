@@ -41,7 +41,7 @@ define('API_KEY', 'ABC123');
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'lastdrop');
 define('DB_USER', 'lastdrop_user');
-define('DB_PASS', 'your_password_here'); // Change in production
+define('DB_PASS', 'Lastdrop1!db');
 define('STATE_FILE_DIR', __DIR__ . '/../game_states/');
 
 // Error logging

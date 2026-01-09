@@ -14,10 +14,10 @@ Write-Host ""
 Write-Host "Testing SSH connection..." -ForegroundColor Cyan
 $test = ssh $sshHost "echo 'Connected'" 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "✗ SSH failed!" -ForegroundColor Red
+    Write-Host "X SSH failed!" -ForegroundColor Red
     exit 1
 }
-Write-Host "✓ Connected" -ForegroundColor Green
+Write-Host "Connected" -ForegroundColor Green
 Write-Host ""
 
 # Upload HTML files
@@ -26,7 +26,7 @@ $files = @("live.html", "demo.html", "index.html")
 foreach ($file in $files) {
     $local = Join-Path $localRoot $file
     if (Test-Path $local) {
-        Write-Host "  → $file" -ForegroundColor Gray
+        Write-Host "  -> $file" -ForegroundColor Gray
         scp $local "${sshHost}:$webRoot/$file"
     }
 }
@@ -39,7 +39,7 @@ $apiFiles = @("live_push.php", "live_state.php", "session_list.php")
 foreach ($file in $apiFiles) {
     $local = Join-Path $localRoot "api\$file"
     if (Test-Path $local) {
-        Write-Host "  → api/$file" -ForegroundColor Gray
+        Write-Host "  -> api/$file" -ForegroundColor Gray
         scp $local "${sshHost}:$webRoot/api/$file"
     }
 }
@@ -51,14 +51,34 @@ $tilesDir = Join-Path $localRoot "assets\tiles"
 if (Test-Path $tilesDir) {
     ssh $sshHost "mkdir -p $webRoot/assets/tiles"
     scp -r "$tilesDir\*.svg" "${sshHost}:$webRoot/assets/tiles/"
-    Write-Host "  ✓ Tiles uploaded" -ForegroundColor Green
+    Write-Host "  Tiles uploaded" -ForegroundColor Green
+}
+Write-Host ""
+
+# Upload chance card images
+Write-Host "Uploading chance card images..." -ForegroundColor Cyan
+$chanceDir = Join-Path $localRoot "assets\chance"
+if (Test-Path $chanceDir) {
+    ssh $sshHost "mkdir -p $webRoot/assets/chance"
+    scp -r "$chanceDir\*.png" "${sshHost}:$webRoot/assets/chance/"
+    Write-Host "  Chance cards uploaded" -ForegroundColor Green
+}
+Write-Host ""
+
+# Upload board images (bg, logo)
+Write-Host "Uploading board images..." -ForegroundColor Cyan
+$imagesDir = Join-Path $localRoot "assets\images"
+if (Test-Path $imagesDir) {
+    ssh $sshHost "mkdir -p $webRoot/assets/images"
+    scp -r "$imagesDir\*" "${sshHost}:$webRoot/assets/images/"
+    Write-Host "  Board images uploaded" -ForegroundColor Green
 }
 Write-Host ""
 
 # Set permissions
 Write-Host "Setting permissions..." -ForegroundColor Cyan
 ssh $sshHost "sudo chown -R www-data:www-data $webRoot 2>/dev/null; sudo chmod -R 755 $webRoot 2>/dev/null"
-Write-Host "✓ Done" -ForegroundColor Green
+Write-Host "Done" -ForegroundColor Green
 Write-Host ""
 
 Write-Host "=== Deployment Complete ===" -ForegroundColor Green

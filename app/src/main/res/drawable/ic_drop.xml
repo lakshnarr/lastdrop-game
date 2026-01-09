@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Water drop shape -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M12,2C12,2 6,10 6,14C6,17.31 8.69,20 12,20C15.31,20 18,17.31 18,14C18,10 12,2 12,2Z"/>
+    <!-- Shine highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M10,11C10,11 9,14 9.5,15.5C10,17 11,17.5 11,17.5C11,17.5 9,16 9,14C9,12 10,11 10,11Z"/>
+</vector>

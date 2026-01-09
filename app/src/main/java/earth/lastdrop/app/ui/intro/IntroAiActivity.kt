@@ -39,11 +39,14 @@ import earth.lastdrop.app.BoardScanManager
 import earth.lastdrop.app.VirtualDiceView
 import earth.lastdrop.app.DiceConnectionController
 import earth.lastdrop.app.LiveServerUiHelper
+import earth.lastdrop.app.ApiManager
+import earth.lastdrop.app.BuildConfig
 import org.sample.godicesdklib.GoDiceSDK
 import earth.lastdrop.app.voice.HybridVoiceService
 import earth.lastdrop.app.voice.NoOpVoiceService
 import earth.lastdrop.app.voice.VoiceService
 import earth.lastdrop.app.voice.VoiceSettingsManager
+import earth.lastdrop.app.voice.SpeechCallback
 import com.example.lastdrop.ui.components.ScorecardBadge
 import com.example.lastdrop.ui.components.EmoteManager
 import com.example.lastdrop.ui.components.DialogueGenerator
@@ -74,18 +77,30 @@ import kotlinx.coroutines.SupervisorJob
 import android.util.Log
 import java.util.UUID
 import earth.lastdrop.app.BoardConnectionController
+import earth.lastdrop.app.DebugFileLogger
+import earth.lastdrop.app.PinEntryDialog
+import earth.lastdrop.app.ui.components.StatusLedBar
+import earth.lastdrop.app.ui.components.PlayerScoreboardView
+import earth.lastdrop.app.ui.components.DiceRollAnimationView
+import earth.lastdrop.app.ui.components.CloudieExpressionView
 
 class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private lateinit var profileManager: ProfileManager
-    private lateinit var cloudieAnimation: LottieAnimationView
+    private var cloudieAnimation: LottieAnimationView? = null  // Now optional (legacy)
+    private lateinit var cloudieExpression: CloudieExpressionView  // New simplified Cloudie
     private lateinit var dialogue: TextView
-    private lateinit var dropsRow: LinearLayout
+    private var dropsRow: LinearLayout? = null  // Now optional (legacy)
     private lateinit var voiceService: VoiceService
     private lateinit var virtualDiceView: VirtualDiceView
-    private lateinit var emoteManager: EmoteManager
+    private var emoteManager: EmoteManager? = null  // Now optional (legacy Lottie)
     private lateinit var dialogueGenerator: DialogueGenerator
     private lateinit var soundManager: SoundEffectManager
+    
+    // New UI components
+    private lateinit var statusLedBar: StatusLedBar
+    private lateinit var playerScoreboard: PlayerScoreboardView
+    private lateinit var diceRollAnimation: DiceRollAnimationView
     private lateinit var hapticManager: HapticFeedbackManager
     private lateinit var particleEffectView: ParticleEffectView
     private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
@@ -114,6 +129,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private lateinit var boardPreferencesManager: BoardPreferencesManager
     private lateinit var boardConnectionController: BoardConnectionController
     private var esp32Connected = false
+    private var esp32Paired = false
+    private var pendingPinDevice: BluetoothDevice? = null
+    private var pendingPin: String = ""
     private var diceConnectionController: DiceConnectionController? = null
     private var playWithTwoDice = false
     private var diceConnected = false
@@ -125,6 +143,12 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // Database
     private lateinit var savedGameDao: SavedGameDao
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    
+    // API Manager for web server connection
+    private lateinit var apiManager: ApiManager
+    private val API_BASE_URL = "https://lastdrop.earth/api"
+    private val API_KEY = BuildConfig.API_KEY
+    private val SESSION_ID = java.util.UUID.randomUUID().toString()
     
     // Toolbar icon references
     private lateinit var iconConnect: ImageView
@@ -158,12 +182,23 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_intro_ai)
+        setContentView(R.layout.activity_intro_ai_v2)  // Using new simplified layout
+
+        // Initialize file logger (overwrites on each fresh start)
+        DebugFileLogger.init(this)
+        DebugFileLogger.i("IntroAi", "=== IntroAiActivity onCreate (V2 UI) ===")
 
         profileManager = ProfileManager(this)
         val db = LastDropDatabase.getInstance(this)
         savedGameDao = db.savedGameDao()
         boardPreferencesManager = BoardPreferencesManager(this)
+        
+        // Initialize ApiManager for web server connection
+        apiManager = ApiManager(
+            apiBaseUrl = API_BASE_URL,
+            apiKey = API_KEY,
+            sessionId = SESSION_ID
+        )
         
         val voiceSettingsManager = VoiceSettingsManager(this)
         val voiceSettings = voiceSettingsManager.getSettings()
@@ -186,15 +221,46 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
             NoOpVoiceService(this)
         }
-        cloudieAnimation = findViewById(R.id.cloudieAnimation)
+        
+        // Set up speech callbacks for mouth animation sync
+        voiceService.setSpeechCallback(object : SpeechCallback {
+            override fun onSpeechStart(utteranceId: String) {
+                runOnUiThread {
+                    cloudieExpression.startTalking(voiceService.getSpeechRate())
+                }
+            }
+            
+            override fun onSpeechDone(utteranceId: String) {
+                runOnUiThread {
+                    cloudieExpression.stopTalking()
+                }
+            }
+            
+            override fun onSpeechError(utteranceId: String, error: String) {
+                runOnUiThread {
+                    cloudieExpression.stopTalking()
+                }
+                appendDebug("Speech error: $error")
+            }
+        })
+        
+        // Initialize NEW UI components
+        statusLedBar = findViewById(R.id.statusLedBar)
+        cloudieExpression = findViewById(R.id.cloudieExpression)
+        playerScoreboard = findViewById(R.id.playerScoreboard)
+        diceRollAnimation = findViewById(R.id.diceRollAnimation)
         dialogue = findViewById(R.id.cloudieDialogue)
+        
+        // Legacy views (may be null in v2 layout, kept for compatibility)
+        cloudieAnimation = findViewById(R.id.cloudieAnimation)
         dropsRow = findViewById(R.id.dropsRow)
+        
         virtualDiceView = findViewById(R.id.virtualDiceView)
         virtualDiceView.setValue(1) // Initialize with value 1
         virtualDiceView.visibility = View.GONE // Hidden by default (Bluetooth mode)
         
-        // Initialize EmoteManager for Lottie animations
-        emoteManager = EmoteManager(this)
+        // Initialize EmoteManager for legacy Lottie (only if cloudieAnimation exists)
+        emoteManager = cloudieAnimation?.let { EmoteManager(this) }
         
         // Initialize SoundEffectManager for game audio
         soundManager = SoundEffectManager(this)
@@ -240,18 +306,27 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 esp32Connected = true
                 runOnUiThread {
                     Toast.makeText(this, "Board connected", Toast.LENGTH_SHORT).show()
+                    statusLedBar.setBoardState(StatusLedBar.LedState.ONLINE)
                 }
             },
             onDisconnected = { _ ->
                 esp32Connected = false
+                DebugFileLogger.w("ESP32", "Board disconnected callback")
                 runOnUiThread {
                     Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
+                    statusLedBar.setBoardState(StatusLedBar.LedState.OFFLINE)
                 }
             },
-            onMessage = { message -> handleESP32Response(message) },
+            onMessage = { message -> 
+                DebugFileLogger.d("ESP32", "onMessage callback: $message")
+                handleESP32Response(message) 
+            },
             onServicesReady = {
+                DebugFileLogger.i("ESP32", "=== onServicesReady callback ===")
+                DebugFileLogger.d("ESP32", "  gameStarted=$gameStarted, selectedProfileIds=$selectedProfileIds")
                 runOnUiThread {
                     Toast.makeText(this, "ESP32 Connected!", Toast.LENGTH_SHORT).show()
+                    statusLedBar.setBoardState(StatusLedBar.LedState.ONLINE)
                 }
                 // Match Classic: only send pair on services ready, config follows pair_success
                 sendPairCommandToESP32()
@@ -287,6 +362,11 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         selectedProfileIds.addAll(selectedProfiles)
         assignedColors.clear()
         assignedColors.addAll(colors)
+        
+        DebugFileLogger.i("IntroAi", "Received ${selectedProfiles.size} profiles")
+        DebugFileLogger.d("IntroAi", "selectedProfiles=$selectedProfiles")
+        DebugFileLogger.d("IntroAi", "colors from intent=$colors")
+        DebugFileLogger.d("IntroAi", "assignedColors after init=$assignedColors")
 
         setInitialStates()
         boardScanManager?.stopScan()
@@ -300,6 +380,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         boardScanManager?.stopScan()
         boardConnectionController.disconnect()
         soundManager.release()
+        apiManager.cleanup()  // Cleanup API manager
         super.onDestroy()
     }
     
@@ -310,6 +391,49 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         startActivity(intent)
         finish()
+    }
+    
+    /**
+     * Handle activity results (QR code scan for web server connection)
+     */
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        val handled = LiveServerUiHelper.handleQrActivityResult(
+            activity = this,
+            requestCode = requestCode,
+            resultCode = resultCode,
+            data = data,
+            onSessionId = { sessionId -> connectToLiveServer(sessionId) },
+            onBoardQr = { qrData ->
+                appendDebug("📷 QR Scanned: ${qrData.boardId}")
+                boardPreferencesManager.saveBoard(
+                    boardId = qrData.boardId,
+                    macAddress = qrData.macAddress,
+                    nickname = qrData.nickname,
+                    password = qrData.password
+                )
+                Toast.makeText(this, "Board saved: ${qrData.nickname ?: qrData.boardId}", Toast.LENGTH_SHORT).show()
+                connectESP32Board()
+            },
+            onInvalid = {
+                Toast.makeText(this, "Invalid QR code format", Toast.LENGTH_LONG).show()
+                appendDebug("❌ Invalid QR code")
+                // Notify wizard of failure
+                pendingServerCallback?.invoke(false)
+                pendingServerCallback = null
+            },
+            onCancel = { 
+                appendDebug("📷 QR scan cancelled")
+                // Notify wizard of cancellation (treat as skip)
+                pendingServerCallback?.invoke(false)
+                pendingServerCallback = null
+            }
+        )
+
+        if (!handled) {
+            @Suppress("DEPRECATION")
+            super.onActivityResult(requestCode, resultCode, data)
+        }
     }
     
     private fun handleClassicModeResult(data: Intent) {
@@ -396,51 +520,70 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun speakLine(line: String) {
+        DebugFileLogger.i("VOICE", "🔊 Speaking: $line")
         dialogue.text = line
+        
+        // Voice service now handles speech callbacks for mouth animation sync
+        // onSpeechStart -> startTalking(), onSpeechDone -> stopTalking()
         voiceService.speak(line)
     }
 
     private fun appendDebug(message: String) {
-        // Minimal inline logger for this screen to avoid coupling to MainActivity logs
+        // Log to both Logcat and file
         android.util.Log.d("IntroAi", message)
+        DebugFileLogger.d("IntroAi", message)
     }
 
     private fun setInitialStates() {
-        cloudieAnimation.translationY = -80f
-        cloudieAnimation.scaleX = 0.8f
-        cloudieAnimation.scaleY = 0.8f
-        cloudieAnimation.alpha = 0f
+        // New CloudieExpression starts at idle
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.IDLE, animate = false)
+        
+        // Hide dice animation initially
+        diceRollAnimation.hide()
+        
+        // Legacy views (only animate if they exist)
+        cloudieAnimation?.apply {
+            translationY = -80f
+            scaleX = 0.8f
+            scaleY = 0.8f
+            alpha = 0f
+        }
 
-        dropsRow.children.forEach { child ->
+        dropsRow?.children?.forEach { child ->
             child.translationY = -40f
             child.alpha = 0f
         }
     }
 
     private fun playEntranceAnimations() {
-        // Start Cloudie idle animation
-        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_IDLE)
+        // New: Cloudie expression starts at IDLE (animated by view itself)
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.EXCITED)
         
-        // Cloudie flies in and grows
-        cloudieAnimation.animate()
-            .translationY(0f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setDuration(650)
-            .setInterpolator(OvershootInterpolator(1.2f))
-            .start()
+        // Legacy Lottie animation (if present)
+        cloudieAnimation?.let { anim ->
+            emoteManager?.playCloudieEmote(anim, EmoteManager.CLOUDIE_IDLE)
+            anim.animate()
+                .translationY(0f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .alpha(1f)
+                .setDuration(650)
+                .setInterpolator(OvershootInterpolator(1.2f))
+                .start()
+        }
 
-        // Staggered drop bounces
-        dropsRow.post {
-            dropsRow.children.forEachIndexed { index, child ->
-                child.animate()
-                    .translationY(0f)
-                    .alpha(1f)
-                    .setStartDelay((150L * index))
-                    .setDuration(450)
-                    .setInterpolator(AccelerateDecelerateInterpolator())
-                    .start()
+        // Legacy staggered drop bounces (if present)
+        dropsRow?.let { row ->
+            row.post {
+                row.children.forEachIndexed { index, child ->
+                    child.animate()
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setStartDelay((150L * index))
+                        .setDuration(450)
+                        .setInterpolator(AccelerateDecelerateInterpolator())
+                        .start()
+                }
             }
         }
     }
@@ -449,24 +592,97 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         lifecycleScope.launch(Dispatchers.IO) {
             val profiles = ids.mapNotNull { profileManager.getProfile(it) }
             withContext(Dispatchers.Main) {
-                dropsRow.removeAllViews()
+                // Update NEW PlayerScoreboardView
+                val playerData = profiles.mapIndexed { index, profile ->
+                    val colorHex = colors.getOrNull(index).orEmpty().ifBlank { profile.avatarColor }
+                    Triple(
+                        profile.nickname.ifBlank { profile.name },
+                        10,  // Players start with 10 drops per game rules
+                        colorHex
+                    )
+                }
+                playerScoreboard.setPlayers(playerData)
+                
+                // Set first player as active
+                if (profiles.isNotEmpty()) {
+                    playerScoreboard.setActivePlayer(0)
+                }
+                
+                // Legacy dropsRow (if present)
+                dropsRow?.removeAllViews()
                 profiles.forEachIndexed { index, profile ->
                     val colorHex = colors.getOrNull(index).orEmpty().ifBlank { profile.avatarColor }
-                    dropsRow.addView(createDrop(profile, colorHex))
+                    dropsRow?.addView(createDrop(profile, colorHex))
                 }
                 // Reset initial states now that drops are inflated
-                dropsRow.children.forEach { child ->
+                dropsRow?.children?.forEach { child ->
                     child.translationY = -40f
                     child.alpha = 0f
                 }
                 
-                // Initialize game with these profiles
+                // Show setup wizard before initializing game
                 if (profiles.isNotEmpty()) {
-                    initializeGame(profiles)
+                    showSetupWizard(profiles)
                 }
             }
         }
     }
+    
+    /**
+     * Show the setup wizard to guide user through Board/Dice/Server connection
+     */
+    private fun showSetupWizard(profiles: List<PlayerProfile>) {
+        val playerNames = profiles.map { it.nickname.ifBlank { it.name } }
+        
+        SetupWizardDialog(
+            context = this,
+            playerNames = playerNames,
+            onSpeak = { text -> speakLine(text) },
+            onConnectBoard = { onResult ->
+                // Connect board with callback
+                connectESP32BoardWithCallback { success ->
+                    runOnUiThread { onResult(success) }
+                }
+            },
+            onConnectDice = { diceCount, onResult ->
+                // Set two-dice mode based on user selection
+                playWithTwoDice = (diceCount == 2)
+                android.util.Log.d("IntroAiActivity", "🎲 User selected $diceCount dice mode, playWithTwoDice=$playWithTwoDice")
+                
+                // Connect dice with callback
+                connectDiceWithCallback { success ->
+                    runOnUiThread { onResult(success) }
+                }
+            },
+            onConnectServer = { onResult ->
+                // Open QR scanner - result comes back via onActivityResult
+                pendingServerCallback = onResult
+                showServerConnectionInfo()
+            },
+            onComplete = { boardConnected, diceConnected, serverConnected, diceCount ->
+                // Set virtual dice mode if no Bluetooth dice connected
+                if (!diceConnected) {
+                    useBluetoothDice = false
+                    virtualDiceView.visibility = View.VISIBLE
+                    iconDiceMode.setImageResource(R.drawable.ic_dice_virtual)
+                } else {
+                    useBluetoothDice = true
+                    playWithTwoDice = (diceCount == 2)
+                    android.util.Log.d("IntroAiActivity", "🎲 Game starting with Bluetooth dice, diceCount=$diceCount, playWithTwoDice=$playWithTwoDice")
+                }
+                
+                // Initialize and start the game
+                initializeGame(profiles)
+            },
+            onQuit = {
+                // User chose to quit
+                finish()
+            }
+        ).show()
+    }
+    
+    // Callback holder for server connection result
+    private var pendingServerCallback: ((Boolean) -> Unit)? = null
 
     private fun createDrop(profile: PlayerProfile, colorHex: String): LinearLayout {
         val dropView = LayoutInflater.from(this).inflate(R.layout.view_player_drop, dropsRow, false) as LinearLayout
@@ -652,17 +868,66 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             showEndGameDialog()
         }
 
-        // Debug button - navigate to MainActivity (hidden by default)
+        // Debug button - tap to show debug log, long-press to share
         iconDebug.setOnClickListener {
             soundManager.playSound(SoundEffect.BUTTON_CLICK)
-            try {
-                val mainActivityClass = Class.forName("earth.lastdrop.app.MainActivity")
-                val intent = Intent(this, mainActivityClass)
-                startActivity(intent)
-            } catch (e: Exception) {
-                soundManager.playSound(SoundEffect.ERROR)
-                Toast.makeText(this, "MainActivity not found", Toast.LENGTH_SHORT).show()
+            showDebugLogDialog()
+        }
+        iconDebug.setOnLongClickListener {
+            soundManager.playSound(SoundEffect.BUTTON_CLICK)
+            shareDebugLog()
+            true
+        }
+    }
+    
+    private fun showDebugLogDialog() {
+        val logContent = DebugFileLogger.getLogContent()
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle("Debug Log")
+            .setMessage(if (logContent.isNotEmpty()) logContent else "(no logs)")
+            .setPositiveButton("Share") { _, _ -> shareDebugLog() }
+            .setNeutralButton("Clear") { _, _ -> 
+                DebugFileLogger.init(this) // Clears log
+                Toast.makeText(this, "Log cleared", Toast.LENGTH_SHORT).show()
             }
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.show()
+        
+        // Make text scrollable
+        dialog.findViewById<android.widget.TextView>(android.R.id.message)?.apply {
+            textSize = 10f
+            setTypeface(android.graphics.Typeface.MONOSPACE)
+        }
+    }
+    
+    private fun shareDebugLog() {
+        val logFile = DebugFileLogger.getLogFile()
+        if (logFile == null || !logFile.exists()) {
+            Toast.makeText(this, "No log file available", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                logFile
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "LastDrop Debug Log")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share Debug Log"))
+        } catch (e: Exception) {
+            DebugFileLogger.e("IntroAi", "Failed to share log", e)
+            // Fallback: copy to clipboard
+            val logContent = DebugFileLogger.getLogContent()
+            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("debug_log", logContent))
+            Toast.makeText(this, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -756,6 +1021,8 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                         val status = if (playWithTwoDice) "2 dice connected ✅" else "1 die connected ✅"
                         Toast.makeText(this, status, Toast.LENGTH_LONG).show()
                         soundManager.playSound(SoundEffect.CHANCE_CARD)
+                        statusLedBar.setDiceState(StatusLedBar.LedState.ONLINE)
+                        statusLedBar.setTwoDiceMode(playWithTwoDice)
                         
                         // Switch to Bluetooth dice mode
                         if (!useBluetoothDice) {
@@ -766,6 +1033,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 onDiceDisconnected = {
                     runOnUiThread {
                         diceConnected = false
+                        statusLedBar.setDiceState(StatusLedBar.LedState.OFFLINE)
                         // Only show message if not syncing state from MainActivity
                         if (!isSyncingState) {
                             Toast.makeText(this, "Dice disconnected", Toast.LENGTH_SHORT).show()
@@ -783,6 +1051,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         diceResults.clear()
         diceColorMap.clear()
         diceConnected = false
+        statusLedBar.setDiceState(StatusLedBar.LedState.OFFLINE)
         
         Toast.makeText(this, "Dice disconnected", Toast.LENGTH_SHORT).show()
         
@@ -846,14 +1115,17 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun connectESP32Board() {
+        DebugFileLogger.i("ESP32", "=== connectESP32Board called ===")
         // Ensure BLE permissions before attempting connection
         if (!ensureBlePermissions()) {
+            DebugFileLogger.w("ESP32", "BLE permissions denied")
             Toast.makeText(this, "Bluetooth permissions required to connect to board", Toast.LENGTH_LONG).show()
             return
         }
         
         // Already connected → offer disconnect
         if (esp32Connected) {
+            DebugFileLogger.d("ESP32", "Already connected, disconnecting...")
             boardConnectionController.disconnect()
             esp32Connected = false
             Toast.makeText(this, "Board disconnected", Toast.LENGTH_SHORT).show()
@@ -861,6 +1133,13 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         }
 
         Toast.makeText(this, "Scanning for LASTDROP-* boards...", Toast.LENGTH_SHORT).show()
+        DebugFileLogger.d("ESP32", "Starting board scan...")
+        
+        // Check if scanner can start (debounce check)
+        if (boardScanManager?.isScanning() == true) {
+            Toast.makeText(this, "Scan already in progress", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val liveScanDialog = BoardSelectionDialog.showLiveScanDialog(
             context = this,
@@ -868,11 +1147,12 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             onBoardSelected = { device ->
                 appendDebug("Selected board: ${device.name}")
                 boardScanManager?.stopScan()
-                connectToDevice(device)
+                showPinEntryDialog(device)  // Show PIN dialog like Classic page
             },
             onCancel = {
                 appendDebug("Board scan cancelled")
                 boardScanManager?.stopScan()
+                boardScanManager?.resetDebounce()  // Allow immediate rescan after cancel
             }
         )
 
@@ -897,7 +1177,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 onBoardSelected = { device ->
                     appendDebug("Selected board: ${device.name}")
                     boardScanManager?.stopScan()
-                    connectToDevice(device)
+                    showPinEntryDialog(device)  // Show PIN dialog like Classic page
                 },
                 onRescan = {
                     appendDebug("Rescanning boards...")
@@ -909,12 +1189,209 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             )
         }
     }
+    
+    /**
+     * Connect to ESP32 board with callback for setup wizard
+     */
+    private var pendingBoardCallback: ((Boolean) -> Unit)? = null
+    
+    private fun connectESP32BoardWithCallback(onResult: (Boolean) -> Unit) {
+        pendingBoardCallback = onResult
+        
+        if (!ensureBlePermissions()) {
+            onResult(false)
+            pendingBoardCallback = null
+            return
+        }
+        
+        if (esp32Connected) {
+            onResult(true)  // Already connected
+            pendingBoardCallback = null
+            return
+        }
+        
+        // Start scanning with timeout
+        boardScanManager?.setDiscoveryCallback(
+            onDiscovered = { device -> 
+                runOnUiThread { 
+                    // Auto-connect to first found board for simplicity
+                    boardScanManager?.stopScan()
+                    connectToDeviceWithCallback(device)
+                } 
+            },
+            onComplete = { 
+                runOnUiThread {
+                    if (!esp32Connected && pendingBoardCallback != null) {
+                        pendingBoardCallback?.invoke(false)
+                        pendingBoardCallback = null
+                    }
+                }
+            }
+        )
+        
+        boardScanManager?.startScan()
+    }
+    
+    private fun connectToDeviceWithCallback(device: BluetoothDevice) {
+        // Track connection state changes
+        var connectionSucceeded = false
+        var connectionFailed = false
+        
+        lifecycleScope.launch {
+            try {
+                android.util.Log.d("IntroAiActivity", "🔌 Attempting to connect to ${device.name}")
+                boardConnectionController.connect(device)
+                
+                // Wait up to 8 seconds for connection, checking state every 500ms
+                var waited = 0
+                while (waited < 8000 && !connectionSucceeded && !connectionFailed) {
+                    delay(500)
+                    waited += 500
+                    
+                    // Check if connected
+                    if (esp32Connected) {
+                        connectionSucceeded = true
+                        android.util.Log.d("IntroAiActivity", "✅ Board connection confirmed after ${waited}ms")
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    if (connectionSucceeded) {
+                        android.util.Log.d("IntroAiActivity", "✅ Board connected, invoking callback with true")
+                        pendingBoardCallback?.invoke(true)
+                    } else {
+                        android.util.Log.d("IntroAiActivity", "❌ Board connection timed out after ${waited}ms")
+                        pendingBoardCallback?.invoke(false)
+                    }
+                    pendingBoardCallback = null
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("IntroAiActivity", "❌ Board connection error: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    pendingBoardCallback?.invoke(false)
+                    pendingBoardCallback = null
+                }
+            }
+        }
+    }
+    
+    /**
+     * Connect to dice with callback for setup wizard
+     */
+    private var pendingDiceCallback: ((Boolean) -> Unit)? = null
+    
+    private fun connectDiceWithCallback(onResult: (Boolean) -> Unit) {
+        pendingDiceCallback = onResult
+        
+        if (!ensureBlePermissions()) {
+            onResult(false)
+            pendingDiceCallback = null
+            return
+        }
+        
+        if (diceConnected) {
+            onResult(true)  // Already connected
+            pendingDiceCallback = null
+            return
+        }
+        
+        // Always create fresh controller for wizard to ensure our callback is used
+        diceConnectionController?.stopScan()
+        diceConnectionController = DiceConnectionController(
+            context = this,
+            bluetoothAdapter = bluetoothAdapter,
+            playWithTwoDice = { playWithTwoDice },
+            onStatus = { status ->
+                runOnUiThread {
+                    appendDebug("Dice: $status")
+                }
+            },
+            onLog = { message -> appendDebug("GoDice: $message") },
+            onDiceConnected = { diceId, _ ->
+                // diceId is the ID of the connected dice (0, 1, etc), not a count!
+                // Any dice connection means success
+                diceConnected = true
+                runOnUiThread {
+                    appendDebug("Dice connected! diceId=$diceId, invoking callback")
+                    statusLedBar.setDiceState(StatusLedBar.LedState.ONLINE)
+                    statusLedBar.setTwoDiceMode(playWithTwoDice)
+                    // IMPORTANT: Call the pending callback to advance wizard
+                    val callback = pendingDiceCallback
+                    pendingDiceCallback = null
+                    callback?.invoke(true)
+                }
+            },
+            onDiceDisconnected = {
+                diceConnected = false
+                runOnUiThread {
+                    statusLedBar.setDiceState(StatusLedBar.LedState.OFFLINE)
+                }
+            }
+        )
+        
+        // Start scanning for dice with timeout
+        diceConnectionController?.startScan()
+        
+        // Timeout after 10 seconds
+        lifecycleScope.launch {
+            delay(10000)
+            if (!diceConnected && pendingDiceCallback != null) {
+                diceConnectionController?.stopScan()
+                val callback = pendingDiceCallback
+                pendingDiceCallback = null
+                callback?.invoke(false)
+            }
+        }
+    }
 
     private fun handleBoardSelected(device: BluetoothDevice) {
-        connectToDevice(device)
+        showPinEntryDialog(device)
+    }
+    
+    /**
+     * Show PIN entry dialog for board authentication (matches Classic page flow)
+     */
+    private fun showPinEntryDialog(device: BluetoothDevice) {
+        val boardId = device.name ?: "Unknown"
+        DebugFileLogger.d("ESP32", "showPinEntryDialog for $boardId")
+        
+        if (esp32Connected) {
+            DebugFileLogger.w("ESP32", "Already connected, ignoring PIN dialog request")
+            return
+        }
+        
+        pendingPinDevice = device
+        
+        runOnUiThread {
+            PinEntryDialog.show(
+                context = this,
+                device = device,
+                boardId = boardId,
+                preferencesManager = boardPreferencesManager,
+                onPinEntered = { pin, rememberPin ->
+                    DebugFileLogger.d("ESP32", "PIN entered: $pin, remember=$rememberPin")
+                    
+                    // Save PIN if requested
+                    if (rememberPin) {
+                        boardPreferencesManager.saveBoardPin(boardId, pin)
+                        DebugFileLogger.d("ESP32", "PIN saved for $boardId")
+                    }
+                    
+                    // Store PIN and connect
+                    pendingPin = pin
+                    connectToDevice(device)
+                },
+                onCancel = {
+                    DebugFileLogger.d("ESP32", "PIN entry cancelled")
+                    pendingPinDevice = null
+                    pendingPin = ""
+                }
+            )
+        }
     }
 
     private fun connectToDevice(device: BluetoothDevice) {
+        DebugFileLogger.i("ESP32", "=== connectToDevice: ${device.name} ===")
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Connecting to Board")
             .setMessage("Connecting to ${device.name}...")
@@ -930,12 +1407,15 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             
             // Attempt connection using BoardConnectionController (same as Classic)
             try {
+                DebugFileLogger.d("ESP32", "Calling boardConnectionController.connect()")
                 boardConnectionController.connect(device)
                 delay(2000) // Give time for connection
+                DebugFileLogger.d("ESP32", "After connect delay, esp32Connected=$esp32Connected")
                 
                 withContext(Dispatchers.Main) {
                     dialog.dismiss()
                     if (!esp32Connected) {
+                        DebugFileLogger.w("ESP32", "Connection failed - esp32Connected still false")
                         androidx.appcompat.app.AlertDialog.Builder(this@IntroAiActivity)
                             .setTitle("Connection Failed")
                             .setMessage("Could not find ESP32 board.\n\n• Check board is powered on\n• Board should advertise as LASTDROP-*\n• Try again or use MainActivity for advanced scanning")
@@ -945,6 +1425,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     }
                 }
             } catch (e: Exception) {
+                DebugFileLogger.e("ESP32", "Connection exception", e)
                 withContext(Dispatchers.Main) {
                     dialog.dismiss()
                     Toast.makeText(this@IntroAiActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
@@ -954,27 +1435,63 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     private fun sendPairCommandToESP32() {
-        if (!esp32Connected) return
-        // Pair PIN mirrors Classic; fallback to default if not saved
+        DebugFileLogger.d("ESP32", "sendPairCommandToESP32 called, esp32Connected=$esp32Connected, pendingPin=$pendingPin")
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendPairCommandToESP32: NOT connected, skipping")
+            return
+        }
+        
+        // Use the PIN entered by user, fallback to saved PIN or default
+        val pin = if (pendingPin.isNotEmpty()) {
+            pendingPin
+        } else {
+            val boardId = boardConnectionController.connectedDevice?.name ?: ""
+            boardPreferencesManager.getSavedPin(boardId) ?: "654321"
+        }
+        DebugFileLogger.d("ESP32", "Using PIN: $pin")
+        
         val pairPayload = JSONObject().apply {
             put("command", "pair")
-            put("password", "654321")
+            put("password", pin)
         }
-        sendToESP32(pairPayload.toString())
+        val pairStr = pairPayload.toString()
+        DebugFileLogger.d("ESP32", "sendPairCommandToESP32: Sending → $pairStr")
+        sendToESP32(pairStr)
     }
 
     private fun sendConfigToESP32() {
-        if (!esp32Connected) return
+        DebugFileLogger.d("ESP32", "sendConfigToESP32 called, esp32Connected=$esp32Connected")
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendConfigToESP32: NOT connected, skipping")
+            return
+        }
 
         val playerCount = selectedProfileIds.size.coerceAtMost(4)
+        DebugFileLogger.d("ESP32", "sendConfigToESP32: selectedProfileIds=$selectedProfileIds (size=${selectedProfileIds.size})")
+        DebugFileLogger.d("ESP32", "sendConfigToESP32: assignedColors=$assignedColors")
+        DebugFileLogger.d("ESP32", "sendConfigToESP32: playerCount=$playerCount")
+        
         val colors = assignedColors.take(playerCount).map { color ->
-            when (color.lowercase()) {
-                "red" -> "FF0000"
-                "green" -> "00FF00"
-                "blue" -> "0000FF"
-                "yellow" -> "FFFF00"
-                else -> color.removePrefix("#").takeIf { it.length == 6 } ?: "FFFFFF"
+            // Colors from ProfileManager are already hex codes (FF0000, 00FF00, etc.)
+            // Just validate they're proper 6-char hex, or map color names as fallback
+            val hexColor = when (color.uppercase()) {
+                "RED" -> "FF0000"
+                "GREEN" -> "00FF00"
+                "BLUE" -> "0000FF"
+                "YELLOW" -> "FFFF00"
+                else -> {
+                    // Already a hex code - validate it
+                    val cleaned = color.removePrefix("#").uppercase()
+                    if (cleaned.length == 6 && cleaned.all { it.isDigit() || it in 'A'..'F' }) {
+                        cleaned
+                    } else {
+                        DebugFileLogger.w("ESP32", "Invalid color '$color', defaulting to FFFFFF")
+                        "FFFFFF"
+                    }
+                }
             }
+            DebugFileLogger.d("ESP32", "  Mapped color '$color' -> $hexColor")
+            hexColor
         }
 
         val config = JSONObject().apply {
@@ -983,56 +1500,163 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             put("colors", JSONArray(colors))
         }
 
-        sendToESP32(config.toString())
+        val configStr = config.toString()
+        DebugFileLogger.d("ESP32", "sendConfigToESP32: Sending → $configStr")
+        sendToESP32(configStr)
     }
 
     private fun sendResetToESP32() {
-        if (!esp32Connected) return
+        DebugFileLogger.d("ESP32", "sendResetToESP32 called, esp32Connected=$esp32Connected")
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendResetToESP32: NOT connected, skipping")
+            return
+        }
         val resetCmd = JSONObject().apply {
             put("command", "reset")
         }
-        sendToESP32(resetCmd.toString())
+        val resetStr = resetCmd.toString()
+        DebugFileLogger.d("ESP32", "sendResetToESP32: Sending → $resetStr")
+        sendToESP32(resetStr)
+    }
+    
+    /**
+     * Send roll command to ESP32 to move LED to the new tile
+     */
+    private fun sendRollToESP32(playerId: Int, diceValue: Int, currentTile: Int, expectedTile: Int, scoreChange: Int, newScore: Int) {
+        DebugFileLogger.d("ESP32", "sendRollToESP32 called: player=$playerId, dice=$diceValue, from=$currentTile, to=$expectedTile, scoreChange=$scoreChange, newScore=$newScore")
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendRollToESP32: NOT connected, skipping")
+            return
+        }
+        
+        val playerName = if (playerId < currentGameProfiles.size) {
+            currentGameProfiles[playerId].nickname
+        } else {
+            "Player ${playerId + 1}"
+        }
+        val color = if (playerId < assignedColors.size) assignedColors[playerId] else "FF0000"
+        
+        val rollCmd = JSONObject().apply {
+            put("command", "roll")
+            put("playerId", playerId)
+            put("playerName", playerName)
+            put("diceValue", diceValue)
+            put("currentTile", currentTile)
+            put("expectedTile", expectedTile)
+            put("color", color)
+            put("scoreChange", scoreChange)
+            put("newScore", newScore)
+        }
+        
+        val rollStr = rollCmd.toString()
+        DebugFileLogger.d("ESP32", "sendRollToESP32: Sending → $rollStr")
+        sendToESP32(rollStr)
+    }
+    
+    /**
+     * Send victory command to ESP32 for grand winner LED animation
+     */
+    private fun sendVictoryToESP32(winnerId: Int) {
+        DebugFileLogger.i("ESP32", "sendVictoryToESP32: winnerId=$winnerId")
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendVictoryToESP32: NOT connected, skipping")
+            return
+        }
+        
+        val winnerColor = if (winnerId < assignedColors.size) assignedColors[winnerId] else "FF0000"
+        val winnerName = if (winnerId < currentGameProfiles.size) currentGameProfiles[winnerId].nickname else "Player ${winnerId + 1}"
+        
+        val victoryCmd = JSONObject().apply {
+            put("command", "victory")
+            put("winnerId", winnerId)
+            put("winnerColor", winnerColor)
+            put("winnerName", winnerName)
+        }
+        
+        val victoryStr = victoryCmd.toString()
+        DebugFileLogger.d("ESP32", "sendVictoryToESP32: Sending → $victoryStr")
+        sendToESP32(victoryStr)
     }
 
     private fun sendToESP32(jsonString: String) {
-        if (!esp32Connected) return
+        if (!esp32Connected) {
+            DebugFileLogger.w("ESP32", "sendToESP32: NOT connected, cannot send: $jsonString")
+            return
+        }
+        DebugFileLogger.d("ESP32", "sendToESP32: → $jsonString")
         boardConnectionController.send(jsonString)
     }
 
     private fun handleESP32Response(jsonResponse: String) {
         // Parse ESP32 JSON responses (coin_placed, misplacement, etc.)
+        DebugFileLogger.d("ESP32", "handleESP32Response: RAW ← $jsonResponse")
         appendDebug("ESP32: $jsonResponse")
         
         try {
             val json = org.json.JSONObject(jsonResponse)
             val event = json.optString("event", "")
+            DebugFileLogger.d("ESP32", "handleESP32Response: event='$event'")
             
             when (event) {
                 "pair_success" -> {
                     // Match Classic: send config after successful pairing
-                    android.util.Log.d("IntroAiActivity", "Pair success - sending config")
+                    DebugFileLogger.i("ESP32", "★ pair_success received - sending config")
                     sendConfigToESP32()
                 }
                 "config_complete" -> {
                     // Match Classic: send reset after config to move LEDs to start tile
-                    android.util.Log.d("IntroAiActivity", "Config complete - sending reset (gameStarted=$gameStarted)")
+                    DebugFileLogger.i("ESP32", "★ config_complete received - gameStarted=$gameStarted")
                     if (gameStarted) {
+                        DebugFileLogger.d("ESP32", "  → scheduling reset in 200ms")
                         // Small delay to let ESP32 process config fully
                         lifecycleScope.launch {
                             delay(200)
                             sendResetToESP32()
                         }
+                    } else {
+                        DebugFileLogger.w("ESP32", "  → game NOT started, skipping reset")
                     }
                 }
                 "reset_complete" -> {
-                    android.util.Log.d("IntroAiActivity", "Reset complete - LEDs should be at start")
+                    DebugFileLogger.i("ESP32", "★ reset_complete received - LEDs should be at start")
                     runOnUiThread {
                         Toast.makeText(this, "Board ready - LEDs at start", Toast.LENGTH_SHORT).show()
                     }
                 }
+                "player_eliminated" -> {
+                    // ESP32 detected elimination via score tracking
+                    val playerId = json.optInt("playerId", -1)
+                    DebugFileLogger.i("ESP32", "★ player_eliminated received for player $playerId")
+                    if (playerId >= 0 && playerId < currentGameProfiles.size) {
+                        runOnUiThread {
+                            Toast.makeText(this, "${currentGameProfiles[playerId].nickname} eliminated!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                "winner_declared" -> {
+                    // ESP32 detected winner (only 1 player left)
+                    val winnerId = json.optInt("winnerId", -1)
+                    DebugFileLogger.i("ESP32", "★ winner_declared received for player $winnerId")
+                    if (winnerId >= 0 && winnerId < currentGameProfiles.size) {
+                        runOnUiThread {
+                            val winnerName = currentGameProfiles[winnerId].nickname
+                            val winnerScore = playerScores[winnerId]
+                            showVictoryDialog(winnerName, winnerScore)
+                        }
+                    }
+                }
+                "victory_complete" -> {
+                    // ESP32 finished playing victory animation
+                    val winnerId = json.optInt("winnerId", -1)
+                    val winnerName = json.optString("winnerName", "Player")
+                    DebugFileLogger.i("ESP32", "★ victory_complete received for $winnerName (id=$winnerId)")
+                }
+                else -> {
+                    DebugFileLogger.d("ESP32", "handleESP32Response: unhandled event '$event'")
+                }
             }
         } catch (e: Exception) {
-            android.util.Log.e("IntroAiActivity", "Error parsing ESP32 response", e)
+            DebugFileLogger.e("ESP32", "Error parsing ESP32 response: ${e.message}", e)
         }
     }
     
@@ -1044,6 +1668,134 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 requestCode = 1002 // Camera permission request code
             )
         }
+    }
+    
+    /**
+     * Connect to live server with scanned session ID
+     */
+    private fun connectToLiveServer(sessionId: String) {
+        statusLedBar.setWebState(StatusLedBar.LedState.CONNECTING)
+        
+        mainScope.launch {
+            try {
+                // Update ApiManager with scanned session ID
+                apiManager.setSessionId(sessionId)
+                
+                // Send immediate heartbeat to create session entry
+                apiManager.sendImmediateHeartbeat()
+                
+                // Start periodic heartbeat with scanned session ID
+                apiManager.startHeartbeat()
+                
+                // Push current game state to server with session ID
+                pushResetStateToServer()
+                
+                delay(1000) // Small delay for user feedback
+                
+                withContext(Dispatchers.Main) {
+                    statusLedBar.setWebState(StatusLedBar.LedState.ONLINE)
+                    Toast.makeText(
+                        this@IntroAiActivity,
+                        "Connected to session: ${sessionId.take(8)}...",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    runCatching { voiceService?.speak("Connected to live server") }
+                    
+                    // Send another heartbeat after successful connection
+                    apiManager.sendImmediateHeartbeat()
+                    
+                    // Notify setup wizard of success
+                    pendingServerCallback?.invoke(true)
+                    pendingServerCallback = null
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    statusLedBar.setWebState(StatusLedBar.LedState.OFFLINE)
+                    Toast.makeText(
+                        this@IntroAiActivity,
+                        "Connection failed: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    runCatching { voiceService?.speak("Live server disconnected") }
+                    
+                    // Notify setup wizard of failure
+                    pendingServerCallback?.invoke(false)
+                    pendingServerCallback = null
+                }
+            }
+        }
+    }
+    
+    /**
+     * Push current game state to the server (for initial sync after connecting)
+     */
+    private fun pushResetStateToServer() {
+        if (currentGameProfiles.isEmpty()) {
+            appendDebug("Cannot push to server - no players configured")
+            return
+        }
+        
+        val playerNames = currentGameProfiles.map { it.nickname }
+        val playerColors = currentGameProfiles.mapIndexed { index, profile ->
+            assignedColors.getOrElse(index) { "FF0000" }
+        }
+        
+        apiManager.pushResetState(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerCount = currentGameProfiles.size
+        )
+        
+        appendDebug("Pushed initial game state to server")
+    }
+    
+    /**
+     * Push live game state to server (after each turn)
+     */
+    private fun pushLiveStateToServer(
+        diceValue: Int,
+        turnResult: TurnResult
+    ) {
+        if (currentGameProfiles.isEmpty()) return
+        
+        val playerNames = currentGameProfiles.map { it.nickname }
+        val playerColors = currentGameProfiles.mapIndexed { index, _ ->
+            assignedColors.getOrElse(index) { "FF0000" }
+        }
+        
+        // Build position and score maps
+        val positionsMap = playerNames.mapIndexed { index, name ->
+            name to playerPositions.getOrElse(index) { 1 }
+        }.toMap()
+        
+        val scoresMap = playerNames.mapIndexed { index, name ->
+            name to playerScores.getOrElse(index) { 10 }
+        }.toMap()
+        
+        // Only show 2 dice when using Bluetooth dice AND 2-dice mode is enabled
+        // Virtual dice = always single die
+        // Bluetooth + 1-dice mode = single die
+        // Bluetooth + 2-dice mode = 2 dice
+        val showTwoDice = useBluetoothDice && playWithTwoDice
+        
+        apiManager.pushLiveState(
+            playerNames = playerNames,
+            playerColors = playerColors,
+            playerPositions = positionsMap,
+            playerScores = scoresMap,
+            playerCount = currentGameProfiles.size,
+            currentPlayer = (currentPlayerIndex + 1) % currentGameProfiles.size, // Next player
+            playWithTwoDice = showTwoDice,  // Only true when Bluetooth + 2-dice mode
+            diceColorMap = diceColorMap,
+            lastDice1 = diceValue,
+            lastDice2 = if (showTwoDice) diceValue else null,  // null for virtual/single dice
+            lastAvg = diceValue,
+            lastTileName = turnResult.tile?.name,
+            lastTileType = turnResult.tile?.type?.name,
+            lastChanceCardNumber = turnResult.chanceCard?.number,
+            lastChanceCardText = turnResult.chanceCard?.description,
+            rolling = false
+        )
     }
 
     private fun toggleDiceMode() {
@@ -1096,6 +1848,11 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     // ==================== GAME LOGIC ====================
 
     private fun initializeGame(profiles: List<PlayerProfile>) {
+        DebugFileLogger.i("GAME", "╔══════════════════════════════════════════════════════╗")
+        DebugFileLogger.i("GAME", "║         🎮 INITIALIZING NEW GAME                     ║")
+        DebugFileLogger.i("GAME", "╚══════════════════════════════════════════════════════╝")
+        DebugFileLogger.i("GAME", "  Player count: ${profiles.size}")
+        
         currentGameProfiles.clear()
         currentGameProfiles.addAll(profiles)
         
@@ -1105,27 +1862,31 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         for (i in currentGameProfiles.indices) {
             playerPositions[i] = 1
-            playerScores[i] = 0
+            playerScores[i] = 10  // Players start with 10 drops per game rules
             playerAlive[i] = true
+            val color = if (i < assignedColors.size) assignedColors[i] else "unknown"
+            DebugFileLogger.i("GAME", "  Player $i: ${profiles[i].nickname} (color=$color, starting with 10 drops)")
         }
 
         // Align board LEDs to start tile, matching Classic reset behavior
+        DebugFileLogger.i("GAME", "  Sending reset to ESP32...")
         sendResetToESP32()
         
-        // Setup scorecard badges with player colors
-        for (i in profiles.indices) {
-            scorecardBadges[i]?.apply {
-                visibility = View.VISIBLE
-                setScore(0)
-                val colorString = profiles[i].avatarColor.let { 
-                    if (it.startsWith("#")) it else "#$it" 
-                }
-                setBorderColor(Color.parseColor(colorString))
-            }
-        }
+        // Setup scorecard badges with player colors (starting with 10 drops)
+        // NOTE: Legacy scorecards disabled - using PlayerScoreboardView instead
+        // for (i in profiles.indices) {
+        //     scorecardBadges[i]?.apply {
+        //         visibility = View.VISIBLE
+        //         setScore(10)  // Start with 10 drops
+        //         val colorString = profiles[i].avatarColor.let { 
+        //             if (it.startsWith("#")) it else "#$it" 
+        //         }
+        //         setBorderColor(Color.parseColor(colorString))
+        //     }
+        // }
         
-        // Hide unused badges
-        for (i in profiles.size until 4) {
+        // Hide all legacy scorecard badges (using PlayerScoreboardView now)
+        for (i in 0 until 4) {
             scorecardBadges[i]?.visibility = View.GONE
         }
         
@@ -1145,12 +1906,17 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         )
         speakLine(startDialogue)
         
-        // Play excited animation for game start
-        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_EXCITED)
+        // Play excited animation for game start (NEW Cloudie expression)
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.EXCITED)
+        cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_EXCITED) }
     }
 
     private fun handleNewRoll(diceValue: Int) {
+        DebugFileLogger.i("GAME", "════════════════════════════════════════")
+        DebugFileLogger.i("GAME", "🎲 NEW ROLL: diceValue=$diceValue")
+        
         if (!gameStarted || currentGameProfiles.isEmpty()) {
+            DebugFileLogger.w("GAME", "  ❌ Game not started or no profiles")
             soundManager.playSound(SoundEffect.ERROR)
             Toast.makeText(this, "Start game first!", Toast.LENGTH_SHORT).show()
             return
@@ -1160,55 +1926,150 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         soundManager.playSound(SoundEffect.DICE_ROLL)
         hapticManager.vibrateDiceRoll()
         
+        // Show dice roll animation with player color
         val safeIndex = currentPlayerIndex.coerceIn(0, currentGameProfiles.size - 1)
         val currentProfile = currentGameProfiles[safeIndex]
         val currentPos = playerPositions[safeIndex]
+        
+        // Get player color for dice animation
+        val playerColorHex = assignedColors.getOrNull(safeIndex) ?: currentProfile.avatarColor
+        val playerColor = try {
+            Color.parseColor(if (playerColorHex.startsWith("#")) playerColorHex else "#$playerColorHex")
+        } catch (e: Exception) {
+            Color.parseColor("#4FC3F7")
+        }
+        diceRollAnimation.setPlayerColor(playerColor)
+        diceRollAnimation.showRoll(diceValue)
+        
+        // Cloudie shows thinking expression during roll
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.THINKING)
+        
+        DebugFileLogger.i("GAME", "  👤 Player: ${currentProfile.nickname} (index=$safeIndex)")
+        DebugFileLogger.i("GAME", "  📍 Current position: tile $currentPos")
+        DebugFileLogger.i("GAME", "  💧 Current score: ${playerScores[safeIndex]}")
 
         // Process turn through GameEngine
         val turnResult = gameEngine.processTurn(currentPos, diceValue)
         
+        DebugFileLogger.i("GAME", "  📊 Turn Result:")
+        DebugFileLogger.i("GAME", "     → New position: tile ${turnResult.newPosition}")
+        DebugFileLogger.i("GAME", "     → Score change: ${if (turnResult.scoreChange >= 0) "+" else ""}${turnResult.scoreChange}")
+        DebugFileLogger.i("GAME", "     → Tile: ${turnResult.tile?.name ?: "unknown"}")
+        turnResult.chanceCard?.let { card ->
+            DebugFileLogger.i("GAME", "     → Chance Card: ${card.description} (effect: ${card.effect})")
+        }
+        
+        // Check for lap completion bonus (+5 drops when passing start tile)
+        val lapBonus = if (turnResult.newPosition < currentPos && turnResult.newPosition <= 3) {
+            // Player wrapped around past start (tile 1) - completed a lap!
+            DebugFileLogger.i("GAME", "  🏁 LAP COMPLETED! +5 bonus drops")
+            5
+        } else 0
+        
+        // Calculate new score (tile effect + lap bonus)
+        val newScore = playerScores[safeIndex] + turnResult.scoreChange + lapBonus
+        DebugFileLogger.i("GAME", "  💧 New score: $newScore (was ${playerScores[safeIndex]}, tile change: ${turnResult.scoreChange}, lap bonus: $lapBonus)")
+        
+        // Send roll command to ESP32 to move LED (includes score for elimination detection)
+        DebugFileLogger.i("GAME", "  📡 Sending roll to ESP32...")
+        sendRollToESP32(
+            playerId = safeIndex,
+            diceValue = diceValue,
+            currentTile = currentPos,
+            expectedTile = turnResult.newPosition,
+            scoreChange = turnResult.scoreChange,
+            newScore = newScore
+        )
+        
         // Update player state
         playerPositions[safeIndex] = turnResult.newPosition
-        playerScores[safeIndex] += turnResult.scoreChange
+        playerScores[safeIndex] = newScore
         
         // Check for elimination (score <= 0)
         if (playerScores[safeIndex] <= 0) {
             playerAlive[safeIndex] = false
             
+            DebugFileLogger.i("GAME", "  ☠️ ELIMINATION: ${currentProfile.nickname} eliminated!")
+            
             soundManager.playSound(SoundEffect.PLAYER_ELIMINATED)
             hapticManager.vibrateElimination()
             
-            val remainingCount = playerAlive.count { it }
+            val remainingPlayers = playerAlive.withIndex().filter { it.value }
+            val remainingCount = remainingPlayers.size
+            DebugFileLogger.i("GAME", "     → Remaining players: $remainingCount")
+            
+            // Funny elimination message
             val eliminationDialogue = dialogueGenerator.generateElimination(
                 currentProfile.nickname,
                 remainingCount
             )
             speakLine(eliminationDialogue)
-            emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_SAD)
+            cloudieExpression.setExpression(CloudieExpressionView.Expression.SAD)
+            cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_SAD) }
+            
+            // Update scoreboard to show elimination
+            playerScoreboard.eliminatePlayer(safeIndex)
+            
+            // Check if there's a winner (only 1 player left alive)
+            if (remainingCount == 1) {
+                // We have a winner!
+                val winnerIndex = remainingPlayers.first().index
+                val winnerProfile = currentGameProfiles[winnerIndex]
+                
+                DebugFileLogger.i("GAME", "  🏆 WINNER: ${winnerProfile.nickname} (index=$winnerIndex)")
+                DebugFileLogger.i("GAME", "     → Final score: ${playerScores[winnerIndex]}")
+                
+                // Small delay for elimination animation to complete, then announce winner
+                lifecycleScope.launch {
+                    delay(2000) // Let ESP32 elimination animation finish
+                    
+                    // Send victory command to ESP32 for grand winner animation
+                    sendVictoryToESP32(winnerIndex)
+                    
+                    // Play victory celebration
+                    soundManager.playSound(SoundEffect.GAME_WIN)
+                    hapticManager.vibrateGameWin()
+                    particleEffectView.burstConfetti()
+                    cloudieExpression.setExpression(CloudieExpressionView.Expression.EXCITED)
+                    cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_EXCITED) }
+                    
+                    // Grand victory announcement
+                    val victoryDialogue = "Incredible! ${winnerProfile.nickname} is the last one standing! " +
+                        "With ${playerScores[winnerIndex]} drops remaining, they are the champion! " +
+                        "All hail the mighty water warrior! Bow before the hydration hero!"
+                    speakLine(victoryDialogue)
+                    
+                    delay(5000) // Let victory animation play
+                    
+                    // Show winner dialog
+                    runOnUiThread {
+                        showVictoryDialog(winnerProfile.nickname, playerScores[winnerIndex])
+                    }
+                }
+                return // Don't continue with normal turn flow
+            }
             
         } else {
             // Play tile landing sound and haptic
             soundManager.playSound(SoundEffect.TILE_LAND)
             hapticManager.vibrateTileLand()
             
-            // Play score change sound/haptic based on result
+            // Update Cloudie expression based on score change
             when {
                 turnResult.scoreChange > 0 -> {
+                    cloudieExpression.setExpression(CloudieExpressionView.Expression.HAPPY)
                     soundManager.playSound(SoundEffect.SCORE_GAIN)
                     hapticManager.vibrateScoreGain()
-                    // Spawn sparkles at scorecard location
-                    scorecardBadges[safeIndex]?.let { badge ->
-                        val location = IntArray(2)
-                        badge.getLocationOnScreen(location)
-                        particleEffectView.spawnSparkles(
-                            location[0] + badge.width / 2f,
-                            location[1] + badge.height / 2f
-                        )
-                    }
+                    // Spawn sparkles at player scoreboard
+                    particleEffectView.burstConfetti()
                 }
                 turnResult.scoreChange < 0 -> {
+                    cloudieExpression.setExpression(CloudieExpressionView.Expression.WORRIED)
                     soundManager.playSound(SoundEffect.SCORE_LOSS)
                     hapticManager.vibrateScoreLoss()
+                }
+                else -> {
+                    cloudieExpression.setExpression(CloudieExpressionView.Expression.IDLE)
                 }
             }
             
@@ -1230,6 +2091,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             val finalDialogue = if (turnResult.chanceCard != null) {
                 soundManager.playSound(SoundEffect.CHANCE_CARD)
                 hapticManager.vibrateChanceCard()
+                cloudieExpression.setExpression(CloudieExpressionView.Expression.THINKING)
                 val cardDialogue = dialogueGenerator.generateChanceCard(
                     currentProfile.nickname,
                     turnResult.chanceCard
@@ -1241,18 +2103,26 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             
             speakLine(finalDialogue)
             
-            // Play appropriate animation based on result
-            when {
-                turnResult.scoreChange > 5 -> emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_CELEBRATE)
-                turnResult.scoreChange < -5 -> emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_WARNING)
-                turnResult.chanceCard != null -> emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_THINKING)
-                else -> emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_SPEAKING)
+            // Legacy emoteManager animations (if present)
+            cloudieAnimation?.let { anim ->
+                when {
+                    turnResult.scoreChange > 5 -> emoteManager?.playCloudieEmote(anim, EmoteManager.CLOUDIE_CELEBRATE)
+                    turnResult.scoreChange < -5 -> emoteManager?.playCloudieEmote(anim, EmoteManager.CLOUDIE_WARNING)
+                    turnResult.chanceCard != null -> emoteManager?.playCloudieEmote(anim, EmoteManager.CLOUDIE_THINKING)
+                    else -> emoteManager?.playCloudieEmote(anim, EmoteManager.CLOUDIE_SPEAKING)
+                }
             }
         }
         
-        // Update UI
+        // Update NEW PlayerScoreboardView with animated score change
+        playerScoreboard.updatePlayerScore(safeIndex, newScore, animate = true)
+        
+        // Update legacy UI
         updateGameUI()
         updateLastEventText(currentProfile.nickname, diceValue, turnResult)
+        
+        // Push updated game state to live server (for web display)
+        pushLiveStateToServer(diceValue, turnResult)
         
         // Move to next player
         advanceToNextPlayer()
@@ -1284,12 +2154,21 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
 
     private fun advanceToNextPlayer() {
         val startIndex = currentPlayerIndex
+        DebugFileLogger.i("GAME", "  🔄 Advancing to next player (current=$startIndex)")
+        
         do {
             currentPlayerIndex = (currentPlayerIndex + 1) % currentGameProfiles.size
             // Loop until we find alive player or return to start
-            if (playerAlive[currentPlayerIndex]) break
+            if (playerAlive[currentPlayerIndex]) {
+                DebugFileLogger.i("GAME", "     → Found alive player at index $currentPlayerIndex")
+                // Update scoreboard active player
+                playerScoreboard.setActivePlayer(currentPlayerIndex)
+                break
+            }
+            DebugFileLogger.d("GAME", "     → Skipping eliminated player at index $currentPlayerIndex")
             if (currentPlayerIndex == startIndex) {
                 // All players eliminated, game over
+                DebugFileLogger.w("GAME", "     → All players eliminated! Ending game.")
                 endGame()
                 return
             }
@@ -1298,6 +2177,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         val nextProfile = currentGameProfiles[currentPlayerIndex]
         val isLeading = playerScores[currentPlayerIndex] == playerScores.max()
         
+        DebugFileLogger.i("GAME", "  👤 Next player: ${nextProfile.nickname} (score=${playerScores[currentPlayerIndex]}, leading=$isLeading)")
+        DebugFileLogger.i("GAME", "════════════════════════════════════════")
+        
         val transitionDialogue = dialogueGenerator.generateTurnTransition(
             nextProfile.nickname,
             playerScores[currentPlayerIndex],
@@ -1305,12 +2187,19 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         )
         speakLine(transitionDialogue)
         
-        // Return to idle animation
-        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_IDLE)
+        // Return to idle animation (new + legacy)
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.IDLE)
+        cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_IDLE) }
     }
 
     private fun updateGameUI() {
-        // Update scorecard badges with animated score changes
+        // Update NEW PlayerScoreboardView
+        playerScoreboard.setActivePlayer(currentPlayerIndex)
+        for (i in currentGameProfiles.indices) {
+            playerScoreboard.updatePlayerScore(i, playerScores[i], animate = false)
+        }
+        
+        // Update legacy scorecard badges with animated score changes
         for (i in currentGameProfiles.indices) {
             scorecardBadges[i]?.animateToScore(playerScores[i])
             
@@ -1335,7 +2224,16 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
     
     private fun updateAllScorecards() {
-        // Update all scorecard badges with current scores
+        // Update NEW PlayerScoreboardView
+        for (i in 0 until currentGameProfiles.size) {
+            playerScoreboard.updatePlayerScore(i, playerScores[i], animate = true)
+            if (!playerAlive[i]) {
+                playerScoreboard.eliminatePlayer(i)
+            }
+        }
+        playerScoreboard.setActivePlayer(currentPlayerIndex)
+        
+        // Update legacy scorecard badges with current scores
         for (i in 0 until currentGameProfiles.size) {
             scorecardBadges[i]?.animateToScore(playerScores[i])
             
@@ -1467,7 +2365,17 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private fun endGame() {
         gameStarted = false
         
-        // Find winner (highest score among alive players)
+        // Find winner (highest score among alive players, or last standing)
+        val alivePlayers = playerAlive.withIndex().filter { it.value }
+        
+        if (alivePlayers.size == 1) {
+            // Single winner - already handled by elimination detection
+            val winnerIndex = alivePlayers.first().index
+            showVictoryDialog(currentGameProfiles[winnerIndex].nickname, playerScores[winnerIndex])
+            return
+        }
+        
+        // Multiple players alive - find highest score
         var maxScore = Int.MIN_VALUE
         var winnerIndex = -1
         
@@ -1478,26 +2386,48 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
         
-        // Announce winner
-        val winnerMessage = if (winnerIndex >= 0) {
+        if (winnerIndex >= 0) {
             val winner = currentGameProfiles[winnerIndex]
-            "Game Over! ${winner.nickname} wins with $maxScore points! 🎉"
+            
+            // Send victory to ESP32
+            sendVictoryToESP32(winnerIndex)
+            
+            // Play celebration
+            soundManager.playSound(SoundEffect.GAME_WIN)
+            hapticManager.vibrateGameWin()
+            particleEffectView.burstConfetti()
+            cloudieExpression.setExpression(CloudieExpressionView.Expression.EXCITED)
+            cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_EXCITED) }
+            
+            showVictoryDialog(winner.nickname, maxScore)
+            speakLine("Congratulations ${winner.nickname}! You are the ultimate water champion with ${maxScore} drops!")
         } else {
-            "Game Over! It's a tie!"
+            // All players eliminated somehow - shouldn't happen normally
+            AlertDialog.Builder(this)
+                .setTitle("🎮 Game Over")
+                .setMessage("No survivors! Everyone ran out of water!")
+                .setPositiveButton("OK") { _, _ ->
+                    val intent = Intent(this, ProfileSelectionActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    startActivity(intent)
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+            speakLine("Incredible! Everyone ran out of water! It's a total drought!")
         }
+    }
+    
+    private fun showVictoryDialog(winnerName: String, score: Int) {
+        gameStarted = false
         
-        // Play celebration
-        soundManager.playSound(SoundEffect.GAME_WIN)
-        hapticManager.vibrateGameWin()
-        particleEffectView.burstConfetti()
-        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_EXCITED)
-        
-        // Show result dialog
         AlertDialog.Builder(this)
-            .setTitle("🏆 Game Over")
-            .setMessage(winnerMessage)
-            .setPositiveButton("OK") { _, _ ->
-                // Navigate back to profile selection
+            .setTitle("🏆 VICTORY!")
+            .setMessage("$winnerName wins with $score drops remaining!\n\nCongratulations, water champion!")
+            .setPositiveButton("Play Again") { _, _ ->
+                performReset()
+            }
+            .setNegativeButton("Exit") { _, _ ->
                 val intent = Intent(this, ProfileSelectionActivity::class.java)
                 intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 startActivity(intent)
@@ -1505,9 +2435,6 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
             .setCancelable(false)
             .show()
-        
-        // Also speak the result
-        speakLine(winnerMessage)
     }
 
     private fun resetGame() {
@@ -1530,7 +2457,7 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         for (i in currentGameProfiles.indices) {
             playerPositions[i] = 1
-            playerScores[i] = 0
+            playerScores[i] = 10  // Reset to starting 10 drops per game rules
             playerAlive[i] = true
         }
         
@@ -1552,7 +2479,18 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Announce reset
         val firstPlayer = currentGameProfiles[0].nickname
         speakLine("Game reset! ${currentGameProfiles.size} players ready. $firstPlayer starts!")
-        emoteManager.playCloudieEmote(cloudieAnimation, EmoteManager.CLOUDIE_EXCITED)
+        cloudieExpression.setExpression(CloudieExpressionView.Expression.EXCITED)
+        cloudieAnimation?.let { emoteManager?.playCloudieEmote(it, EmoteManager.CLOUDIE_EXCITED) }
+        
+        // Reset scoreboard
+        playerScoreboard.reset()
+        // Re-initialize with players (starting with 10 drops)
+        val playerData = currentGameProfiles.mapIndexed { index, profile ->
+            val colorHex = assignedColors.getOrNull(index).orEmpty().ifBlank { profile.avatarColor }
+            Triple(profile.nickname.ifBlank { profile.name }, 10, colorHex)  // Start with 10 drops
+        }
+        playerScoreboard.setPlayers(playerData)
+        playerScoreboard.setActivePlayer(0)
         
         Toast.makeText(this, "Game reset - $firstPlayer's turn", Toast.LENGTH_SHORT).show()
     }
@@ -1580,26 +2518,38 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     }
 
     override fun onDiceStable(diceId: Int, number: Int) {
-        if (!gameStarted || !useBluetoothDice) return
+        DebugFileLogger.i("DICE", "🎲 onDiceStable: diceId=$diceId, number=$number")
+        
+        if (!gameStarted || !useBluetoothDice) {
+            DebugFileLogger.w("DICE", "  → Ignored: gameStarted=$gameStarted, useBluetoothDice=$useBluetoothDice")
+            return
+        }
         
         diceResults[diceId] = number
-        appendDebug("Die $diceId stable: $number")
+        DebugFileLogger.d("DICE", "  → Stored result. diceResults=$diceResults")
         
         // Check if we have all needed results
         val neededCount = if (playWithTwoDice) 2 else 1
+        DebugFileLogger.d("DICE", "  → neededCount=$neededCount, have=${diceResults.size}")
+        
         if (diceResults.size >= neededCount) {
             val rollValue = if (playWithTwoDice) {
                 // Average of two dice
                 val values = diceResults.values.toList()
-                (values[0] + values[1]) / 2
+                val avg = (values[0] + values[1]) / 2
+                DebugFileLogger.i("DICE", "  → Two dice average: (${values[0]} + ${values[1]}) / 2 = $avg")
+                avg
             } else {
-                diceResults.values.first()
+                val value = diceResults.values.first()
+                DebugFileLogger.i("DICE", "  → Single die value: $value")
+                value
             }
             
             // Clear results for next roll
             diceResults.clear()
             
             // Process the roll
+            DebugFileLogger.i("DICE", "  → Processing roll with value: $rollValue")
             runOnUiThread {
                 handleNewRoll(rollValue)
             }

@@ -410,6 +410,7 @@ void resetIdleTimer();
 void validateGameState();
 void handleUndo(JsonDocument& doc);
 void handleReset();
+void handleVictory(JsonDocument& doc);
 void sendStatus();
 void animateMove(int fromTile, int toTile, uint32_t color, int playerId);
 void setTileColor(int tile, uint32_t color);
@@ -749,6 +750,8 @@ void processCommandQueue() {
     handleUpdateSettings(doc);
   } else if (strcmp(command, "status") == 0) {
     sendStatus();
+  } else if (strcmp(command, "victory") == 0) {
+    handleVictory(doc);
   } else {
     sendErrorResponse("Unknown command");
   }
@@ -1465,6 +1468,47 @@ void sendUndoResponse(int playerId, int fromTile, int toTile, int score, bool al
   String response;
   serializeJson(doc, response);
   sendBLEResponse(response.c_str());
+}
+
+// ==================== HANDLE VICTORY ====================
+void handleVictory(JsonDocument& doc) {
+  Serial.println("\n🏆 Processing Victory Command...");
+  resetIdleTimer();
+  
+  int winnerId = doc["winnerId"] | 0;
+  const char* winnerColor = doc["winnerColor"];
+  const char* winnerName = doc["winnerName"];
+  
+  Serial.printf("  Winner ID: %d\n", winnerId);
+  Serial.printf("  Winner Color: %s\n", winnerColor ? winnerColor : "default");
+  Serial.printf("  Winner Name: %s\n", winnerName ? winnerName : "unknown");
+  
+  // Update winner color if provided
+  if (winnerColor != nullptr && strlen(winnerColor) >= 6) {
+    long colorValue = strtol(winnerColor, NULL, 16);
+    uint8_t r = (colorValue >> 16) & 0xFF;
+    uint8_t g = (colorValue >> 8) & 0xFF;
+    uint8_t b = colorValue & 0xFF;
+    players[winnerId].color = strip.Color(r, g, b);
+    Serial.printf("  Updated winner color to: 0x%06X\n", players[winnerId].color);
+  }
+  
+  // Trigger the winner animation
+  animateWinner(winnerId);
+  
+  // Send victory acknowledgment
+  StaticJsonDocument<256> response;
+  response["event"] = "victory_complete";
+  response["winnerId"] = winnerId;
+  response["winnerName"] = winnerName ? winnerName : "Player";
+  response["success"] = true;
+  
+  String output;
+  serializeJson(response, output);
+  pTxCharacteristic->setValue(output.c_str());
+  pTxCharacteristic->notify();
+  
+  Serial.println("✓ Victory animation complete\n");
 }
 
 // ==================== HANDLE RESET ====================

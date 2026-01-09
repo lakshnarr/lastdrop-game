@@ -1,6 +1,10 @@
 package earth.lastdrop.app
 
 import earth.lastdrop.app.ui.intro.IntroAiActivity
+import earth.lastdrop.app.voice.HybridVoiceService
+import earth.lastdrop.app.voice.NoOpVoiceService
+import earth.lastdrop.app.voice.VoiceService
+import earth.lastdrop.app.voice.VoiceSettingsManager
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
@@ -35,6 +39,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
     private lateinit var adapter: ProfileAdapter
     private lateinit var btnStartGame: Button
     private lateinit var btnLoadSavedGame: Button
+    private var voiceService: VoiceService? = null
     private val cloudiePrefs by lazy { getSharedPreferences("cloudie_prefs", MODE_PRIVATE) }
     private val selectedProfiles = mutableSetOf<String>() // For multiplayer
     private var isCalledFromMainActivity = false // Track where we came from
@@ -55,6 +60,9 @@ class ProfileSelectionActivity : AppCompatActivity() {
         savedGameDao = database.savedGameDao()
         profileManager = ProfileManager(this)
         
+        // Initialize voice service
+        initVoiceService()
+        
         setupRecyclerView()
         updateStartButtonState()
         
@@ -64,7 +72,15 @@ class ProfileSelectionActivity : AppCompatActivity() {
             profileManager.getOrCreateGuestProfile()
             // Migrate old gray profiles to vibrant colors
             profileManager.updateProfileColors()
-            loadProfiles()
+            val profiles = profileManager.getAllProfiles().first()
+            adapter.submitProfiles(profiles)
+            
+            // Check if this is first time (no user profiles exist)
+            val hasUserProfiles = profiles.any { !it.isAI && !it.isGuest }
+            
+            // Welcome voice after profiles load
+            delay(600)
+            speakCloudieIntro(hasUserProfiles)
         }
 
         refreshSavedGameButton()
@@ -74,6 +90,67 @@ class ProfileSelectionActivity : AppCompatActivity() {
         super.onResume()
         // Re-fetch in case a save was created or consumed while this screen was backgrounded
         refreshSavedGameButton()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        voiceService?.shutdown()
+    }
+    
+    private fun initVoiceService() {
+        val voiceSettingsManager = VoiceSettingsManager(this)
+        val voiceSettings = voiceSettingsManager.getSettings()
+        voiceService = runCatching {
+            HybridVoiceService(
+                context = this,
+                settings = voiceSettings,
+                onReady = { },
+                onError = { }
+            )
+        }.getOrElse {
+            NoOpVoiceService(this)
+        }
+    }
+    
+    private fun speakLine(text: String) {
+        runCatching { voiceService?.speak(text) }
+    }
+    
+    /**
+     * Kid-friendly AI introduction with random fresh greetings
+     */
+    private fun speakCloudieIntro(hasUserProfiles: Boolean) {
+        val greetings = if (!hasUserProfiles) {
+            // First time users - full introduction
+            listOf(
+                "Hey there, welcome to Last Drop Earth! An awesome IoT game made by Lakshna! I'm Cloudie, your AI friend! Let's create your player profile and start saving the planet!",
+                "Woohoo! Welcome to Last Drop Earth! This cool IoT game was created by Lakshna! I'm Cloudie, your fluffy AI buddy! Let's make your profile and have some fun!",
+                "Hello hello! Welcome to Last Drop Earth, an amazing IoT adventure by Lakshna! I'm Cloudie, your cloud friend! Time to create your profile and join the fun!",
+                "Yay, a new friend! Welcome to Last Drop Earth! Lakshna made this awesome IoT game just for you! I'm Cloudie, your AI pal! Let's set up your profile!",
+                "Hi hi hi! Welcome to Last Drop Earth! It's an IoT game created by Lakshna! I'm Cloudie, the friendliest cloud around! Let's make your profile together!"
+            )
+        } else {
+            // Returning users - fun random greetings
+            listOf(
+                "You're back! Cloudie missed you! Ready to save some water drops today?",
+                "Hey hey! Cloudie here! Who's ready for an awesome game?",
+                "Woohoo! My favorite humans are here! Let's play Last Drop!",
+                "Yippee! Game time! Cloudie is SO excited to see you!",
+                "Hello friends! Cloudie's been waiting! Pick your players and let's goooo!",
+                "Bouncy bouncy! You came back! Cloudie is doing a happy dance!",
+                "Ta-daaaa! It's game time! Who wants to be a water hero today?",
+                "Sparkle sparkle! My friends are here! Ready to roll some dice?",
+                "Wheee! Another adventure awaits! Tap your profiles to play!",
+                "Cloudie says HI! Let's make this the best game ever!",
+                "Oh oh oh! You're here! Cloudie almost floated away with excitement!",
+                "Guess who's ready to play? Cloudie! And you too, right? RIGHT?",
+                "Boing boing! Welcome back, water warriors! Let's save the planet!",
+                "Fluffy greetings, friends! Time to pick your team and have fun!",
+                "Pssst! Hey! It's Cloudie! Wanna play a super cool game?"
+            )
+        }
+        
+        speakLine(greetings.random())
     }
     
     @Deprecated("Deprecated in Java")
@@ -245,15 +322,28 @@ class ProfileSelectionActivity : AppCompatActivity() {
     private fun toggleProfileSelection(profile: PlayerProfile) {
         if (selectedProfiles.contains(profile.playerId)) {
             selectedProfiles.remove(profile.playerId)
+            // Voice for deselection
+            val name = profile.nickname.ifBlank { profile.name }
+            speakLine("$name removed.")
         } else {
             if (selectedProfiles.size < 4) { // Max 4 players
                 selectedProfiles.add(profile.playerId)
+                
+                // Voice welcome for the selected player
+                val name = profile.nickname.ifBlank { profile.name }
+                val welcomeLines = when {
+                    profile.isAI -> listOf("Cloudie is in!", "I'm playing too!", "Cloudie joins the game!")
+                    profile.isGuest -> listOf("Guest player joining!", "Welcome guest!")
+                    else -> listOf("Welcome $name!", "Hey $name!", "$name is in!", "Nice to see you $name!")
+                }
+                speakLine(welcomeLines.random())
                 
                 // Show AI greeting when player joins (not for AI or guest)
                 if (!profile.isGuest && !profile.isAI) {
                     showPlayerGreeting(profile)
                 }
             } else {
+                speakLine("Maximum 4 players!")
                 Toast.makeText(this, "Maximum 4 players", Toast.LENGTH_SHORT).show()
             }
         }
@@ -515,6 +605,9 @@ class ProfileSelectionActivity : AppCompatActivity() {
     }
     
     private fun showColorSelectionDialog() {
+        // Stop any ongoing speech when user initiates color selection
+        voiceService?.stop()
+        
         lifecycleScope.launch {
             val profiles = selectedProfiles.mapNotNull { id ->
                 profileManager.getProfile(id)
@@ -550,6 +643,7 @@ class ProfileSelectionActivity : AppCompatActivity() {
         }
         
         val profile = profiles[currentIndex]
+        val playerName = profile.nickname.ifBlank { profile.name }
         
         // AI auto-picks last available color
         if (profile.isAI) {
@@ -558,22 +652,27 @@ class ProfileSelectionActivity : AppCompatActivity() {
             availableColors.remove(autoColor)
             
             // Show AI picked message briefly, then continue
+            val colorSpoken = getColorNameSpoken(autoColor)
+            speakLine("Cloudie picks $colorSpoken!")
             Toast.makeText(this, "☁️ Cloudie chose ${getColorName(autoColor)}!", Toast.LENGTH_SHORT).show()
             
             // Continue to next player after short delay
             lifecycleScope.launch {
-                delay(800)
+                delay(1200)
                 showColorPickerForPlayer(profiles, currentIndex + 1, selectedColors, availableColors)
             }
             return
         }
         
-        // Human or Guest player - show color picker
+        // Human or Guest player - show color picker with voice prompt
         val colorNames = availableColors.map { getColorName(it) }.toTypedArray()
         val playerLabel = when {
             profile.isGuest -> "👤 ${profile.name}"
             else -> profile.nickname
         }
+        
+        // Voice prompt for color selection
+        speakLine("$playerName, pick your color!")
         
         AlertDialog.Builder(this)
             .setTitle("$playerLabel - Choose Your Color")
@@ -582,8 +681,15 @@ class ProfileSelectionActivity : AppCompatActivity() {
                 selectedColors[profile.playerId] = chosenColor
                 availableColors.remove(chosenColor)
                 
-                // Move to next player
-                showColorPickerForPlayer(profiles, currentIndex + 1, selectedColors, availableColors)
+                // Announce the color choice
+                val colorSpoken = getColorNameSpoken(chosenColor)
+                speakLine("$playerName picks $colorSpoken!")
+                
+                // Move to next player after brief delay for voice
+                lifecycleScope.launch {
+                    delay(800)
+                    showColorPickerForPlayer(profiles, currentIndex + 1, selectedColors, availableColors)
+                }
             }
             .setCancelable(false)
             .show()
@@ -599,6 +705,16 @@ class ProfileSelectionActivity : AppCompatActivity() {
         }
     }
     
+    private fun getColorNameSpoken(colorHex: String): String {
+        return when (colorHex) {
+            "FF0000" -> "red"
+            "00FF00" -> "green"
+            "0000FF" -> "blue"
+            "FFFF00" -> "yellow"
+            else -> "a color"
+        }
+    }
+    
     private fun startGameWithColors(
         profiles: List<PlayerProfile>,
         selectedColors: Map<String, String>
@@ -607,6 +723,10 @@ class ProfileSelectionActivity : AppCompatActivity() {
         val orderedColors = selectedProfiles.map { profileId ->
             selectedColors[profileId] ?: ProfileManager.GAME_COLORS[0]
         }
+        
+        // IMPORTANT: Stop and shutdown voice before navigating to prevent dual voices
+        voiceService?.shutdown()
+        voiceService = null
         
         // Launch IntroAiActivity with profiles and colors
         val intent = Intent(this, IntroAiActivity::class.java).apply {

@@ -65,6 +65,7 @@ class BoardScanManager(
             val remaining = (SCAN_DEBOUNCE_MS - sinceLastScan) / 1000
             Log.d(TAG, "Scan request debounced (${remaining}s remaining)")
             onLogMessage("⏳ Please wait ${remaining + 1}s before scanning again")
+            Toast.makeText(context, "Please wait ${remaining + 1}s before scanning again", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -198,6 +199,13 @@ class BoardScanManager(
      */
     fun isScanning(): Boolean {
         return isScanning
+    }
+    
+    /**
+     * Reset debounce timer (allows immediate rescan after cancel)
+     */
+    fun resetDebounce() {
+        lastScanStartedAt = 0L
     }
     
     /**

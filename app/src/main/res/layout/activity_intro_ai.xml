@@ -302,16 +302,16 @@
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Debug (hidden by default) -->
+            <!-- Debug - tap to view log, long-press to share -->
             <ImageView
                 android:id="@+id/iconDebug"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:padding="8dp"
                 android:src="@drawable/ic_debug"
-                android:contentDescription="Debug"
+                android:contentDescription="Debug Log"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:visibility="gone" />
+                android:visibility="visible" />
 
         </LinearLayout>
     </HorizontalScrollView>

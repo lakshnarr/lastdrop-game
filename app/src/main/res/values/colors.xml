@@ -7,4 +7,9 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Primary brand color (sky blue - matching Cloudie) -->
+    <color name="primary">#4FC3F7</color>
+    <color name="primary_dark">#0093C4</color>
+    <color name="accent">#FF9800</color>
 </resources>

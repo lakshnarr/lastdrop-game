@@ -411,11 +411,27 @@
     .board-surface {
       position: absolute;
       inset: 22px;
-      background: radial-gradient(circle at top, #111827, #020617);
+      background: url('/assets/images/board-bg.png') center center / cover no-repeat, 
+                  radial-gradient(circle at top, #111827, #020617);
       border-radius: 18px;
       box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
       border: 1px solid rgba(31, 41, 55, 0.9);
       z-index: 1;
+    }
+    
+    .board-logo {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 35%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      background: url('/assets/images/logo1.png') center center / contain no-repeat;
+      opacity: 0.9;
+      z-index: 5;
+      pointer-events: none;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
     }
 
     .tiles-grid {
@@ -1218,6 +1234,7 @@
         <div id="boardWrapper" class="board-wrapper">
           <div id="board3d" class="board3d">
             <div class="board-surface"></div>
+            <div class="board-logo"></div>
             <div class="tiles-grid" id="tilesGrid"></div>
             <div class="tokens-layer" id="tokensLayer"></div>
             
@@ -2434,7 +2451,7 @@
       if (state.lastEvent && state.lastEvent.chanceCardId) {
         const id = state.lastEvent.chanceCardId;
         playSound('chance'); // Play chance card sound
-        chanceImage.style.backgroundImage = `url('/assets/chance/${id}.jpg')`;
+        chanceImage.style.backgroundImage = `url('/assets/chance/${id}.png')`;
         chanceTitle.textContent = `Chance Card — ${id}`;
         chanceText.textContent = (state.chanceDescriptions && state.chanceDescriptions[id]) || "Special event triggered by the board.";
         chanceCard.classList.add("visible");

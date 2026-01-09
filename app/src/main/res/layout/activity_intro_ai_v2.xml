@@ -1,0 +1,533 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0b1020"
+    android:fitsSystemWindows="true">
+
+    <!-- Top Icon Toolbar (Scrollable) -->
+    <HorizontalScrollView
+        android:id="@+id/iconToolbarScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:background="#1a1f30"
+        android:padding="8dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/iconToolbar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Connect Icon -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconConnect"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_connect"
+                    android:contentDescription="Connect"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Connect"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Board/MainActivity Icon -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconBoard"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_classic"
+                    android:contentDescription="Classic Mode"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Classic"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Save Icon -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconSave"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_save"
+                    android:contentDescription="Save"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Save"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Dice Mode Toggle -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconDiceMode"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_dice_bluetooth"
+                    android:contentDescription="Dice Mode"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dice"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Players -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconPlayers"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_players"
+                    android:contentDescription="Players"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Players"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- History -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconHistory"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_history"
+                    android:contentDescription="History"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="History"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Ranks -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconRanks"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_ranks"
+                    android:contentDescription="Ranks"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ranks"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Undo -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconUndo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_undo"
+                    android:contentDescription="Undo"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Undo"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Refresh -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconRefresh"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="Refresh"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Refresh"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Reset -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconReset"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_reset"
+                    android:contentDescription="Reset"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Reset"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- End Game -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconEndGame"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_end_game"
+                    android:contentDescription="End Game"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="End"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Close/Exit -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconClose"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_close"
+                    android:contentDescription="Close"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Close"
+                    android:textSize="8sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Debug -->
+            <ImageView
+                android:id="@+id/iconDebug"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_debug"
+                android:contentDescription="Debug"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:visibility="visible" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Status LED Bar (Board, Dice, Web status) -->
+    <earth.lastdrop.app.ui.components.StatusLedBar
+        android:id="@+id/statusLedBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#151a28"
+        android:paddingVertical="4dp"
+        app:layout_constraintTop_toBottomOf="@id/iconToolbarScroll"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Main Content Area -->
+    <LinearLayout
+        android:id="@+id/mainContentArea"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@id/statusLedBar"
+        app:layout_constraintBottom_toTopOf="@id/dialogueSection"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Cloudie Expression (Simple drawable, not Lottie) -->
+        <earth.lastdrop.app.ui.components.CloudieExpressionView
+            android:id="@+id/cloudieExpression"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:layout_marginTop="8dp" />
+
+        <!-- Dice Roll Animation (appears when rolling) -->
+        <earth.lastdrop.app.ui.components.DiceRollAnimationView
+            android:id="@+id/diceRollAnimation"
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
+        <!-- Player Scoreboard (replaces drop icons) -->
+        <earth.lastdrop.app.ui.components.PlayerScoreboardView
+            android:id="@+id/playerScoreboard"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="16dp" />
+
+    </LinearLayout>
+
+    <!-- Bottom Dialogue Section -->
+    <LinearLayout
+        android:id="@+id/dialogueSection"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#1a1f30"
+        android:padding="16dp"
+        app:layout_constraintBottom_toTopOf="@id/virtualDicePanel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Cloudie Current Speech -->
+        <TextView
+            android:id="@+id/cloudieDialogue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="☁️ Cloudie: Welcome to Last Drop!"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingBottom="8dp" />
+
+        <!-- Last Event Text -->
+        <TextView
+            android:id="@+id/lastEventText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Waiting for game to start..."
+            android:textColor="#BBBBBB"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- Virtual Dice Panel (Bottom) - for tap-to-roll mode -->
+    <LinearLayout
+        android:id="@+id/virtualDicePanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#2a2f40"
+        android:padding="12dp"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btnDice1"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="1"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+        <Button
+            android:id="@+id/btnDice2"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="2"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+        <Button
+            android:id="@+id/btnDice3"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="3"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+        <Button
+            android:id="@+id/btnDice4"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="4"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+        <Button
+            android:id="@+id/btnDice5"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="5"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+        <Button
+            android:id="@+id/btnDice6"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:text="6"
+            android:textSize="18sp"
+            android:layout_margin="4dp" />
+
+    </LinearLayout>
+
+    <!-- 3D Virtual Dice View (for rolling animation) -->
+    <earth.lastdrop.app.VirtualDiceView
+        android:id="@+id/virtualDiceView"
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        android:background="@android:color/transparent"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/dialogueSection"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Particle Effect Overlay -->
+    <com.example.lastdrop.ui.components.ParticleEffectView
+        android:id="@+id/particleEffectView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:elevation="10dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- Legacy views kept for compatibility but hidden -->
+    <LinearLayout
+        android:id="@+id/dropsRow"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.example.lastdrop.ui.components.ScorecardBadge
+        android:id="@+id/scorecard1"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.example.lastdrop.ui.components.ScorecardBadge
+        android:id="@+id/scorecard2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.example.lastdrop.ui.components.ScorecardBadge
+        android:id="@+id/scorecard3"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.example.lastdrop.ui.components.ScorecardBadge
+        android:id="@+id/scorecard4"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

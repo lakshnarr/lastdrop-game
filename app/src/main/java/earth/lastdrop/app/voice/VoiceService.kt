@@ -2,7 +2,9 @@ package earth.lastdrop.app.voice
 
 import android.content.Context
 import android.media.MediaPlayer
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,18 +14,42 @@ import java.io.File
 import java.util.Locale
 
 /**
+ * Callback interface for speech events
+ */
+interface SpeechCallback {
+    fun onSpeechStart(utteranceId: String)
+    fun onSpeechDone(utteranceId: String)
+    fun onSpeechError(utteranceId: String, error: String)
+}
+
+/**
  * Minimal voice hook placeholder. Replace with real TTS/ElevenLabs later.
  */
 interface VoiceService {
     fun speak(text: String)
+    fun stop() {}  // Stop any current speech
+    fun setSpeechCallback(callback: SpeechCallback?)
+    fun getSpeechRate(): Float  // Returns current speech rate for animation sync
     fun shutdown() {}
 }
 
 class NoOpVoiceService(private val context: Context) : VoiceService {
+    private var speechCallback: SpeechCallback? = null
+    
     override fun speak(text: String) {
         Log.d("VoiceService", "(stub) Cloudie would say: $text")
         // Hook real TTS/streaming here. Keep non-blocking.
     }
+    
+    override fun stop() {
+        // No-op for stub
+    }
+    
+    override fun setSpeechCallback(callback: SpeechCallback?) {
+        speechCallback = callback
+    }
+    
+    override fun getSpeechRate(): Float = 1.0f
 }
 
 /**
@@ -37,6 +63,10 @@ class HybridVoiceService(
 ) : VoiceService {
     
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var speechCallback: SpeechCallback? = null
+    private var currentUtteranceId: String? = null
+    private var isSpeaking = false
+    
     private val elevenLabs: ElevenLabsService? = if (settings.useElevenLabs && settings.elevenLabsApiKey.isNotBlank()) {
         Log.d("HybridVoice", "✓ ElevenLabs enabled with API key: ${settings.elevenLabsApiKey.take(8)}... voiceId: ${settings.elevenLabsVoiceId}")
         ElevenLabsService(settings.elevenLabsApiKey, settings.elevenLabsVoiceId)
@@ -56,13 +86,53 @@ class HybridVoiceService(
     private var mediaPlayer: MediaPlayer? = null
     private val audioCache = mutableMapOf<String, File>()
     
+    override fun setSpeechCallback(callback: SpeechCallback?) {
+        speechCallback = callback
+        ttsService.setSpeechCallback(callback)
+    }
+    
+    override fun getSpeechRate(): Float {
+        return if (elevenLabs != null) settings.elevenLabsSpeed else settings.ttsSpeechRate
+    }
+    
+    /**
+     * Public stop method to halt any current speech
+     */
+    override fun stop() {
+        stopCurrentSpeech()
+    }
+    
+    /**
+     * Stop any currently playing speech before starting new one
+     */
+    private fun stopCurrentSpeech() {
+        // Stop MediaPlayer (ElevenLabs audio)
+        mediaPlayer?.let { player ->
+            if (player.isPlaying) {
+                player.stop()
+            }
+            player.release()
+        }
+        mediaPlayer = null
+        
+        // Stop TTS
+        ttsService.stop()
+        
+        isSpeaking = false
+        currentUtteranceId = null
+    }
+    
     override fun speak(text: String) {
         if (!settings.voiceEnabled || text.isBlank()) {
             Log.d("HybridVoice", "Speak skipped - voiceEnabled: ${settings.voiceEnabled}, text empty: ${text.isBlank()}")
             return
         }
         
+        // IMPORTANT: Stop any current speech before starting new one
+        stopCurrentSpeech()
+        
         Log.d("HybridVoice", "Speaking: \"$text\" (ElevenLabs: ${elevenLabs != null})")
+        isSpeaking = true
         
         if (elevenLabs != null) {
             scope.launch {
@@ -86,7 +156,7 @@ class HybridVoiceService(
                     if (audioFile != null) {
                         audioCache[text] = audioFile
                         Log.d("HybridVoice", "✓ Playing ElevenLabs audio (${audioFile.length() / 1024}KB)")
-                        playAudio(audioFile)
+                        playAudio(audioFile, text)
                     } else {
                         // ElevenLabs failed, fallback to TTS
                         Log.w("HybridVoice", "✗ ElevenLabs failed, using TTS fallback")
@@ -104,16 +174,32 @@ class HybridVoiceService(
         }
     }
     
-    private fun playAudio(file: File) {
+    private fun playAudio(file: File, utteranceId: String) {
         try {
             mediaPlayer?.release()
+            currentUtteranceId = utteranceId
+            
+            // Notify speech start
+            speechCallback?.onSpeechStart(utteranceId)
+            
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
+                setOnCompletionListener {
+                    // Notify speech done when audio finishes
+                    speechCallback?.onSpeechDone(utteranceId)
+                    currentUtteranceId = null
+                }
+                setOnErrorListener { _, what, extra ->
+                    speechCallback?.onSpeechError(utteranceId, "MediaPlayer error: $what, $extra")
+                    currentUtteranceId = null
+                    true
+                }
                 prepare()
                 start()
             }
         } catch (e: Exception) {
             Log.e("HybridVoice", "Audio playback failed", e)
+            speechCallback?.onSpeechError(utteranceId, e.message ?: "Unknown error")
         }
     }
     
@@ -143,6 +229,7 @@ class TextToSpeechVoiceService(
     private val tts: TextToSpeech = TextToSpeech(appContext, this)
     private var ready = false
     private val pending = ArrayDeque<String>()
+    private var speechCallback: SpeechCallback? = null
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
@@ -157,6 +244,26 @@ class TextToSpeechVoiceService(
             tts.setPitch(pitch)  // Slightly higher pitch for friendlier tone (0.5-2.0 range)
             tts.setSpeechRate(speechRate)  // Slightly slower for clarity and emphasis (0.5-2.0 range)
             
+            // Set up utterance progress listener for speech callbacks
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    utteranceId?.let { speechCallback?.onSpeechStart(it) }
+                }
+                
+                override fun onDone(utteranceId: String?) {
+                    utteranceId?.let { speechCallback?.onSpeechDone(it) }
+                }
+                
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    utteranceId?.let { speechCallback?.onSpeechError(it, "TTS error") }
+                }
+                
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    utteranceId?.let { speechCallback?.onSpeechError(it, "TTS error code: $errorCode") }
+                }
+            })
+            
             ready = true
             // Flush any queued lines now that TTS is ready
             while (pending.isNotEmpty()) {
@@ -167,6 +274,12 @@ class TextToSpeechVoiceService(
             onError?.invoke("TTS init failed: status=$status")
         }
     }
+    
+    override fun setSpeechCallback(callback: SpeechCallback?) {
+        speechCallback = callback
+    }
+    
+    override fun getSpeechRate(): Float = speechRate
 
     override fun speak(text: String) {
         if (text.isBlank()) return
@@ -183,12 +296,25 @@ class TextToSpeechVoiceService(
 
     private fun speakInternal(text: String) {
         runCatching {
-            // QUEUE_ADD prevents cutting off previous lines; intros and dialogs often enqueue multiple lines.
-            tts.speak(text, TextToSpeech.QUEUE_ADD, null, "cloudie-${System.currentTimeMillis()}")
+            val utteranceId = "cloudie-${System.currentTimeMillis()}"
+            // Use Bundle for params (required for utterance callbacks)
+            val params = Bundle().apply {
+                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+            }
+            // QUEUE_FLUSH stops any current speech before starting new one (prevents overlapping voices)
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
         }.onFailure { error ->
             Log.e("VoiceService", "TTS speak failed", error)
             onError?.invoke("TTS speak failed: ${error.message}")
         }
+    }
+    
+    /**
+     * Stop any currently playing speech
+     */
+    override fun stop() {
+        runCatching { tts.stop() }
+        pending.clear()
     }
 
     override fun shutdown() {

@@ -51,11 +51,14 @@ class BoardConnectionController(
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice) {
         onLog("📡 Connecting to ${device.name}...")
+        DebugFileLogger.d(TAG, "connect() called for device: ${device.name}")
         gatt = device.connectGatt(context, false, object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+                DebugFileLogger.d(TAG, "onConnectionStateChange: status=$status, newState=$newState")
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         Log.d(TAG, "ESP32 connected, requesting MTU...")
+                        DebugFileLogger.i(TAG, "STATE_CONNECTED - requesting MTU 512")
                         onLog("✅ ESP32 Connected")
                         onConnected(device)
                         // Request larger MTU for longer JSON messages (default is 23 bytes)
@@ -63,6 +66,7 @@ class BoardConnectionController(
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.d(TAG, "ESP32 disconnected")
+                        DebugFileLogger.i(TAG, "STATE_DISCONNECTED")
                         onLog("❌ ESP32 Disconnected")
                         val prev = connectedDevice
                         cleanup()
@@ -73,35 +77,56 @@ class BoardConnectionController(
 
             override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
                 super.onMtuChanged(gatt, mtu, status)
+                DebugFileLogger.d(TAG, "onMtuChanged: mtu=$mtu, status=$status")
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     Log.d(TAG, "MTU changed to $mtu bytes")
+                    DebugFileLogger.i(TAG, "MTU success: $mtu bytes - discovering services")
                     onLog("✅ MTU: $mtu bytes")
                     // Now discover services after MTU is set
                     gatt?.discoverServices()
                 } else {
                     Log.e(TAG, "MTU request failed, using default")
+                    DebugFileLogger.w(TAG, "MTU request failed, discovering services anyway")
                     gatt?.discoverServices()
                 }
             }
 
             @Suppress("DEPRECATION")
             override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+                DebugFileLogger.d(TAG, "onServicesDiscovered: status=$status")
                 if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
                     val service = gatt.getService(serviceUuid)
+                    DebugFileLogger.d(TAG, "Got service: ${service != null}")
                     txCharacteristic = service?.getCharacteristic(txUuid)
                     rxCharacteristic = service?.getCharacteristic(rxUuid)
+                    DebugFileLogger.d(TAG, "txChar: ${txCharacteristic != null}, rxChar: ${rxCharacteristic != null}")
 
                     txCharacteristic?.let { char ->
                         gatt.setCharacteristicNotification(char, true)
                         val descriptor = char.getDescriptor(cccdUuid)
                         descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        gatt.writeDescriptor(descriptor)
+                        val writeResult = gatt.writeDescriptor(descriptor)
+                        DebugFileLogger.d(TAG, "writeDescriptor result: $writeResult - waiting for onDescriptorWrite")
                     }
 
                     onLog("✅ ESP32 Services Discovered")
-                    onServicesReady()
+                    // DON'T call onServicesReady here - wait for onDescriptorWrite
                 } else {
                     Log.e(TAG, "Service discovery failed: $status")
+                    DebugFileLogger.e(TAG, "Service discovery failed: status=$status")
+                }
+            }
+
+            @Suppress("DEPRECATION")
+            override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+                DebugFileLogger.d(TAG, "onDescriptorWrite: status=$status")
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    DebugFileLogger.i(TAG, "Descriptor write success - NOW calling onServicesReady")
+                    onServicesReady()
+                } else {
+                    DebugFileLogger.e(TAG, "Descriptor write failed: $status")
+                    // Still try to proceed
+                    onServicesReady()
                 }
             }
 
@@ -109,6 +134,7 @@ class BoardConnectionController(
             override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
                 characteristic?.value?.let { data ->
                     val message = String(data, Charsets.UTF_8)
+                    DebugFileLogger.d(TAG, "onCharacteristicChanged: ← $message")
                     onMessage(message)
                 }
             }
@@ -117,9 +143,14 @@ class BoardConnectionController(
 
     @SuppressLint("MissingPermission")
     fun send(json: String) {
-        val rx = rxCharacteristic ?: return
+        val rx = rxCharacteristic ?: run {
+            DebugFileLogger.w(TAG, "send() called but rxCharacteristic is null!")
+            return
+        }
+        DebugFileLogger.d(TAG, "send() → $json")
         rx.value = json.toByteArray(Charsets.UTF_8)
-        gatt?.writeCharacteristic(rx)
+        val result = gatt?.writeCharacteristic(rx)
+        DebugFileLogger.d(TAG, "writeCharacteristic result: $result")
     }
 
     @SuppressLint("MissingPermission")
