@@ -10,6 +10,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import earth.lastdrop.app.DebugFileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -64,6 +65,7 @@ class BoardScanManager(
         if (sinceLastScan in 0 until SCAN_DEBOUNCE_MS) {
             val remaining = (SCAN_DEBOUNCE_MS - sinceLastScan) / 1000
             Log.d(TAG, "Scan request debounced (${remaining}s remaining)")
+            DebugFileLogger.w(TAG, "Scan debounced - ${remaining}s remaining until next scan allowed")
             onLogMessage("⏳ Please wait ${remaining + 1}s before scanning again")
             Toast.makeText(context, "Please wait ${remaining + 1}s before scanning again", Toast.LENGTH_SHORT).show()
             return
@@ -76,12 +78,14 @@ class BoardScanManager(
         
         // Check if Bluetooth is enabled
         if (bluetoothAdapter == null) {
+            DebugFileLogger.e(TAG, "Bluetooth adapter is NULL - device doesn't support Bluetooth")
             Toast.makeText(context, "Bluetooth not supported on this device", Toast.LENGTH_LONG).show()
             onLogMessage("❌ Bluetooth not supported")
             return
         }
         
         if (!bluetoothAdapter.isEnabled) {
+            DebugFileLogger.w(TAG, "Bluetooth is DISABLED - user needs to enable it")
             Toast.makeText(context, "Please enable Bluetooth in Settings", Toast.LENGTH_LONG).show()
             onLogMessage("❌ Bluetooth is OFF - Please enable it")
             return
@@ -89,6 +93,7 @@ class BoardScanManager(
         
         val scanner = bluetoothAdapter.bluetoothLeScanner
         if (scanner == null) {
+            DebugFileLogger.e(TAG, "BLE scanner is NULL (adapter enabled=${bluetoothAdapter.isEnabled})")
             Toast.makeText(context, "Bluetooth LE scanner not available. Try restarting Bluetooth.", Toast.LENGTH_LONG).show()
             onLogMessage("❌ BLE scanner unavailable - Try restarting Bluetooth")
             return
@@ -99,6 +104,8 @@ class BoardScanManager(
         lastScanStartedAt = now
         
         Log.d(TAG, "Starting board scan (looking for $BOARD_PREFIX*)")
+        DebugFileLogger.i(TAG, "=== Starting BLE scan for ${BOARD_PREFIX}* boards ===")
+        DebugFileLogger.d(TAG, "Scan timeout: ${SCAN_TIMEOUT_MS}ms, Adapter state: enabled=${bluetoothAdapter.isEnabled}")
         onLogMessage("🔍 Scanning for LASTDROP boards...")
         
         // Scan for ALL BLE devices (we'll filter by prefix)
@@ -120,6 +127,7 @@ class BoardScanManager(
                     // Check MAC whitelist if configured
                     if (TRUSTED_ADDRESSES.isNotEmpty() && !TRUSTED_ADDRESSES.contains(address)) {
                         Log.w(TAG, "Rejected untrusted board: $deviceName ($address)")
+                        DebugFileLogger.w(TAG, "⚠️ Rejected untrusted board: $deviceName ($address)")
                         onLogMessage("⚠️ Rejected untrusted: $deviceName")
                         return@let
                     }
@@ -135,12 +143,14 @@ class BoardScanManager(
                     // Add to discovered list
                     discoveredBoards.add(device)
                     Log.d(TAG, "Found board: $deviceName ($address)")
+                    DebugFileLogger.i(TAG, "✅ Found board: $deviceName (MAC: $address, RSSI: ${result.rssi})")
                     onLogMessage("✅ Found: $deviceName")
                 }
             }
             
             override fun onScanFailed(errorCode: Int) {
                 Log.e(TAG, "Scan failed: $errorCode")
+                DebugFileLogger.e(TAG, "❌ BLE scan failed with error code: $errorCode")
                 onLogMessage("❌ Scan failed: $errorCode")
                 Toast.makeText(context, "Scan failed", Toast.LENGTH_SHORT).show()
                 stopScan()
@@ -153,6 +163,7 @@ class BoardScanManager(
         scanJob = scope.launch {
             delay(SCAN_TIMEOUT_MS)
             if (isScanning) {
+                DebugFileLogger.i(TAG, "Scan timeout reached (${SCAN_TIMEOUT_MS}ms) - found ${discoveredBoards.size} boards")
                 stopScan()
                 
                 // Notify scan complete
@@ -160,6 +171,7 @@ class BoardScanManager(
                 
                 when {
                     discoveredBoards.isEmpty() -> {
+                        DebugFileLogger.w(TAG, "No boards discovered after ${SCAN_TIMEOUT_MS}ms")
                         onLogMessage("⏱️ No boards found (10s timeout)")
                         Toast.makeText(
                             context,
@@ -170,11 +182,13 @@ class BoardScanManager(
                     discoveredBoards.size == 1 -> {
                         // Auto-connect to single board
                         val board = discoveredBoards[0]
+                        DebugFileLogger.i(TAG, "🎯 Auto-connecting to single board: ${board.name}")
                         onLogMessage("🎯 Auto-connecting to ${board.name}")
                         onBoardSelected(board)
                     }
                     else -> {
                         // Multiple boards - show selection dialog
+                        DebugFileLogger.i(TAG, "🎲 Found ${discoveredBoards.size} boards: ${discoveredBoards.map { it.name }}")
                         onLogMessage("🎲 Found ${discoveredBoards.size} boards")
                         onBoardFound(discoveredBoards.toList())
                     }
@@ -198,6 +212,7 @@ class BoardScanManager(
         
         isScanning = false
         Log.d(TAG, "Scan stopped")
+        DebugFileLogger.i(TAG, "🛑 Scan stopped (found ${discoveredBoards.size} boards total)")
         onLogMessage("🛑 Scan stopped")
     }
     

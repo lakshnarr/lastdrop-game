@@ -519,6 +519,11 @@
         screen.classList.remove('active');
       });
     }
+
+    // Auto-start session QR generation on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      showSessionQR();
+    });
   </script>
 </body>
 </html>

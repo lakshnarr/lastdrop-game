@@ -177,9 +177,11 @@ class GameEngine {
             }
 
             TileType.CHANCE -> {
-                // Pick one random card from the deck
-                card = drawRandomChanceCard()
-                scoreChange += card.effect
+                // CHANGE: Don't auto-pick card here anymore
+                // Card selection is now done via dice roll in ChanceCardSelectionDialog
+                // Score change will be applied separately after card selection
+                card = null
+                scoreChange += 0  // No effect until card is selected
             }
         }
 
@@ -190,6 +192,29 @@ class GameEngine {
             chanceCard = card
         )
     }
+    
+    /**
+     * Get 6 random chance cards for the selection dialog
+     * Distribution: 2 from Tier A (1-10), 2 from Tier B (11-14), 2 from Tier C (15-20)
+     */
+    fun getSixRandomChanceCards(): List<ChanceCard> {
+        val tierA = chanceCards.filter { it.number in 1..10 }.shuffled().take(2)
+        val tierB = chanceCards.filter { it.number in 11..14 }.shuffled().take(2)
+        val tierC = chanceCards.filter { it.number in 15..20 }.shuffled().take(2)
+        return (tierA + tierB + tierC).shuffled()
+    }
+    
+    /**
+     * Get a specific chance card by number
+     */
+    fun getChanceCard(number: Int): ChanceCard? {
+        return chanceCards.find { it.number == number }
+    }
+    
+    /**
+     * Get all chance cards (for reference)
+     */
+    fun getAllChanceCards(): List<ChanceCard> = chanceCards.toList()
 
     private fun drawRandomChanceCard(): ChanceCard {
         if (chanceCards.isEmpty()) {

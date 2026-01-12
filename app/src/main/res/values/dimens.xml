@@ -3,10 +3,13 @@
     <!-- Default dimensions for phones (< 600dp width) -->
     
     <!-- Text sizes -->
+    <dimen name="text_hero">26sp</dimen>
     <dimen name="text_title">24sp</dimen>
+    <dimen name="text_large">20sp</dimen>
     <dimen name="text_subtitle">18sp</dimen>
     <dimen name="text_body">16sp</dimen>
     <dimen name="text_small">14sp</dimen>
+    <dimen name="text_caption">12sp</dimen>
     <dimen name="text_tiny">12sp</dimen>
     
     <!-- Button sizes -->
@@ -31,7 +34,11 @@
     <dimen name="icon_small">24dp</dimen>
     <dimen name="icon_medium">48dp</dimen>
     <dimen name="icon_large">80dp</dimen>
-    <dimen name="icon_xlarge">120dp</dimen>
+    <dimen name="icon_xlarge">100dp</dimen>
+    <dimen name="icon_hero">120dp</dimen>
+    
+    <!-- Avatar/Profile -->
+    <dimen name="avatar_size">60dp</dimen>
     
     <!-- Progress indicator -->
     <dimen name="progress_size">48dp</dimen>

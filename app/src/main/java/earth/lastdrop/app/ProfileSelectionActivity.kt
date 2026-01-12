@@ -284,7 +284,8 @@ class ProfileSelectionActivity : AppCompatActivity() {
             onCreateClick = { showCreateProfileDialog() }
         )
         
-        recyclerView.layoutManager = GridLayoutManager(this, 2)
+        // Use 3 columns for better space utilization (6 profiles fit perfectly in 2 rows)
+        recyclerView.layoutManager = GridLayoutManager(this, 3)
         recyclerView.adapter = adapter
     }
     
@@ -799,24 +800,39 @@ class ProfileAdapter(
     }
     
     private fun createProfileItemView(parent: ViewGroup): View {
+        // Calculate height based on screen size for equal spacing
+        // Screen height minus toolbar (~56dp) minus buttons (~200dp) divided by 2 rows
+        val displayMetrics = parent.context.resources.displayMetrics
+        val screenHeight = displayMetrics.heightPixels
+        val availableHeight = screenHeight - (56 + 200) * displayMetrics.density.toInt()
+        val tileHeight = (availableHeight / 2.2).toInt() // 2.2 to leave some padding
+        
         return FrameLayout(parent.context).apply {
             layoutParams = ViewGroup.MarginLayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                300
+                tileHeight
             ).apply {
-                setMargins(12, 12, 12, 12) // Add spacing around tiles
+                setMargins(8, 8, 8, 8) // Smaller margins for 3 columns
             }
-            setPadding(16, 16, 16, 16)
+            setPadding(12, 12, 12, 12)
         }
     }
     
     private fun createAddButtonView(parent: ViewGroup): View {
+        // Match the profile tile height
+        val displayMetrics = parent.context.resources.displayMetrics
+        val screenHeight = displayMetrics.heightPixels
+        val availableHeight = screenHeight - (56 + 200) * displayMetrics.density.toInt()
+        val tileHeight = (availableHeight / 2.2).toInt()
+        
         return Button(parent.context).apply {
             text = "+ Add Profile"
-            layoutParams = ViewGroup.LayoutParams(
+            layoutParams = ViewGroup.MarginLayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                300
-            )
+                tileHeight
+            ).apply {
+                setMargins(8, 8, 8, 8)
+            }
         }
     }
     

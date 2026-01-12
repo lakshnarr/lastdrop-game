@@ -35,6 +35,7 @@
 #define NUM_LEDS 136  // Total LEDs in perimeter strip (0-135, LED 0 removed due to loose connection)
 #define NUM_TILES 20
 #define NUM_PLAYERS 4
+#define LAP_BONUS 0  // Bonus points when completing a lap (passing start tile). Set to 0 to disable.
 
 // LED mapping: Each tile has 4 LEDs (R, G, B, Y), with decorative LEDs between tiles
 // Tile format: [Red, Green, Blue, Yellow]
@@ -1123,8 +1124,10 @@ void handleRoll(JsonDocument& doc) {
   
   // Lap detection and wrapping
   if (newTile > NUM_TILES) {
-    Serial.println("  >> LAP COMPLETED! +5 BONUS POINTS");
     completedLap = true;
+    if (LAP_BONUS > 0) {
+      Serial.printf("  >> LAP COMPLETED! +%d BONUS POINTS\n", LAP_BONUS);
+    }
     newTile = newTile - NUM_TILES;  // Wrap to beginning
   }
   if (newTile < 1) newTile = 1;
@@ -1234,10 +1237,10 @@ void handleRoll(JsonDocument& doc) {
     }
   }
   
-  // Apply lap bonus if completed
-  if (completedLap) {
-    scoreChange += 5;
-    Serial.println("  Applied lap bonus: +5 points");
+  // Apply lap bonus if completed (configurable via LAP_BONUS)
+  if (completedLap && LAP_BONUS > 0) {
+    scoreChange += LAP_BONUS;
+    Serial.printf("  Applied lap bonus: +%d points\n", LAP_BONUS);
   }
 
   // Apply score change
@@ -1544,12 +1547,11 @@ void handleReset() {
   waitingForCoin = false;
   lastMove.hasUndo = false;
   
-  // Clear all LEDs
-  strip.clear();
-  strip.show();
-  delay(100);
+  // Play startup animation (same as first boot)
+  startupAnimation();
   
   // Redraw background
+  renderBackground();
   renderBackground();
   
   // Save state

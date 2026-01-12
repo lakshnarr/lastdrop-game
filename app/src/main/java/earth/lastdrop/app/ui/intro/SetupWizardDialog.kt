@@ -48,7 +48,6 @@ class SetupWizardDialog(
     private var serverConnected = false
     private var selectedDiceCount = 1  // 1 or 2 dice
     private var wantsSmartDice = false
-    private var allSkipped = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,7 +98,6 @@ class SetupWizardDialog(
             3 -> showDiceConnectStep()        // Connect dice
             4 -> showServerStep()
             5 -> showWelcomeStep()
-            6 -> showQuitConfirmStep()
         }
     }
 
@@ -206,20 +204,9 @@ class SetupWizardDialog(
         onSpeak("All set! Hey $namesText! ${playerNames[0]}, you're up first. Tap Let's Go when you're ready!")
     }
 
-    private fun showQuitConfirmStep() {
-        tvStepTitle.text = "Want to Quit? 🤔"
-        tvStepDescription.text = "You skipped all connections.\nDo you want to quit or try again?"
-        ivStepIcon.setImageResource(R.drawable.ic_close)
-        btnYes.text = "Quit"
-        btnYes.visibility = View.VISIBLE
-        btnNo.text = "Try Again"
-        onSpeak("You skipped everything. Want to quit or try again?")
-    }
-
     private fun handleYes() {
         when (currentStep) {
             0 -> { // Connect Board
-                allSkipped = false
                 onSpeak("Great! Searching for the board...")
                 showLoading("Searching for board...")
                 onConnectBoard { success ->
@@ -234,7 +221,6 @@ class SetupWizardDialog(
                 }
             }
             1 -> { // Want Smart Dice? Yes -> ask count
-                allSkipped = false
                 wantsSmartDice = true
                 onSpeak("Awesome! Let's pick how many dice.")
                 showStep(2) // Go to dice count selection
@@ -248,7 +234,6 @@ class SetupWizardDialog(
                 showStep(3)
             }
             4 -> { // Connect Server
-                allSkipped = false
                 onSpeak("Let's set up web sharing!")
                 showLoading("Opening scanner...")
                 onConnectServer { success ->
@@ -263,10 +248,6 @@ class SetupWizardDialog(
             5 -> { // Welcome - Start Game
                 dismiss()
                 onComplete(boardConnected, diceConnected, serverConnected, selectedDiceCount)
-            }
-            6 -> { // Quit Confirm - Yes = Quit
-                dismiss()
-                onQuit()
             }
         }
     }
@@ -293,16 +274,8 @@ class SetupWizardDialog(
                 showStep(4) // Go to server
             }
             4 -> { // Skip server
-                if (allSkipped && !boardConnected && !diceConnected) {
-                    showStep(6) // All skipped - ask if quit
-                } else {
-                    onSpeak("Okay, skipping web sharing.")
-                    showStep(5) // Go to welcome
-                }
-            }
-            6 -> { // Try Again
-                onSpeak("Let's try again from the start!")
-                showStep(0)
+                onSpeak("Okay, skipping web sharing.")
+                showStep(5) // Go to welcome (always proceed, even if all skipped)
             }
         }
     }

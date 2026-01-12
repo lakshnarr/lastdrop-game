@@ -173,3 +173,158 @@ $b = Test-AndroidSdk
 $c = Test-JavaHome
 $d = Test-ESP32Port
 if ($a -and $b -and $c -and $d) { Write-Host "`n✅ All tools ready!" -ForegroundColor Green }
+
+# ============================================================================
+# VPS DEPLOYMENT CONFIGURATION
+# ============================================================================
+
+$global:VPS = @{
+    Host = "142.171.191.171"
+    Domain = "lastdrop.earth"
+    User = "lastdrop"
+    Password = "Lastdrop1!"
+    WebRoot = "/var/www/lastdrop.earth/public"
+    Port = 22
+    PscpPath = "C:\Program Files\PuTTY\pscp.exe"
+    PlinkPath = "C:\Program Files\PuTTY\plink.exe"
+}
+
+$global:LocalPaths = @{
+    Website = "$ProjectRoot\website"
+    LiveHtml = "$ProjectRoot\website\live.html"
+    HostHtml = "$ProjectRoot\website\host.html"
+    Assets = "$ProjectRoot\website\assets"
+    ChanceCards = "$ProjectRoot\website\assets\chance"
+}
+
+function Test-VPSTools {
+    $pscp = Test-Path $global:VPS.PscpPath
+    $plink = Test-Path $global:VPS.PlinkPath
+    if ($pscp -and $plink) {
+        Write-Host "✓ PuTTY tools found (pscp, plink)" -ForegroundColor Green
+        return $true
+    }
+    Write-Host "✗ PuTTY tools not found. Install with: winget install PuTTY.PuTTY" -ForegroundColor Red
+    return $false
+}
+
+function Upload-ToVPS {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$LocalPath,
+        [string]$RemotePath = $global:VPS.WebRoot
+    )
+    
+    if (-not (Test-Path $LocalPath)) {
+        Write-Host "✗ Local path not found: $LocalPath" -ForegroundColor Red
+        return $false
+    }
+    
+    $isDir = (Get-Item $LocalPath).PSIsContainer
+    $fileName = Split-Path $LocalPath -Leaf
+    $destFull = "$($global:VPS.User)@$($global:VPS.Host):$RemotePath"
+    
+    Write-Host "`n📤 Uploading: $fileName" -ForegroundColor Yellow
+    Write-Host "   → $destFull" -ForegroundColor Gray
+    
+    $args = @("-batch", "-pw", $global:VPS.Password)
+    if ($isDir) { $args += "-r" }
+    $args += $LocalPath, $destFull
+    
+    & $global:VPS.PscpPath @args 2>&1 | ForEach-Object { Write-Host "   $_" }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "   ✅ Success!" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "   ❌ Failed" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Deploy-Live {
+    Write-Host "`n🚀 Deploying live.html to VPS..." -ForegroundColor Magenta
+    Upload-ToVPS -LocalPath $global:LocalPaths.LiveHtml -RemotePath "$($global:VPS.WebRoot)/live.html"
+}
+
+function Deploy-Host {
+    Write-Host "`n🚀 Deploying host.html to VPS..." -ForegroundColor Magenta
+    Upload-ToVPS -LocalPath $global:LocalPaths.HostHtml -RemotePath "$($global:VPS.WebRoot)/host.html"
+}
+
+function Deploy-Assets {
+    Write-Host "`n🚀 Deploying assets folder to VPS..." -ForegroundColor Magenta
+    Upload-ToVPS -LocalPath $global:LocalPaths.Assets -RemotePath "$($global:VPS.WebRoot)/assets/"
+}
+
+function Deploy-ChanceCards {
+    Write-Host "`n🚀 Deploying chance cards to VPS..." -ForegroundColor Magenta
+    
+    # Upload to /tmp first, then sudo copy (due to www-data ownership)
+    $chanceDir = $global:LocalPaths.ChanceCards
+    $files = Get-ChildItem "$chanceDir\*.png" -ErrorAction SilentlyContinue
+    
+    foreach ($file in $files) {
+        Write-Host "   📤 $($file.Name)..." -ForegroundColor Gray
+        & $global:VPS.PscpPath -batch -pw $global:VPS.Password $file.FullName "$($global:VPS.User)@$($global:VPS.Host):/tmp/$($file.Name)" 2>&1 | Out-Null
+        & $global:VPS.PlinkPath -batch -pw $global:VPS.Password "$($global:VPS.User)@$($global:VPS.Host)" "echo '$($global:VPS.Password)' | sudo -S cp /tmp/$($file.Name) $($global:VPS.WebRoot)/assets/chance/$($file.Name) 2>/dev/null" 2>&1 | Out-Null
+    }
+    Write-Host "   ✅ Chance cards deployed!" -ForegroundColor Green
+}
+
+function Deploy-All {
+    Write-Host "`n🚀 FULL DEPLOYMENT TO VPS" -ForegroundColor Magenta
+    Write-Host "================================" -ForegroundColor Magenta
+    
+    Deploy-Live
+    Deploy-Host
+    
+    # Upload other HTML files
+    $htmlFiles = @("index.html", "intro.html")
+    foreach ($file in $htmlFiles) {
+        $localFile = Join-Path $global:LocalPaths.Website $file
+        if (Test-Path $localFile) {
+            Upload-ToVPS -LocalPath $localFile -RemotePath "$($global:VPS.WebRoot)/$file"
+        }
+    }
+    
+    Deploy-ChanceCards
+    
+    Write-Host "`n✅ Full deployment complete!" -ForegroundColor Green
+}
+
+function VPS-Run {
+    param([Parameter(Mandatory=$true)][string]$Command)
+    Write-Host "🖥️  Running on VPS: $Command" -ForegroundColor Cyan
+    & $global:VPS.PlinkPath -batch -pw $global:VPS.Password "$($global:VPS.User)@$($global:VPS.Host)" $Command
+}
+
+function Show-DeployHelp {
+    Write-Host @"
+
+📦 LastDrop VPS Deployment Commands
+====================================
+
+Quick Deploy:
+  Deploy-Live          Upload live.html
+  Deploy-Host          Upload host.html
+  Deploy-Assets        Upload assets folder
+  Deploy-ChanceCards   Upload chance card images
+  Deploy-All           Upload everything
+
+Custom Upload:
+  Upload-ToVPS -LocalPath "C:\file.png" -RemotePath "/var/www/lastdrop.earth/public/"
+
+Run Command on VPS:
+  VPS-Run "ls -la /var/www/lastdrop.earth/public/"
+
+VPS: $($global:VPS.User)@$($global:VPS.Host)
+
+"@ -ForegroundColor Cyan
+}
+
+# Show VPS status
+if (Test-VPSTools) {
+    Write-Host "VPS: $($global:VPS.User)@$($global:VPS.Host) → $($global:VPS.WebRoot)" -ForegroundColor DarkGray
+    Write-Host "Type 'Show-DeployHelp' for deployment commands" -ForegroundColor DarkGray
+}

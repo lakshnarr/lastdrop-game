@@ -71,10 +71,28 @@
       grid-area: header;
       background: rgba(5, 7, 17, 0.95);
       border-bottom: 1px solid var(--tile-border);
-      padding: 12px 20px;
+      padding: 12px 0;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 16px;
+      align-items: center;
+    }
+    
+    .header-title-column {
+      grid-column: 1;
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 4px;
+    }
+
+    .top-logo {
+      height: 120px;
+      max-width: 440px;
+      margin: 6px auto 6px auto;
+      display: block;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
+      object-fit: contain;
     }
 
     h1 {
@@ -83,6 +101,13 @@
       text-transform: uppercase;
       margin: 0;
       text-align: center;
+    }
+
+    .page-shell {
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 16px;
     }
 
     .subtitle {
@@ -105,7 +130,9 @@
       grid-area: main;
       display: grid;
       grid-template-columns: 1fr 320px;
-      gap: 0;
+      gap: 16px;
+      justify-content: center;
+      align-items: start;
       overflow: hidden;
     }
 
@@ -114,12 +141,21 @@
       .main-content {
         grid-template-columns: 1fr 280px;
       }
+      .header {
+        grid-template-columns: 1fr 280px;
+      }
     }
 
     @media (max-width: 900px) {
       .main-content {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
+      }
+      
+      .header {
+        display: flex;
+        flex-direction: column;
+        padding: 12px 20px;
       }
       
       .side-card {
@@ -153,6 +189,11 @@
       
       .subtitle {
         font-size: 0.7rem;
+      }
+
+      .top-logo {
+        height: 96px;
+        max-width: 320px;
       }
       
       .footer {
@@ -393,7 +434,7 @@
 
     .board3d {
       position: relative;
-      width: min(460px, 80vw);
+      width: min(520px, 86vw);
       aspect-ratio: 1 / 1;
       background: radial-gradient(
           circle at 30% 0%,
@@ -410,7 +451,7 @@
 
     .board-surface {
       position: absolute;
-      inset: 22px;
+      inset: 16px;
       background: url('/assets/images/board-bg.png') center center / cover no-repeat, 
                   radial-gradient(circle at top, #111827, #020617);
       border-radius: 18px;
@@ -436,11 +477,11 @@
 
     .tiles-grid {
       position: absolute;
-      inset: 36px;
+      inset: 18px;
       display: grid;
       grid-template-columns: repeat(6, 1fr);
-      grid-template-rows: repeat(7, 1fr);
-      gap: 4px;
+      grid-template-rows: repeat(6, 1fr);
+      gap: 6px;
       transform-style: preserve-3d;
       z-index: 10;
     }
@@ -490,7 +531,7 @@
 
     .tokens-layer {
       position: absolute;
-      inset: 36px;
+      inset: 18px 18px 10px 18px;
       transform-style: preserve-3d;
       transform: translateZ(32px); /* Lift coins above board surface */
       z-index: 9000;
@@ -506,6 +547,60 @@
       filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.6)) drop-shadow(0 2px 12px rgba(0, 0, 0, 0.4));
       transition: all 0.4s ease-out;
       z-index: 5000;
+    }
+    
+    /* Special effect: Skip Penalty Immunity */
+    .player-token.skip-penalty::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 60px;
+      height: 60px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0) 70%);
+      border: 2px solid rgba(34, 197, 94, 0.8);
+      border-radius: 50%;
+      animation: pulse-green 2s infinite;
+      z-index: -1;
+    }
+    
+    /* Special effect: Water Shield */
+    .player-token.water-shield::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 65px;
+      height: 65px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.4), rgba(59, 130, 246, 0) 70%);
+      border: 3px solid rgba(59, 130, 246, 0.9);
+      border-radius: 50%;
+      animation: pulse-blue 1.8s infinite;
+      z-index: -1;
+    }
+    
+    @keyframes pulse-green {
+      0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.15);
+        opacity: 0.7;
+      }
+    }
+    
+    @keyframes pulse-blue {
+      0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0.6;
+      }
     }
     
     /* Eliminated player styling */
@@ -582,8 +677,8 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 160px;
-      max-width: 50vw;
+      width: 280px;
+      max-width: 70vw;
       transform: translate(-50%, -50%) translateZ(20px);
       background: linear-gradient(135deg, #0f172a, #020617);
       border-radius: 12px;
@@ -612,10 +707,133 @@
 
     .chance-image {
       width: 100%;
-      height: 90px;
-      background-size: cover;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      background-size: contain;
       background-position: center;
       background-repeat: no-repeat;
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Chance Selection Overlay - 6 cards for dice selection */
+    .chance-selection-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .chance-selection-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .chance-selection-title {
+      font-size: 1.2rem;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 12px;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+    }
+
+    .chance-selection-player {
+      font-size: 1.5rem;
+      color: #f8fafc;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .chance-selection-instruction {
+      font-size: 1rem;
+      color: #94a3b8;
+      margin-bottom: 20px;
+      animation: pulse-text 1.5s infinite;
+    }
+
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .chance-selection-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      max-width: 90%;
+    }
+
+    .chance-selection-card {
+      position: relative;
+      width: 100px;
+      aspect-ratio: 2 / 3;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
+      cursor: default;
+    }
+
+    .chance-selection-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .chance-selection-card .dice-badge {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #1e40af, #3b82f6);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: bold;
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .chance-selection-card.selected {
+      transform: scale(1.15);
+      border-color: #fbbf24;
+      box-shadow: 0 0 30px rgba(251, 191, 36, 0.6), 0 0 60px rgba(251, 191, 36, 0.3);
+      z-index: 10;
+    }
+
+    .chance-selection-card.not-selected {
+      opacity: 0.3;
+      transform: scale(0.9);
+    }
+
+    .chance-selection-card.animate-in {
+      animation: card-flip-in 0.4s ease-out forwards;
+    }
+
+    @keyframes card-flip-in {
+      0% {
+        transform: rotateY(180deg) scale(0.5);
+        opacity: 0;
+      }
+      100% {
+        transform: rotateY(0) scale(1);
+        opacity: 1;
+      }
     }
 
     .chance-body {
@@ -1102,7 +1320,7 @@
   <!-- Small Screen Disclaimer -->
   <div id="smallScreenDisclaimer" class="small-screen-disclaimer hidden">
     <div class="disclaimer-content">
-      <div class="disclaimer-icon">=ƒô¦</div>
+      <div class="disclaimer-icon">📺</div>
       <div class="disclaimer-title">Best Viewed on Large Screens</div>
       <div class="disclaimer-text">
         This live board is designed for TV and large screens for an immersive gaming experience. 
@@ -1127,7 +1345,7 @@
   <!-- Connection Popup -->
   <div id="connectionOverlay" class="connection-overlay hidden">
     <div class="connection-card">
-      <div class="connection-title">=ƒÄ« Connect LastDrop Controller</div>
+      <div class="connection-title">🎮 Connect LastDrop Controller</div>
       <div class="connection-content">
         <div class="connection-status">
           <div class="status-indicator" id="connectionIndicator">
@@ -1150,7 +1368,7 @@
   <!-- Reconnection Overlay -->
   <div id="reconnectionOverlay" class="connection-overlay hidden">
     <div class="connection-card">
-      <div class="connection-title">=ƒöä Reconnecting...</div>
+      <div class="connection-title">⏳ Reconnecting...</div>
       <div class="connection-content">
         <div class="connection-status">
           <div class="status-indicator">
@@ -1162,12 +1380,33 @@
           <p>Retry attempt: <strong id="retryAttempt">1</strong>/5</p>
           <p>Next retry in: <strong id="retryDelay">2</strong>s</p>
         </div>
+        <div class="connection-actions" style="margin-top: 16px;">
+          <button id="showQrBtn" class="btn-small">Show QR Code</button>
+        </div>
       </div>
     </div>
   </div>
   
-  <!-- Welcome Screen (Demo Mode) -->
-  <div id="welcomeOverlay" class="connection-overlay">
+  <!-- QR Code Overlay -->
+  <div id="qrOverlay" class="connection-overlay hidden">
+    <div class="connection-card">
+      <div class="connection-title">📱 Scan to Reconnect</div>
+      <div class="connection-content">
+        <div id="qrCodeContainer" style="text-align: center; padding: 20px; background: white; border-radius: 8px; margin: 16px 0;">
+          <div id="qrCode"></div>
+        </div>
+        <div class="connection-instructions">
+          <p style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">Scan this QR code with your LastDrop app to reconnect to this session</p>
+        </div>
+        <div class="connection-actions" style="margin-top: 16px;">
+          <button id="closeQrBtn" class="btn-small">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Welcome Screen (Demo Mode) - Hidden by default for live mode -->
+  <div id="welcomeOverlay" class="connection-overlay hidden">
     <div class="connection-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
       <div class="connection-title">&#128167; Welcome to Last Drop Demo!</div>
       <div class="connection-content" style="text-align: left;">
@@ -1185,7 +1424,6 @@
             <li><strong>Roll the dice</strong> - Move forward based on dice value</li>
             <li><strong>Tile effects</strong> - Gain or lose water drops depending on where you land</li>
             <li><strong>Chance cards</strong> - Land on special tiles to draw random events</li>
-            <li><strong>Complete laps</strong> - Pass START to earn +5 bonus drops</li>
             <li><strong>Elimination</strong> - Players with 0 drops are out of the game</li>
           </ul>
         </div>
@@ -1207,17 +1445,20 @@
     </div>
   </div>
 
-  <!-- Header -->
-  <header class="header">
-    <h1>LAST DROP &#128167;</h1>
-    <div class="subtitle">
-      <span id="sessionInfo" class="last-updated" style="color: #60a5fa;"></span>
-      <span id="lastUpdated" class="last-updated"></span>
-    </div>
-  </header>
+  <div class="page-shell">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title-column">
+        <h1>🎮 Live Game</h1>
+        <div class="subtitle">
+          <span id="lastUpdated" class="last-updated"></span>
+          <span id="sessionInfo" class="last-updated" style="display:none;"></span>
+        </div>
+      </div>
+    </header>
 
-  <!-- Main Content Area -->
-  <main class="main-content">
+    <!-- Main Content Area -->
+    <main class="main-content">
     <!-- Board Section -->
     <section class="board-card">
       <div class="board-header">
@@ -1243,6 +1484,16 @@
               <div class="chance-body">
                 <div id="chanceTitle" class="chance-title">Chance Card</div>
                 <div id="chanceText" class="chance-text">Awaiting event...</div>
+              </div>
+            </div>
+            
+            <!-- Chance Card Selection Overlay - 6 cards for dice selection -->
+            <div id="chanceSelectionOverlay" class="chance-selection-overlay">
+              <div class="chance-selection-title">🎴 Chance Cards</div>
+              <div id="chanceSelectionPlayer" class="chance-selection-player">Player rolling...</div>
+              <div class="chance-selection-instruction">Roll to Choose!</div>
+              <div class="chance-selection-grid" id="chanceSelectionGrid">
+                <!-- Cards will be populated by JavaScript -->
               </div>
             </div>
           </div>
@@ -1391,7 +1642,6 @@
       <div id="eliminatedList" class="eliminated-list"></div>
 
       <div class="status-row">
-        <span>Connection: <span id="connStatus" class="badge-red">OFFLINE</span></span>
         <span>Mode: <span id="modeStatus" class="badge-green">DEMO</span></span>
       </div>
 
@@ -1399,12 +1649,18 @@
         ESP32 → Android → Server → Live — visual only, rules stay on hardware.
       </div>
     </aside>
-  </main>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <button id="settingsBtn" class="btn-small" type="button"> Settings</button>
+    </footer>
+  </div>
 
   <!-- Winner Celebration Overlay -->
   <div id="winnerOverlay" class="winner-overlay hidden">
     <div class="winner-card">
-      <div class="winner-trophy">=ƒÅå</div>
+      <div class="winner-trophy">🏆</div>
       <div class="winner-title">WINNER!</div>
       <div id="winnerName" class="winner-name">Player 1</div>
       <div id="winnerDrops" class="winner-drops">💧 15 drops</div>
@@ -1420,11 +1676,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <button id="settingsBtn" class="btn-small" type="button"> Settings</button>
-  </footer>
 
   <!-- Settings rop -->
   <div id="settingsBackdrop" class="settings-backdrop hidden"></div>
@@ -1583,6 +1834,9 @@
     
     const tileNames = ["LAUNCH PAD","NATURE GUARDIAN","POLLUTING FACTORY","FLOWER GARDEN","TREE CUTTING","MARSH SWAMP","RECYCLED WATER","WASTED WATER","RIVER ROBBER","LILLY POND","SANCTUARY COVE","SHRINKING LAKE","CRYSTAL GLACIER","DRY CITY","RAIN HARVEST","MANGROVE TRAIL","WASTED WELL","EVERGREEN FOREST","PLANT GROWER","DIRTY WATER LANE"];
     let demoMode = false;
+    
+    // Game balance settings (easy to adjust)
+    const LAP_BONUS = 0;  // Bonus drops when completing a lap (passing start tile). Set to 0 to disable.
 
     // Audio System
     const audioEnabled = { value: true };
@@ -1705,10 +1959,22 @@
     const chanceImage = document.getElementById("chanceImage");
     const chanceTitle = document.getElementById("chanceTitle");
     const chanceText = document.getElementById("chanceText");
+    
+    // Chance selection overlay elements
+    const chanceSelectionOverlay = document.getElementById("chanceSelectionOverlay");
+    const chanceSelectionPlayer = document.getElementById("chanceSelectionPlayer");
+    const chanceSelectionGrid = document.getElementById("chanceSelectionGrid");
+    let activeChanceSelection = null; // Stores {playerName, cardNumbers} when selection is active
 
     // Connection popup elements - moved inside load event to ensure DOM is ready
     let connectionOverlay, connectionIndicator, connectionText, skipConnection;
     let reconnectionOverlay, reconnectionText, retryAttemptEl, retryDelayEl, reconnectionInfo;
+    let qrOverlay, qrCodeContainer, showQrBtn, closeQrBtn;
+    let qrCodeInstance = null;
+    let qrOverlay, qrCodeContainer, showQrBtn, closeQrBtn;
+    let qrCodeInstance = null;
+    let qrOverlay, qrCodeContainer, showQrBtn, closeQrBtn;
+    let qrCodeInstance = null;
     let loadingOverlay;
     let firstFetchComplete = false;
     let lastUpdatedEl;
@@ -2022,6 +2288,10 @@
         return;
       }
 
+      // CRITICAL: Clear any leftover CSS transition so non-animated moves snap instantly
+      // This prevents "phantom animations" when tokens from previous walks have transition set
+      token.style.transition = 'none';
+
       // Always keep tokens inside the dedicated tokens layer (avoid clipping by tiles)
       if (token.parentElement !== tokensLayer) tokensLayer.appendChild(token);
 
@@ -2164,6 +2434,70 @@
         const tileIndex = token.dataset.tileIndex;
         if (tileIndex) positionToken(token.dataset.player, tileIndex, index);
       });
+    }
+
+    // Chance Card Selection Functions
+    function showChanceSelection(playerName, cardNumbers) {
+      if (!chanceSelectionOverlay || !chanceSelectionGrid) return;
+      
+      activeChanceSelection = { playerName, cardNumbers };
+      chanceSelectionPlayer.textContent = playerName;
+      
+      // Clear and populate the card grid
+      chanceSelectionGrid.innerHTML = '';
+      cardNumbers.forEach((cardNum, index) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'chance-selection-card animate-in';
+        cardDiv.style.animationDelay = `${index * 0.1}s`;
+        cardDiv.dataset.cardNumber = cardNum;
+        cardDiv.dataset.diceValue = index + 1;
+        
+        const img = document.createElement('img');
+        img.src = `/assets/chance/${cardNum}.png`;
+        img.alt = `Chance Card ${cardNum}`;
+        img.onerror = function() {
+          // Fallback if image not found
+          this.src = '/assets/chance/1.png';
+        };
+        
+        const badge = document.createElement('div');
+        badge.className = 'dice-badge';
+        badge.textContent = index + 1;
+        
+        cardDiv.appendChild(img);
+        cardDiv.appendChild(badge);
+        chanceSelectionGrid.appendChild(cardDiv);
+      });
+      
+      chanceSelectionOverlay.classList.add('visible');
+      playSound('chance'); // Play chance sound when showing
+    }
+    
+    function hideChanceSelection() {
+      if (chanceSelectionOverlay) {
+        chanceSelectionOverlay.classList.remove('visible');
+      }
+      activeChanceSelection = null;
+    }
+    
+    function highlightSelectedCard(diceValue) {
+      if (!activeChanceSelection || !chanceSelectionGrid) return;
+      
+      const cards = chanceSelectionGrid.querySelectorAll('.chance-selection-card');
+      cards.forEach((card, index) => {
+        if (index + 1 === diceValue) {
+          card.classList.add('selected');
+          card.classList.remove('not-selected');
+        } else {
+          card.classList.add('not-selected');
+          card.classList.remove('selected');
+        }
+      });
+      
+      // Hide after a delay to show the selection
+      setTimeout(() => {
+        hideChanceSelection();
+      }, 2000);
     }
 
     function updateUIFromState(state) {
@@ -2327,6 +2661,11 @@
       const updatePlayerPositions = () => {
         // If this is a reset event, clear ALL old tokens and recreate fresh
         if (state.lastEvent && state.lastEvent.reset === true) {
+          console.log("[live] RESET detected - clearing animation locks and tokens");
+          // Force clear any animation locks
+          isDiceAnimationPlaying = false;
+          queuedLiveState = null;
+          
           // Remove ALL existing tokens from DOM and clear tracking
           Object.keys(tokensByPlayerId).forEach(playerId => {
             const token = tokensByPlayerId[playerId];
@@ -2345,11 +2684,59 @@
           return;
         }
 
+        // Handle initial sync from Android app - position all tokens immediately without animation
+        if (state.lastEvent && state.lastEvent.initialSync === true) {
+          console.log("[live] INITIAL SYNC detected - positioning all tokens at current positions (no animation)");
+          // Force clear any animation locks
+          isDiceAnimationPlaying = false;
+          queuedLiveState = null;
+          
+          // Position all tokens at their CURRENT positions (from state) without animation
+          players.forEach((p, idx) => {
+            ensureTokenForPlayer(p);
+            const token = tokensByPlayerId[p.id];
+            if (!token) return;
+            
+            if (p.eliminated) {
+              token.classList.add('eliminated');
+              token.style.display = 'none';
+            } else {
+              token.classList.remove('eliminated');
+              token.style.display = 'block';
+            }
+            
+            // Apply special effect classes from API
+            if (p.skipPenalty) {
+              token.classList.add('skip-penalty');
+            } else {
+              token.classList.remove('skip-penalty');
+            }
+            
+            if (p.waterShield) {
+              token.classList.add('water-shield');
+            } else {
+              token.classList.remove('water-shield');
+            }
+            
+            // Position immediately without animation
+            positionToken(p.id, p.pos, idx, false);
+            token.dataset.tileIndex = p.pos;
+          });
+          
+          eventLog.innerHTML = "Connected to game - tokens synced";
+          return;
+        }
+
         // If a dice animation is playing, queue this state and do not move tokens now
         if (isDiceAnimationPlaying) {
           queuedLiveState = state;
           return;
         }
+        
+        // Determine which player just moved (from lastEvent)
+        const activePlayerId = state.lastEvent ? state.lastEvent.playerId : null;
+        console.debug('[live] updatePlayerPositions - activePlayer:', activePlayerId);
+        
         players.forEach((p, idx) => {
           ensureTokenForPlayer(p);
           const token = tokensByPlayerId[p.id];
@@ -2362,19 +2749,36 @@
             token.style.display = 'block';
           }
           
+          // Apply special effect classes from API
+          if (p.skipPenalty) {
+            token.classList.add('skip-penalty');
+          } else {
+            token.classList.remove('skip-penalty');
+          }
+          
+          if (p.waterShield) {
+            token.classList.add('water-shield');
+          } else {
+            token.classList.remove('water-shield');
+          }
+          
           // Get stored and new positions
           const previousPos = (token.dataset.tileIndex !== undefined && token.dataset.tileIndex !== '') ? parseInt(token.dataset.tileIndex) : null;
           const newPos = p.pos;
 
-          // If position changed and we should animate, run the walking animation
-          if (!p.eliminated && previousPos !== null && previousPos !== newPos) {
-            // Use animateTokenWalk directly and update dataset only when animation completes
+          // ONLY animate the token of the player who just rolled
+          // For all other players, position immediately without animation
+          const shouldAnimate = (p.id === activePlayerId) && !p.eliminated && previousPos !== null && previousPos !== newPos;
+          
+          if (shouldAnimate) {
+            // Animate ONLY the active player's token
+            console.debug('[live] Animating token for active player', p.id, 'from', previousPos, 'to', newPos);
             animateTokenWalk(p.id, previousPos, newPos, idx, () => {
               const t = tokensByPlayerId[p.id];
               if (t) t.dataset.tileIndex = newPos;
             });
           } else {
-            // No animation required — position immediately and update dataset
+            // Position immediately without animation (other players or no movement)
             positionToken(p.id, newPos, idx, false);
             token.dataset.tileIndex = newPos;
           }
@@ -2555,6 +2959,27 @@
         lastChanceTimeout = setTimeout(() => chanceCard.classList.remove("visible"), 4500);
       } else {
         chanceCard.classList.remove("visible");
+      }
+      
+      // Handle chance card selection overlay (6 cards for dice selection)
+      if (state.chanceSelection && state.chanceSelection.active) {
+        const sel = state.chanceSelection;
+        // Only show if we're not already showing the same selection
+        if (!activeChanceSelection || 
+            activeChanceSelection.playerName !== sel.playerName ||
+            JSON.stringify(activeChanceSelection.cardNumbers) !== JSON.stringify(sel.cardNumbers)) {
+          showChanceSelection(sel.playerName, sel.cardNumbers);
+        }
+        
+        // If a card was selected (diceResult is set), highlight it
+        if (sel.selectedCard && sel.diceResult) {
+          highlightSelectedCard(sel.diceResult);
+        }
+      } else {
+        // No active selection, hide the overlay
+        if (activeChanceSelection) {
+          hideChanceSelection();
+        }
       }
     }
 
@@ -3128,9 +3553,9 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       const newPos = ((currentPlayer.pos - 1 + diceValue) % 20) + 1;
       currentPlayer.pos = newPos;
       
-      // Check if player completed a lap (passed tile 1)
-      if (oldPos > newPos || (oldPos + diceValue > 20)) {
-        currentPlayer.drops += 5; // Lap bonus
+      // Check if player completed a lap (passed tile 1) - configurable via LAP_BONUS
+      if (LAP_BONUS > 0 && (oldPos > newPos || (oldPos + diceValue > 20))) {
+        currentPlayer.drops += LAP_BONUS;
       }
       
       // Show 3D dice animation (no callback needed in demo mode)
@@ -3228,6 +3653,24 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       retryDelayEl = document.getElementById("retryDelay");
       reconnectionInfo = document.getElementById("reconnectionInfo");
       
+      // Initialize QR overlay elements
+      qrOverlay = document.getElementById("qrOverlay");
+      qrCodeContainer = document.getElementById("qrCode");
+      showQrBtn = document.getElementById("showQrBtn");
+      closeQrBtn = document.getElementById("closeQrBtn");
+      
+      // Initialize QR overlay elements
+      qrOverlay = document.getElementById("qrOverlay");
+      qrCodeContainer = document.getElementById("qrCode");
+      showQrBtn = document.getElementById("showQrBtn");
+      closeQrBtn = document.getElementById("closeQrBtn");
+      
+      // Initialize QR overlay elements
+      qrOverlay = document.getElementById("qrOverlay");
+      qrCodeContainer = document.getElementById("qrCode");
+      showQrBtn = document.getElementById("showQrBtn");
+      closeQrBtn = document.getElementById("closeQrBtn");
+      
       // Initialize welcome overlay
       const welcomeOverlay = document.getElementById("welcomeOverlay");
       const startDemoBtn = document.getElementById("startDemoBtn");
@@ -3274,6 +3717,78 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
         // Don't call fetchAndUpdate in demo mode, demo is already running
       });
       
+      // Show QR Code button handler
+      showQrBtn?.addEventListener("click", () => {
+        // Hide reconnection overlay
+        reconnectionOverlay.classList.add('hidden');
+        
+        // Show QR overlay
+        qrOverlay.classList.remove('hidden');
+        
+        // Generate QR code with current page URL (preserving session params)
+        const currentUrl = window.location.href;
+        
+        // Clear previous QR code if exists
+        qrCodeContainer.innerHTML = '';
+        
+        // Generate new QR code
+        if (typeof QRCode !== 'undefined') {
+          qrCodeInstance = new QRCode(qrCodeContainer, {
+            text: currentUrl,
+            width: 256,
+            height: 256,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+          });
+        } else {
+          qrCodeContainer.innerHTML = '<p style="color: red;">QR library not loaded. Please refresh the page.</p>';
+        }
+      });
+      
+      // Close QR Code button handler
+      closeQrBtn?.addEventListener("click", () => {
+        qrOverlay.classList.add('hidden');
+        // Show reconnection overlay again
+        reconnectionOverlay.classList.remove('hidden');
+      });
+      
+      // Show QR Code button handler
+      showQrBtn?.addEventListener("click", () => {
+        // Hide reconnection overlay
+        reconnectionOverlay.classList.add('hidden');
+        
+        // Show QR overlay
+        qrOverlay.classList.remove('hidden');
+        
+        // Generate QR code with current page URL (preserving session params)
+        const currentUrl = window.location.href;
+        
+        // Clear previous QR code if exists
+        qrCodeContainer.innerHTML = '';
+        
+        // Generate new QR code
+        if (typeof QRCode !== 'undefined') {
+          qrCodeInstance = new QRCode(qrCodeContainer, {
+            text: currentUrl,
+            width: 256,
+            height: 256,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+          });
+        } else {
+          qrCodeContainer.innerHTML = '<p style="color: red;">QR library not loaded. Please refresh the page.</p>';
+        }
+      });
+      
+      // Close QR Code button handler
+      closeQrBtn?.addEventListener("click", () => {
+        qrOverlay.classList.add('hidden');
+        // Show reconnection overlay again
+        reconnectionOverlay.classList.remove('hidden');
+      });
+      
       initTiles();
       computeTileCenters();
       // Start in top view
@@ -3312,6 +3827,9 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
       });
     });
   </script>
+  
+  <!-- QR Code Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </body>
 </html>
 </script>
@@ -3666,4 +4184,7 @@ function showStaticDice(value1, value2 = null, playerName = "Player", diceColor1
   });
 </script>
 
-
+<!-- QR Code Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</body>
+</html>

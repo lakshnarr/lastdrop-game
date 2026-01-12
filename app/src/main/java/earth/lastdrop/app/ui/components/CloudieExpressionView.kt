@@ -45,15 +45,15 @@ class CloudieExpressionView @JvmOverloads constructor(
 
     // Face drawing paints - Warm, friendly colors!
     private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#87CEEB") // Sky blue - friendly cloud color
+        color = Color.parseColor("#B8E4F9") // Light sky blue - like reference
         style = Paint.Style.FILL
     }
     private val faceHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#B0E0FF") // Lighter blue for highlight
+        color = Color.parseColor("#D6F0FC") // Even lighter blue for highlight spots
         style = Paint.Style.FILL
     }
     private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#2E4057") // Dark navy eyes - warmer than pure black
+        color = Color.parseColor("#1A1A1A") // Almost black for eyes
         style = Paint.Style.FILL
     }
     private val eyeWhitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -65,27 +65,29 @@ class CloudieExpressionView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
     private val mouthPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#E91E63") // Pink happy mouth
-        style = Paint.Style.FILL  // Filled mouth for friendlier look
+        color = Color.parseColor("#E57B8D") // Soft pink mouth like reference
+        style = Paint.Style.FILL
     }
     private val mouthStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#C2185B") // Darker pink outline
+        color = Color.parseColor("#1A1A1A") // Black outline
         style = Paint.Style.STROKE
-        strokeWidth = 4f
+        strokeWidth = 3f
         strokeCap = Paint.Cap.ROUND
     }
     private val blushPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#60FF8A80") // Rosy pink blush - more visible
+        color = Color.parseColor("#70FFB6C1") // Light pink blush
         style = Paint.Style.FILL
     }
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#30000000")
+        color = Color.parseColor("#20000000")
         style = Paint.Style.FILL
     }
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#5DA9E9") // Slightly darker blue outline
+        color = Color.parseColor("#1A1A1A") // Black outline like reference
         style = Paint.Style.STROKE
-        strokeWidth = 3f
+        strokeWidth = 5f
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
     }
 
     // Animation state
@@ -107,10 +109,36 @@ class CloudieExpressionView @JvmOverloads constructor(
     private var blinkAnimator: ValueAnimator? = null
 
     private var idleAnimator: ValueAnimator? = null
+    
+    // Floating animation state - smooth X,Y movement
+    private var floatAnimatorX: ValueAnimator? = null
+    private var floatAnimatorY: ValueAnimator? = null
+    private var floatOffsetX = 0f  // Translation offset in X
+    private var floatOffsetY = 0f  // Translation offset in Y
+    private val floatAmplitudeX = 15f  // Max horizontal float distance in dp
+    private val floatAmplitudeY = 10f   // Max vertical float distance in dp
+    
+    // Bounds for floating (set by parent to constrain movement)
+    private var floatBoundsTop = 0f
+    private var floatBoundsBottom = 0f
+    
+    /** Get the center position of the cloud (for water drop animations) */
+    fun getCloudCenter(): Pair<Float, Float> {
+        val location = IntArray(2)
+        getLocationInWindow(location)
+        return Pair(location[0] + width / 2f + translationX, location[1] + height / 2f + translationY)
+    }
+    
+    /** Set the vertical bounds for floating animation */
+    fun setFloatBounds(topBound: Float, bottomBound: Float) {
+        floatBoundsTop = topBound
+        floatBoundsBottom = bottomBound
+    }
 
     init {
         startIdleAnimation()
         startBlinkLoop()
+        startFloatingAnimation()
     }
 
     private fun startIdleAnimation() {
@@ -131,6 +159,48 @@ class CloudieExpressionView @JvmOverloads constructor(
             }
             start()
         }
+    }
+    
+    private fun startFloatingAnimation() {
+        // Horizontal floating - slower, wider movement
+        floatAnimatorX = ValueAnimator.ofFloat(-floatAmplitudeX, floatAmplitudeX).apply {
+            duration = 4500  // 4.5 seconds for one direction
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()  // Smooth ease in/out
+            addUpdateListener { 
+                if (!isTalking) {
+                    floatOffsetX = it.animatedValue as Float
+                    translationX = floatOffsetX * resources.displayMetrics.density
+                }
+            }
+            start()
+        }
+        
+        // Vertical floating - different timing for organic feel
+        floatAnimatorY = ValueAnimator.ofFloat(-floatAmplitudeY, floatAmplitudeY).apply {
+            duration = 3200  // 3.2 seconds - different from X for natural feel
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { 
+                if (!isTalking) {
+                    floatOffsetY = it.animatedValue as Float
+                    translationY = floatOffsetY * resources.displayMetrics.density
+                }
+            }
+            start()
+        }
+    }
+    
+    private fun pauseFloatingAnimation() {
+        floatAnimatorX?.pause()
+        floatAnimatorY?.pause()
+    }
+    
+    private fun resumeFloatingAnimation() {
+        floatAnimatorX?.resume()
+        floatAnimatorY?.resume()
     }
     
     private fun startBlinkLoop() {
@@ -170,6 +240,9 @@ class CloudieExpressionView @JvmOverloads constructor(
         if (isTalking) return
         isTalking = true
         
+        // Pause floating animation during speech
+        pauseFloatingAnimation()
+        
         // Adjust mouth animation speed based on speech rate
         // Faster speech = faster mouth movement
         val mouthDuration = (120 / speechRate.coerceIn(0.5f, 2.0f)).toLong().coerceIn(60, 200)
@@ -197,6 +270,9 @@ class CloudieExpressionView @JvmOverloads constructor(
         talkAnimator?.cancel()
         mouthOpenAmount = 0f
         invalidate()
+        
+        // Resume floating animation
+        resumeFloatingAnimation()
     }
 
     override fun onDetachedFromWindow() {
@@ -204,6 +280,8 @@ class CloudieExpressionView @JvmOverloads constructor(
         idleAnimator?.cancel()
         talkAnimator?.cancel()
         blinkAnimator?.cancel()
+        floatAnimatorX?.cancel()
+        floatAnimatorY?.cancel()
     }
 
     fun setExpression(expression: Expression, animate: Boolean = true) {
@@ -283,202 +361,148 @@ class CloudieExpressionView @JvmOverloads constructor(
 
         val centerX = width / 2f
         val centerY = height / 2f
-        val radius = minOf(width, height) / 2.5f
+        val cloudW = width * 0.46f   // Wider cloud
+        val cloudH = height * 0.30f  // Taller cloud
 
         canvas.save()
         canvas.scale(bounceScale, bounceScale, centerX, centerY)
 
-        // Shadow (soft drop shadow)
-        canvas.drawCircle(centerX + 3f, centerY + 5f, radius + 2f, shadowPaint)
+        // ========== CARTOONY CLOUD - SMOOTH PATH ==========
+        val cloudPath = createCloudPath(centerX, centerY, cloudW, cloudH)
+        
+        // Shadow
+        canvas.save()
+        canvas.translate(4f, 5f)
+        canvas.drawPath(cloudPath, shadowPaint)
+        canvas.restore()
 
-        // Main cloud face - fluffy cloud shape!
-        canvas.drawCircle(centerX, centerY, radius, facePaint)
+        // Fill cloud
+        canvas.drawPath(cloudPath, facePaint)
         
-        // Cloud bumps on top (make it look fluffy)
-        val bumpRadius = radius * 0.38f
-        canvas.drawCircle(centerX - radius * 0.55f, centerY - radius * 0.55f, bumpRadius, facePaint)
-        canvas.drawCircle(centerX + radius * 0.55f, centerY - radius * 0.55f, bumpRadius, facePaint)
-        canvas.drawCircle(centerX, centerY - radius * 0.72f, bumpRadius * 0.95f, facePaint)
-        // Extra bumps for fluffier look
-        canvas.drawCircle(centerX - radius * 0.3f, centerY - radius * 0.7f, bumpRadius * 0.7f, facePaint)
-        canvas.drawCircle(centerX + radius * 0.3f, centerY - radius * 0.7f, bumpRadius * 0.7f, facePaint)
+        // Highlight spots (like reference - lighter bubbles)
+        canvas.drawCircle(centerX - cloudW * 0.45f, centerY - cloudH * 0.1f, cloudH * 0.25f, faceHighlightPaint)
+        canvas.drawCircle(centerX - cloudW * 0.2f, centerY - cloudH * 0.35f, cloudH * 0.18f, faceHighlightPaint)
+        canvas.drawCircle(centerX + cloudW * 0.35f, centerY - cloudH * 0.25f, cloudH * 0.12f, faceHighlightPaint)
         
-        // Highlight on face (makes it look 3D and shiny)
-        canvas.drawCircle(centerX - radius * 0.3f, centerY - radius * 0.2f, radius * 0.25f, faceHighlightPaint)
-        
-        // Subtle outline for definition
-        canvas.drawCircle(centerX, centerY, radius, outlinePaint)
+        // Black outline (thick, like reference)
+        canvas.drawPath(cloudPath, outlinePaint)
 
-        // Eyes - Big cute anime-style eyes with blink!
-        val eyeY = centerY - radius * 0.1f
-        val eyeSpacing = radius * 0.35f
-        val eyeRadius = radius * 0.18f * eyeScale
+        // ========== CUTE FACE ==========
+        val faceY = centerY + cloudH * 0.1f
         
-        // Calculate eye height based on blink (squash vertically when blinking)
-        val eyeHeightScale = 1f - (blinkProgress * 0.9f)  // Eyes close to 10% when blinking
+        // Cute eyes (proportional)
+        val eyeSpacing = cloudW * 0.24f
+        val eyeRadius = cloudH * 0.24f * eyeScale
+        val eyeHeightScale = 1f - (blinkProgress * 0.9f)
         
         if (eyeHeightScale > 0.2f) {
-            // Draw eyes normally (not fully closed)
-            
-            // Left eye white
+            // Left eye
             canvas.save()
-            canvas.scale(1f, eyeHeightScale, centerX - eyeSpacing + eyeOffsetX, eyeY + eyeOffsetY)
-            canvas.drawCircle(
-                centerX - eyeSpacing + eyeOffsetX,
-                eyeY + eyeOffsetY,
-                eyeRadius * 1.3f,
-                eyeWhitePaint
-            )
-            // Left eye pupil (dark)
-            canvas.drawCircle(
-                centerX - eyeSpacing + eyeOffsetX,
-                eyeY + eyeOffsetY,
-                eyeRadius,
-                eyePaint
-            )
-            // Left eye sparkle (big)
-            canvas.drawCircle(
-                centerX - eyeSpacing + eyeOffsetX + eyeRadius * 0.3f,
-                eyeY + eyeOffsetY - eyeRadius * 0.3f,
-                eyeRadius * 0.35f,
-                pupilPaint
-            )
-            // Left eye sparkle (small)
-            canvas.drawCircle(
-                centerX - eyeSpacing + eyeOffsetX - eyeRadius * 0.2f,
-                eyeY + eyeOffsetY + eyeRadius * 0.3f,
-                eyeRadius * 0.15f,
-                pupilPaint
-            )
+            canvas.scale(1f, eyeHeightScale, centerX - eyeSpacing + eyeOffsetX, faceY + eyeOffsetY)
+            canvas.drawCircle(centerX - eyeSpacing + eyeOffsetX, faceY + eyeOffsetY, eyeRadius * 1.2f, eyeWhitePaint)
+            canvas.drawCircle(centerX - eyeSpacing + eyeOffsetX, faceY + eyeOffsetY, eyeRadius, eyePaint)
+            canvas.drawCircle(centerX - eyeSpacing + eyeOffsetX + eyeRadius * 0.28f, faceY + eyeOffsetY - eyeRadius * 0.28f, eyeRadius * 0.32f, pupilPaint)
             canvas.restore()
 
-            // Right eye white
+            // Right eye
             canvas.save()
-            canvas.scale(1f, eyeHeightScale, centerX + eyeSpacing + eyeOffsetX, eyeY + eyeOffsetY)
-            canvas.drawCircle(
-                centerX + eyeSpacing + eyeOffsetX,
-                eyeY + eyeOffsetY,
-                eyeRadius * 1.3f,
-                eyeWhitePaint
-            )
-            // Right eye pupil (dark)
-            canvas.drawCircle(
-                centerX + eyeSpacing + eyeOffsetX,
-                eyeY + eyeOffsetY,
-                eyeRadius,
-                eyePaint
-            )
-            // Right eye sparkle (big)
-            canvas.drawCircle(
-                centerX + eyeSpacing + eyeOffsetX + eyeRadius * 0.3f,
-                eyeY + eyeOffsetY - eyeRadius * 0.3f,
-                eyeRadius * 0.35f,
-                pupilPaint
-            )
-            // Right eye sparkle (small)
-            canvas.drawCircle(
-                centerX + eyeSpacing + eyeOffsetX - eyeRadius * 0.2f,
-                eyeY + eyeOffsetY + eyeRadius * 0.3f,
-                eyeRadius * 0.15f,
-                pupilPaint
-            )
+            canvas.scale(1f, eyeHeightScale, centerX + eyeSpacing + eyeOffsetX, faceY + eyeOffsetY)
+            canvas.drawCircle(centerX + eyeSpacing + eyeOffsetX, faceY + eyeOffsetY, eyeRadius * 1.2f, eyeWhitePaint)
+            canvas.drawCircle(centerX + eyeSpacing + eyeOffsetX, faceY + eyeOffsetY, eyeRadius, eyePaint)
+            canvas.drawCircle(centerX + eyeSpacing + eyeOffsetX + eyeRadius * 0.28f, faceY + eyeOffsetY - eyeRadius * 0.28f, eyeRadius * 0.32f, pupilPaint)
             canvas.restore()
         } else {
-            // Eyes closed - draw curved lines (like ^_^)
-            mouthStrokePaint.strokeWidth = 4f
-            mouthStrokePaint.color = Color.parseColor("#2E4057")
-            
-            // Left closed eye arc
+            // Closed eyes ^_^
+            val closedPaint = Paint(mouthStrokePaint).apply { strokeWidth = 3f; color = Color.parseColor("#1A1A1A") }
             val closedPath = android.graphics.Path()
-            closedPath.moveTo(centerX - eyeSpacing - eyeRadius, eyeY + eyeOffsetY)
-            closedPath.quadTo(centerX - eyeSpacing, eyeY + eyeOffsetY - eyeRadius * 0.5f, 
-                              centerX - eyeSpacing + eyeRadius, eyeY + eyeOffsetY)
-            canvas.drawPath(closedPath, mouthStrokePaint)
-            
-            // Right closed eye arc
+            closedPath.moveTo(centerX - eyeSpacing - eyeRadius * 0.7f, faceY)
+            closedPath.quadTo(centerX - eyeSpacing, faceY - eyeRadius * 0.5f, centerX - eyeSpacing + eyeRadius * 0.7f, faceY)
+            canvas.drawPath(closedPath, closedPaint)
             closedPath.reset()
-            closedPath.moveTo(centerX + eyeSpacing - eyeRadius, eyeY + eyeOffsetY)
-            closedPath.quadTo(centerX + eyeSpacing, eyeY + eyeOffsetY - eyeRadius * 0.5f,
-                              centerX + eyeSpacing + eyeRadius, eyeY + eyeOffsetY)
-            canvas.drawPath(closedPath, mouthStrokePaint)
-            
-            mouthStrokePaint.color = Color.parseColor("#C2185B")
+            closedPath.moveTo(centerX + eyeSpacing - eyeRadius * 0.7f, faceY)
+            closedPath.quadTo(centerX + eyeSpacing, faceY - eyeRadius * 0.5f, centerX + eyeSpacing + eyeRadius * 0.7f, faceY)
+            canvas.drawPath(closedPath, closedPaint)
         }
 
-        // Eyebrows (cute little arcs)
-        if (eyebrowAngle != 0f) {
-            mouthStrokePaint.strokeWidth = 3f
-            mouthStrokePaint.color = Color.parseColor("#5DA9E9")
-            
-            canvas.save()
-            canvas.rotate(eyebrowAngle, centerX - eyeSpacing, eyeY - eyeRadius * 1.5f - 6f)
-            canvas.drawLine(
-                centerX - eyeSpacing - 10f, eyeY - eyeRadius * 1.5f - 6f,
-                centerX - eyeSpacing + 10f, eyeY - eyeRadius * 1.5f - 6f,
-                mouthStrokePaint
-            )
-            canvas.restore()
-
-            canvas.save()
-            canvas.rotate(-eyebrowAngle, centerX + eyeSpacing, eyeY - eyeRadius * 1.5f - 6f)
-            canvas.drawLine(
-                centerX + eyeSpacing - 10f, eyeY - eyeRadius * 1.5f - 6f,
-                centerX + eyeSpacing + 10f, eyeY - eyeRadius * 1.5f - 6f,
-                mouthStrokePaint
-            )
-            canvas.restore()
-            
-            mouthStrokePaint.color = Color.parseColor("#C2185B")
-        }
-
-        // Rosy blush (always cute!)
+        // Rosy cheeks (like reference - pink circles)
         if (showBlush) {
-            canvas.drawCircle(centerX - eyeSpacing - 8f, eyeY + 22f, 10f, blushPaint)
-            canvas.drawCircle(centerX + eyeSpacing + 8f, eyeY + 22f, 10f, blushPaint)
+            canvas.drawCircle(centerX - eyeSpacing - cloudW * 0.13f, faceY + cloudH * 0.32f, cloudH * 0.16f, blushPaint)
+            canvas.drawCircle(centerX + eyeSpacing + cloudW * 0.13f, faceY + cloudH * 0.32f, cloudH * 0.16f, blushPaint)
         }
 
-        // Mouth - Cute filled smile with talking animation!
-        val mouthY = centerY + radius * 0.35f
-        val mouthWidth = radius * 0.4f
-        val curveAmount = mouthCurve * radius * 0.35f
+        // Cute smile mouth
+        val mouthY = faceY + cloudH * 0.48f
+        val mouthW = cloudW * 0.2f
+        val curveAmt = mouthCurve * cloudH * 0.38f
+        val talkOpen = mouthOpenAmount * cloudH * 0.3f
         
-        // Add talking animation - mouth opens up and down
-        val talkOpenAmount = mouthOpenAmount * radius * 0.2f  // How much mouth opens when talking
-        
-        val path = android.graphics.Path()
+        val mouthPath = android.graphics.Path()
         if (isTalking && mouthOpenAmount > 0.1f) {
-            // Talking mouth - open oval shape
-            val mouthOpenWidth = mouthWidth * 0.6f
-            val mouthOpenHeight = talkOpenAmount
-            
-            // Draw an oval mouth opening
-            path.addOval(
-                centerX - mouthOpenWidth,
-                mouthY - mouthOpenHeight * 0.3f,
-                centerX + mouthOpenWidth,
-                mouthY + mouthOpenHeight,
-                android.graphics.Path.Direction.CW
-            )
-            canvas.drawPath(path, mouthPaint)
-            canvas.drawPath(path, mouthStrokePaint)
+            mouthPath.addOval(centerX - mouthW * 0.5f, mouthY - talkOpen * 0.2f, centerX + mouthW * 0.5f, mouthY + talkOpen, android.graphics.Path.Direction.CW)
+            canvas.drawPath(mouthPath, mouthPaint)
+            mouthStrokePaint.strokeWidth = 2.5f
+            canvas.drawPath(mouthPath, mouthStrokePaint)
         } else if (mouthCurve > 0) {
-            // Happy smile - filled arc (not talking)
-            path.moveTo(centerX - mouthWidth, mouthY)
-            path.quadTo(centerX, mouthY + curveAmount, centerX + mouthWidth, mouthY)
-            path.quadTo(centerX, mouthY + curveAmount * 0.3f, centerX - mouthWidth, mouthY)
-            path.close()
-            canvas.drawPath(path, mouthPaint)
-            canvas.drawPath(path, mouthStrokePaint)
+            mouthPath.moveTo(centerX - mouthW, mouthY)
+            mouthPath.quadTo(centerX, mouthY + curveAmt, centerX + mouthW, mouthY)
+            mouthPath.quadTo(centerX, mouthY + curveAmt * 0.35f, centerX - mouthW, mouthY)
+            mouthPath.close()
+            canvas.drawPath(mouthPath, mouthPaint)
+            mouthStrokePaint.strokeWidth = 2f
+            canvas.drawPath(mouthPath, mouthStrokePaint)
         } else {
-            // Sad/worried - just a line
-            path.moveTo(centerX - mouthWidth * 0.7f, mouthY)
-            path.quadTo(centerX, mouthY + curveAmount, centerX + mouthWidth * 0.7f, mouthY)
-            mouthStrokePaint.strokeWidth = 5f
-            canvas.drawPath(path, mouthStrokePaint)
-            mouthStrokePaint.strokeWidth = 4f
+            mouthPath.moveTo(centerX - mouthW * 0.6f, mouthY)
+            mouthPath.quadTo(centerX, mouthY + curveAmt, centerX + mouthW * 0.6f, mouthY)
+            mouthStrokePaint.strokeWidth = 3f
+            canvas.drawPath(mouthPath, mouthStrokePaint)
         }
 
         canvas.restore()
+    }
+    
+    /**
+     * Create a smooth cartoony cloud path - matching reference image
+     * Has 3 bumps on top and curved bumpy bottom (not flat!)
+     */
+    private fun createCloudPath(cx: Float, cy: Float, w: Float, h: Float): android.graphics.Path {
+        val path = android.graphics.Path()
+        
+        // Cloud boundaries
+        val left = cx - w
+        val right = cx + w
+        val top = cy - h * 1.05f
+        val bottom = cy + h * 0.75f
+        
+        // Start from bottom center-left
+        path.moveTo(cx - w * 0.4f, bottom)
+        
+        // Bottom left bump (curved, not flat!)
+        path.quadTo(cx - w * 0.7f, bottom + h * 0.15f, left + w * 0.1f, bottom - h * 0.1f)
+        
+        // Left side curve going up
+        path.quadTo(left - w * 0.12f, cy + h * 0.15f, left + w * 0.05f, cy - h * 0.15f)
+        
+        // Left top bump
+        path.quadTo(left - w * 0.08f, cy - h * 0.7f, cx - w * 0.48f, top + h * 0.25f)
+        
+        // Middle top bump (tallest) - smooth curves
+        path.quadTo(cx - w * 0.25f, top - h * 0.2f, cx, top - h * 0.05f)
+        path.quadTo(cx + w * 0.25f, top - h * 0.2f, cx + w * 0.48f, top + h * 0.25f)
+        
+        // Right top bump
+        path.quadTo(right + w * 0.08f, cy - h * 0.7f, right - w * 0.05f, cy - h * 0.15f)
+        
+        // Right side curve going down
+        path.quadTo(right + w * 0.12f, cy + h * 0.15f, right - w * 0.1f, bottom - h * 0.1f)
+        
+        // Bottom right bump (curved, not flat!)
+        path.quadTo(cx + w * 0.7f, bottom + h * 0.15f, cx + w * 0.4f, bottom)
+        
+        // Bottom center curve (slight bump)
+        path.quadTo(cx, bottom + h * 0.12f, cx - w * 0.4f, bottom)
+        
+        path.close()
+        return path
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

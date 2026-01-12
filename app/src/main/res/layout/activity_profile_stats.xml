@@ -25,22 +25,22 @@
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="@dimen/spacing_normal"
                 app:cardBackgroundColor="#2a2a2a"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardCornerRadius="@dimen/card_corner_radius"
+                app:cardElevation="@dimen/card_elevation">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:padding="16dp">
+                    android:padding="@dimen/card_padding">
 
                     <View
                         android:id="@+id/avatarColor"
-                        android:layout_width="60dp"
-                        android:layout_height="60dp"
-                        android:layout_marginEnd="16dp"
+                        android:layout_width="@dimen/avatar_size"
+                        android:layout_height="@dimen/avatar_size"
+                        android:layout_marginEnd="@dimen/spacing_normal"
                         android:background="@drawable/circle_background" />
 
                     <LinearLayout
@@ -56,26 +56,26 @@
                             android:layout_height="wrap_content"
                             android:text="Player Name"
                             android:textColor="#FFFFFF"
-                            android:textSize="24sp"
+                            android:textSize="@dimen/text_title"
                             android:textStyle="bold" />
 
                         <TextView
                             android:id="@+id/profileNickname"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
+                            android:layout_marginTop="@dimen/spacing_tiny"
                             android:text="@nickname"
                             android:textColor="#AAAAAA"
-                            android:textSize="14sp" />
+                            android:textSize="@dimen/text_small" />
 
                         <TextView
                             android:id="@+id/profileCode"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
+                            android:layout_marginTop="@dimen/spacing_tiny"
                             android:text="Code: ABCD"
                             android:textColor="#888888"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
                     </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
@@ -84,32 +84,32 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="@dimen/spacing_small"
                 android:text="Statistics"
                 android:textColor="#FFFFFF"
-                android:textSize="20sp"
+                android:textSize="@dimen/text_large"
                 android:textStyle="bold" />
 
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="@dimen/spacing_normal"
                 app:cardBackgroundColor="#2a2a2a"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardCornerRadius="@dimen/card_corner_radius"
+                app:cardElevation="@dimen/card_elevation">
 
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:columnCount="2"
-                    android:padding="16dp">
+                    android:padding="@dimen/card_padding">
 
                     <!-- Total Games -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="@dimen/spacing_small"
                         android:orientation="vertical">
 
                         <TextView
@@ -117,7 +117,7 @@
                             android:layout_height="wrap_content"
                             android:text="Total Games"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/totalGames"
@@ -125,7 +125,7 @@
                             android:layout_height="wrap_content"
                             android:text="0"
                             android:textColor="#FFFFFF"
-                            android:textSize="20sp"
+                            android:textSize="@dimen/text_large"
                             android:textStyle="bold" />
                     </LinearLayout>
 
@@ -134,7 +134,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="@dimen/spacing_small"
                         android:orientation="vertical">
 
                         <TextView
@@ -142,7 +142,7 @@
                             android:layout_height="wrap_content"
                             android:text="Wins"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/totalWins"
@@ -150,7 +150,7 @@
                             android:layout_height="wrap_content"
                             android:text="0"
                             android:textColor="#4CAF50"
-                            android:textSize="20sp"
+                            android:textSize="@dimen/text_large"
                             android:textStyle="bold" />
                     </LinearLayout>
 
@@ -159,7 +159,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="@dimen/spacing_small"
                         android:orientation="vertical">
 
                         <TextView
@@ -167,7 +167,7 @@
                             android:layout_height="wrap_content"
                             android:text="Losses"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/totalLosses"
@@ -175,7 +175,7 @@
                             android:layout_height="wrap_content"
                             android:text="0"
                             android:textColor="#F44336"
-                            android:textSize="20sp"
+                            android:textSize="@dimen/text_large"
                             android:textStyle="bold" />
                     </LinearLayout>
 
@@ -184,7 +184,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="@dimen/spacing_small"
                         android:orientation="vertical">
 
                         <TextView
@@ -192,7 +192,7 @@
                             android:layout_height="wrap_content"
                             android:text="Win Rate"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/winRate"
@@ -200,7 +200,7 @@
                             android:layout_height="wrap_content"
                             android:text="0%"
                             android:textColor="#FFFFFF"
-                            android:textSize="20sp"
+                            android:textSize="@dimen/text_large"
                             android:textStyle="bold" />
                     </LinearLayout>
 
@@ -216,7 +216,7 @@
                             android:layout_height="wrap_content"
                             android:text="Best Score"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/bestScore"
@@ -224,7 +224,7 @@
                             android:layout_height="wrap_content"
                             android:text="0"
                             android:textColor="#FFD700"
-                            android:textSize="20sp"
+                            android:textSize="@dimen/text_large"
                             android:textStyle="bold" />
                     </LinearLayout>
 
@@ -240,7 +240,7 @@
                             android:layout_height="wrap_content"
                             android:text="Current Streak"
                             android:textColor="#AAAAAA"
-                            android:textSize="12sp" />
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/currentStreak"

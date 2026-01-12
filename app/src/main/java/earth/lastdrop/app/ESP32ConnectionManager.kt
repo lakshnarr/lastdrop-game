@@ -9,6 +9,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import earth.lastdrop.app.DebugFileLogger
 import kotlinx.coroutines.*
 import java.util.*
 
@@ -68,19 +69,23 @@ class ESP32ConnectionManager(
     fun connect() {
         if (isConnected) {
             Log.d(TAG, "Already connected")
+            DebugFileLogger.d(TAG, "Connect called but already connected")
             return
         }
         
+        DebugFileLogger.i(TAG, "=== Starting ESP32 connection ===")
         onLogMessage("🔍 Scanning for ESP32...")
         
         // Check if Bluetooth is enabled
         if (bluetoothAdapter == null) {
+            DebugFileLogger.e(TAG, "Bluetooth adapter is NULL")
             Toast.makeText(context, "Bluetooth not supported on this device", Toast.LENGTH_LONG).show()
             onLogMessage("❌ Bluetooth not supported")
             return
         }
         
         if (!bluetoothAdapter.isEnabled) {
+            DebugFileLogger.w(TAG, "Bluetooth is DISABLED")
             Toast.makeText(context, "Please enable Bluetooth in Settings", Toast.LENGTH_LONG).show()
             onLogMessage("❌ Bluetooth is OFF - Please enable it")
             return
@@ -88,6 +93,7 @@ class ESP32ConnectionManager(
         
         val scanner = bluetoothAdapter.bluetoothLeScanner
         if (scanner == null) {
+            DebugFileLogger.e(TAG, "BLE scanner is NULL despite adapter being enabled")
             Toast.makeText(context, "Bluetooth LE scanner not available. Try restarting Bluetooth.", Toast.LENGTH_LONG).show()
             onLogMessage("❌ BLE scanner unavailable - Try restarting Bluetooth")
             return
@@ -106,14 +112,18 @@ class ESP32ConnectionManager(
                 result?.device?.let { device ->
                     val address = device.address
                     
+                    DebugFileLogger.i(TAG, "🔍 Discovered ESP32: name=${device.name}, MAC=$address, RSSI=${result.rssi}")
+                    
                     // Validate MAC address if whitelist configured
                     if (TRUSTED_ESP32_ADDRESSES.isNotEmpty() && !TRUSTED_ESP32_ADDRESSES.contains(address)) {
                         Log.w(TAG, "Rejected untrusted ESP32: $address")
+                        DebugFileLogger.w(TAG, "⚠️ Rejected untrusted ESP32: $address (not in whitelist)")
                         onLogMessage("⚠️ Rejected untrusted ESP32: $address")
                         Toast.makeText(context, "Untrusted ESP32 rejected. Add MAC to whitelist.", Toast.LENGTH_LONG).show()
                         return@let
                     }
                     
+                    DebugFileLogger.i(TAG, "✅ ESP32 trusted, proceeding with connection")
                     onLogMessage("✅ Found trusted ESP32: $address")
                     stopScan()
                     connectToDevice(device)
@@ -122,6 +132,7 @@ class ESP32ConnectionManager(
             
             override fun onScanFailed(errorCode: Int) {
                 Log.e(TAG, "Scan failed: $errorCode")
+                DebugFileLogger.e(TAG, "❌ ESP32 scan failed with error: $errorCode")
                 onLogMessage("❌ ESP32 scan failed: $errorCode")
                 Toast.makeText(context, "ESP32 scan failed", Toast.LENGTH_SHORT).show()
             }
@@ -134,6 +145,7 @@ class ESP32ConnectionManager(
         scanJob = scope.launch {
             delay(SCAN_TIMEOUT_MS)
             if (!isConnected) {
+                DebugFileLogger.w(TAG, "⏱️ ESP32 scan timeout - no device found after ${SCAN_TIMEOUT_MS}ms")
                 stopScan()
                 onLogMessage("⏱️ ESP32 scan timeout (10s)")
                 Toast.makeText(
@@ -154,6 +166,7 @@ class ESP32ConnectionManager(
         scanCallback?.let {
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
             scanCallback = null
+            DebugFileLogger.i(TAG, "🛑 ESP32 scan stopped")
             onLogMessage("🛑 ESP32 scan stopped")
         }
     }
@@ -164,12 +177,14 @@ class ESP32ConnectionManager(
     @SuppressLint("MissingPermission")
     fun connectToDevice(device: BluetoothDevice) {
         Log.d(TAG, "Connecting to ESP32: ${device.address}")
+        DebugFileLogger.i(TAG, "🔌 Initiating GATT connection to ESP32: ${device.name} (${device.address})")
         
         gatt = device.connectGatt(context, false, object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         Log.d(TAG, "ESP32 connected, discovering services...")
+                        DebugFileLogger.i(TAG, "✅ ESP32 GATT connected (status=$status), discovering services...")
                         isConnected = true
                         reconnectAttempts = 0
                         scanJob?.cancel()
@@ -180,6 +195,7 @@ class ESP32ConnectionManager(
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.d(TAG, "ESP32 disconnected")
+                        DebugFileLogger.w(TAG, "❌ ESP32 GATT disconnected (status=$status, device=${device.address})")
                         isConnected = false
                         gatt?.close()
                         this@ESP32ConnectionManager.gatt = null
@@ -191,6 +207,7 @@ class ESP32ConnectionManager(
                         // Auto-reconnect if game is active
                         if (isGameActive && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                             reconnectAttempts++
+                            DebugFileLogger.i(TAG, "🔄 Auto-reconnect attempt $reconnectAttempts/$MAX_RECONNECT_ATTEMPTS")
                             onLogMessage("🔄 Attempting reconnect ($reconnectAttempts/$MAX_RECONNECT_ATTEMPTS)...")
                             
                             reconnectJob?.cancel()

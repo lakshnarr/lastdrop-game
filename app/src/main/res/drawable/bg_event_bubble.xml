@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cartoony event bubble for last event text -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Shadow -->
+    <item
+        android:left="2dp"
+        android:top="2dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#30000000" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+
+    <!-- Main bubble -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#38B2AC"
+                android:endColor="#2C7A7B" />
+            <corners android:radius="16dp" />
+            <stroke
+                android:width="2dp"
+                android:color="#81E6D9" />
+        </shape>
+    </item>
+</layer-list>

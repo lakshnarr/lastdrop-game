@@ -26,7 +26,7 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <!-- Connect Icon -->
+            <!-- 1. Connect Icon -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -35,8 +35,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconConnect"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_connect"
                     android:contentDescription="Connect"
@@ -45,34 +45,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Connect"
-                    android:textSize="8sp"
+                    android:textSize="9sp"
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Board/MainActivity Icon -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconBoard"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_classic"
-                    android:contentDescription="Classic Mode"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Classic"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- Save Icon -->
+            <!-- 2. Save Icon -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -81,8 +58,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconSave"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_save"
                     android:contentDescription="Save"
@@ -91,103 +68,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Save"
-                    android:textSize="8sp"
+                    android:textSize="9sp"
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Dice Mode Toggle -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconDiceMode"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_dice_bluetooth"
-                    android:contentDescription="Dice Mode"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Dice"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- Players -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconPlayers"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_players"
-                    android:contentDescription="Players"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Players"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- History -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconHistory"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_history"
-                    android:contentDescription="History"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="History"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- Ranks -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconRanks"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_ranks"
-                    android:contentDescription="Ranks"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Ranks"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- Undo -->
+            <!-- 3. Undo -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -196,8 +81,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconUndo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_undo"
                     android:contentDescription="Undo"
@@ -206,34 +91,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Undo"
-                    android:textSize="8sp"
+                    android:textSize="9sp"
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Refresh -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="4dp">
-                <ImageView
-                    android:id="@+id/iconRefresh"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_refresh"
-                    android:contentDescription="Refresh"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Refresh"
-                    android:textSize="8sp"
-                    android:textColor="#666666" />
-            </LinearLayout>
-
-            <!-- Reset -->
+            <!-- 4. Reset -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -242,8 +104,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconReset"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_reset"
                     android:contentDescription="Reset"
@@ -252,11 +114,34 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Reset"
-                    android:textSize="8sp"
+                    android:textSize="9sp"
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- End Game -->
+            <!-- 5. Refresh -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconRefresh"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="Refresh"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Refresh"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- 6. End Game -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -265,8 +150,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconEndGame"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_end_game"
                     android:contentDescription="End Game"
@@ -275,11 +160,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="End"
-                    android:textSize="8sp"
+                    android:textSize="9sp"
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Close/Exit -->
+            <!-- 7. Close/Exit -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -288,8 +173,8 @@
                 android:layout_marginEnd="4dp">
                 <ImageView
                     android:id="@+id/iconClose"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
                     android:padding="8dp"
                     android:src="@drawable/ic_close"
                     android:contentDescription="Close"
@@ -302,7 +187,7 @@
                     android:textColor="#666666" />
             </LinearLayout>
 
-            <!-- Debug -->
+            <!-- 8. Debug -->
             <ImageView
                 android:id="@+id/iconDebug"
                 android:layout_width="40dp"
@@ -312,6 +197,121 @@
                 android:contentDescription="Debug"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:visibility="visible" />
+
+            <!-- Board/MainActivity Icon -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconBoard"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_classic"
+                    android:contentDescription="Classic Mode"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Classic"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Dice Mode Toggle -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconDiceMode"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_dice_bluetooth"
+                    android:contentDescription="Dice Mode"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dice"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Players -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconPlayers"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_players"
+                    android:contentDescription="Players"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Players"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- History -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconHistory"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_history"
+                    android:contentDescription="History"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="History"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
+
+            <!-- Ranks -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="4dp">
+                <ImageView
+                    android:id="@+id/iconRanks"
+                    android:layout_width="45dp"
+                    android:layout_height="45dp"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_ranks"
+                    android:contentDescription="Ranks"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ranks"
+                    android:textSize="9sp"
+                    android:textColor="#666666" />
+            </LinearLayout>
 
         </LinearLayout>
     </HorizontalScrollView>
@@ -343,8 +343,8 @@
         <!-- Cloudie Expression (Simple drawable, not Lottie) -->
         <earth.lastdrop.app.ui.components.CloudieExpressionView
             android:id="@+id/cloudieExpression"
-            android:layout_width="140dp"
-            android:layout_height="140dp"
+            android:layout_width="170dp"
+            android:layout_height="170dp"
             android:layout_marginTop="8dp" />
 
         <!-- Dice Roll Animation (appears when rolling) -->
@@ -365,37 +365,61 @@
 
     </LinearLayout>
 
-    <!-- Bottom Dialogue Section -->
+    <!-- Bottom Dialogue Section - Cartoony Style -->
     <LinearLayout
         android:id="@+id/dialogueSection"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#1a1f30"
-        android:padding="16dp"
+        android:background="@drawable/bg_speech_bubble"
+        android:padding="20dp"
+        android:layout_margin="12dp"
+        android:elevation="8dp"
         app:layout_constraintBottom_toTopOf="@id/virtualDicePanel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Cloudie Current Speech -->
-        <TextView
-            android:id="@+id/cloudieDialogue"
+        <!-- Cloudie Current Speech - Fun Bubble Style -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="☁️ Cloudie: Welcome to Last Drop!"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:paddingBottom="8dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="10dp">
 
-        <!-- Last Event Text -->
+            <!-- Cloudie emoji with bounce -->
+            <TextView
+                android:id="@+id/cloudieEmoji"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="☁️"
+                android:textSize="32sp"
+                android:layout_marginEnd="10dp" />
+
+            <TextView
+                android:id="@+id/cloudieDialogue"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Welcome to Last Drop!"
+                android:textColor="#E2E8F0"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:lineSpacingMultiplier="1.2"
+                android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
+
+        <!-- Last Event Text - Event Bubble -->
         <TextView
             android:id="@+id/lastEventText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Waiting for game to start..."
-            android:textColor="#BBBBBB"
-            android:textSize="14sp" />
+            android:text="🎲 Waiting for game to start..."
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:background="@drawable/bg_event_bubble"
+            android:padding="12dp"
+            android:fontFamily="sans-serif-medium" />
 
     </LinearLayout>
 

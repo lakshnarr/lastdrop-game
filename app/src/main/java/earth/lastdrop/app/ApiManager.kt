@@ -364,7 +364,9 @@ class ApiManager(
         lastChanceCardText: String?,
         rolling: Boolean = false,
         eventType: String? = null,
-        eventMessage: String? = null
+        eventMessage: String? = null,
+        playerSkipPenalty: Map<String, Boolean> = emptyMap(),
+        playerWaterShield: Map<String, Boolean> = emptyMap()
     ) {
         scope.launch {
             try {
@@ -396,6 +398,8 @@ class ApiManager(
                         val pos = playerPositions[name] ?: 0
                         val score = playerScores[name] ?: 0
                         val color = playerColors[index]
+                        val skipPenalty = playerSkipPenalty[name] ?: false
+                        val waterShield = playerWaterShield[name] ?: false
                         val obj = JSONObject().apply {
                             put("id", "p${index + 1}")
                             put("name", name)
@@ -403,6 +407,8 @@ class ApiManager(
                             put("score", score)
                             put("eliminated", score <= 0)
                             put("color", color)
+                            put("skipPenalty", skipPenalty)
+                            put("waterShield", waterShield)
                         }
                         put(obj)
                     }
@@ -458,6 +464,85 @@ class ApiManager(
                 conn.disconnect()
             } catch (e: Exception) {
                 Log.e(TAG, "Error pushing live state", e)
+            }
+        }
+    }
+
+    /**
+     * Push current game state on initial server connection (syncs live.html immediately)
+     * Unlike pushResetState, this sends ACTUAL positions and scores
+     */
+    fun pushCurrentState(
+        playerNames: List<String>,
+        playerColors: List<String>,
+        playerPositions: Map<String, Int>,
+        playerScores: Map<String, Int>,
+        playerCount: Int,
+        currentPlayer: Int
+    ) {
+        scope.launch {
+            try {
+                val url = URL("$apiBaseUrl/live_push.php?key=$apiKey&session=$sessionId")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = DEFAULT_TIMEOUT_MS
+                    readTimeout = DEFAULT_TIMEOUT_MS
+                }
+
+                // Build players array with ACTUAL current values
+                val playersJson = JSONArray().apply {
+                    playerNames.take(playerCount).forEachIndexed { index, name ->
+                        val pos = playerPositions[name] ?: 1
+                        val score = playerScores[name] ?: 10
+                        val color = playerColors.getOrElse(index) { "FF0000" }
+                        val obj = JSONObject().apply {
+                            put("id", "p${index + 1}")
+                            put("name", name)
+                            put("pos", pos)
+                            put("score", score)
+                            put("eliminated", score <= 0)
+                            put("color", color)
+                        }
+                        put(obj)
+                    }
+                }
+
+                // Create lastEvent that signals initial sync (no dice roll yet)
+                val currentPlayerName = playerNames.getOrElse(currentPlayer) { "" }
+                val lastEventJson = JSONObject().apply {
+                    put("playerId", "p${currentPlayer + 1}")
+                    put("playerName", currentPlayerName)
+                    put("dice1", JSONObject.NULL)
+                    put("dice2", JSONObject.NULL)
+                    put("avg", JSONObject.NULL)
+                    put("tileIndex", playerPositions[currentPlayerName] ?: 1)
+                    put("tileName", "")
+                    put("tileType", "")
+                    put("chanceCardId", JSONObject.NULL)
+                    put("chanceCardText", "")
+                    put("rolling", false)
+                    put("initialSync", true) // Flag indicating this is an initial sync
+                }
+
+                val root = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
+                    put("players", playersJson)
+                    put("lastEvent", lastEventJson)
+                }
+
+                conn.outputStream.use { os ->
+                    os.write(root.toString().toByteArray(Charsets.UTF_8))
+                }
+
+                val code = conn.responseCode
+                Log.d(TAG, "Current state pushed (initial sync), response code: $code")
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pushing current state", e)
             }
         }
     }
@@ -534,6 +619,99 @@ class ApiManager(
                 conn.disconnect()
             } catch (e: Exception) {
                 Log.e(TAG, "Error pushing undo state", e)
+            }
+        }
+    }
+    
+    /**
+     * Push chance card selection state for live.html display
+     * Shows the 6 available cards and waits for dice roll selection
+     */
+    fun pushChanceSelection(
+        playerName: String,
+        cardNumbers: List<Int>,
+        onSuccess: () -> Unit = {},
+        onError: (Exception) -> Unit = {}
+    ) {
+        scope.launch {
+            try {
+                val url = URL("$apiBaseUrl/live_push.php?key=$apiKey&session=$sessionId")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = DEFAULT_TIMEOUT_MS
+                    readTimeout = DEFAULT_TIMEOUT_MS
+                }
+
+                val payload = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
+                    put("chanceSelection", JSONObject().apply {
+                        put("active", true)
+                        put("playerName", playerName)
+                        put("cardNumbers", JSONArray(cardNumbers))
+                    })
+                }
+
+                conn.outputStream.use { os ->
+                    os.write(payload.toString().toByteArray(Charsets.UTF_8))
+                }
+
+                val code = conn.responseCode
+                Log.d(TAG, "Chance selection pushed, response code: $code")
+                conn.disconnect()
+                
+                withContext(Dispatchers.Main) {
+                    if (code in 200..299) {
+                        onSuccess()
+                    } else {
+                        onError(Exception("Server returned code $code"))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pushing chance selection", e)
+                withContext(Dispatchers.Main) {
+                    onError(e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Clear chance selection state (after card is selected)
+     */
+    fun clearChanceSelection() {
+        scope.launch {
+            try {
+                val url = URL("$apiBaseUrl/live_push.php?key=$apiKey&session=$sessionId")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = DEFAULT_TIMEOUT_MS
+                    readTimeout = DEFAULT_TIMEOUT_MS
+                }
+
+                val payload = JSONObject().apply {
+                    put("apiKey", apiKey)
+                    put("sessionId", sessionId)
+                    put("boardId", "ANDROID-APP")
+                    put("chanceSelection", JSONObject().apply {
+                        put("active", false)
+                    })
+                }
+
+                conn.outputStream.use { os ->
+                    os.write(payload.toString().toByteArray(Charsets.UTF_8))
+                }
+
+                val code = conn.responseCode
+                Log.d(TAG, "Chance selection cleared, response code: $code")
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error clearing chance selection", e)
             }
         }
     }

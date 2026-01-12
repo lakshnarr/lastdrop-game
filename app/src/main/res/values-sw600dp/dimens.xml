@@ -3,10 +3,13 @@
     <!-- Tablet dimensions (600dp - 720dp width) -->
     
     <!-- Text sizes - slightly larger for tablets -->
+    <dimen name="text_hero">40sp</dimen>
     <dimen name="text_title">28sp</dimen>
+    <dimen name="text_large">24sp</dimen>
     <dimen name="text_subtitle">20sp</dimen>
     <dimen name="text_body">18sp</dimen>
     <dimen name="text_small">16sp</dimen>
+    <dimen name="text_caption">14sp</dimen>
     <dimen name="text_tiny">14sp</dimen>
     
     <!-- Button sizes -->
@@ -19,7 +22,7 @@
     <dimen name="spacing_small">12dp</dimen>
     <dimen name="spacing_normal">20dp</dimen>
     <dimen name="spacing_large">32dp</dimen>
-    <dimen name="spacing_xlarge">40dp</dimen>
+    <dimen name="spacing_xlarge">60dp</dimen>
     
     <!-- Card/Dialog -->
     <dimen name="card_corner_radius">28dp</dimen>
@@ -30,9 +33,13 @@
     <!-- Icon sizes -->
     <dimen name="icon_small">32dp</dimen>
     <dimen name="icon_medium">64dp</dimen>
-    <dimen name="icon_large">96dp</dimen>
-    <dimen name="icon_xlarge">144dp</dimen>
+    <dimen name="icon_large">120dp</dimen>
+    <dimen name="icon_xlarge">160dp</dimen>
+    <dimen name="icon_hero">200dp</dimen>
+    
+    <!-- Avatar/Profile -->
+    <dimen name="avatar_size">80dp</dimen>
     
     <!-- Progress indicator -->
-    <dimen name="progress_size">56dp</dimen>
+    <dimen name="progress_size">60dp</dimen>
 </resources>
