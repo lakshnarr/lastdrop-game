@@ -144,21 +144,21 @@ const TileDefinition BOARD[NUM_TILES] = {
   {1,  "Launch Pad",           TYPE_START},
   {2,  "Nature Guardian",      TYPE_BONUS},
   {3,  "Polluting Factory",    TYPE_PENALTY},
-  {4,  "Flower Garden",        TYPE_BONUS},
+  {4,  "Flower Garden",        TYPE_WATER_DOCK},  // ECO SAVE +1
   {5,  "Tree Cutting",         TYPE_DISASTER},
   {6,  "Marsh Swamp",          TYPE_CHANCE},
   {7,  "Recycled Water",       TYPE_WATER_DOCK},
   {8,  "Wasted Water",         TYPE_PENALTY},
   {9,  "River Robber",         TYPE_DISASTER},
-  {10, "Lilly Pond",           TYPE_BONUS},
+  {10, "Lilly Pond",           TYPE_WATER_DOCK},  // ECO SAVE +1
   {11, "Sanctuary Cove",       TYPE_CHANCE},
   {12, "Shrinking Lake",       TYPE_DISASTER},
-  {13, "Crystal Glacier",      TYPE_BONUS},
+  {13, "Crystal Glacier",      TYPE_WATER_DOCK},  // ECO SAVE +2
   {14, "Dry City",             TYPE_PENALTY},
-  {15, "Rain Harvest",         TYPE_BONUS},
+  {15, "Rain Harvest",         TYPE_WATER_DOCK},  // ECO SAVE +2
   {16, "Mangrove Trail",       TYPE_CHANCE},
   {17, "Wasted Well",          TYPE_PENALTY},
-  {18, "Evergreen Forest",     TYPE_WATER_DOCK},
+  {18, "Evergreen Forest",     TYPE_SUPER_DOCK},  // MIGHTY SAVE +4
   {19, "Plant Grower",         TYPE_BONUS},
   {20, "Dirty Water Lane",     TYPE_PENALTY}
 };

@@ -32,9 +32,9 @@ if ($apiKey !== $validKey) {
     exit;
 }
 
-// Get session parameters
+// Get session parameters (accept both 'session' and 'sessionId' for compatibility)
 $boardId = $_GET['boardId'] ?? null;
-$sessionId = $_GET['sessionId'] ?? null;
+$sessionId = $_GET['sessionId'] ?? $_GET['session'] ?? null;
 
 // Data directory for storing sessions
 $dataDir = __DIR__ . '/../data/sessions';

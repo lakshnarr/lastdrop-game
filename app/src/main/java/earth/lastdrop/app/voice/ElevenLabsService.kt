@@ -110,4 +110,32 @@ class ElevenLabsService(
             false
         }
     }
+    
+    /**
+     * Check if voice ID is valid by fetching voice details
+     */
+    suspend fun validateVoiceId(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Log.d("ElevenLabs", "Validating voice ID: $voiceId")
+            val request = Request.Builder()
+                .url("$baseUrl/voices/$voiceId")
+                .addHeader("xi-api-key", apiKey)
+                .get()
+                .build()
+            
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    Log.d("ElevenLabs", "✓ Voice ID is valid")
+                    true
+                } else {
+                    Log.e("ElevenLabs", "✗ Voice ID validation failed: ${response.code} ${response.message}")
+                    Log.e("ElevenLabs", "Response body: ${response.body?.string()}")
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ElevenLabs", "Voice ID validation error: ${e.message}", e)
+            false
+        }
+    }
 }

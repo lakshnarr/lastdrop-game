@@ -12,7 +12,8 @@ data class VoiceSettings(
     val elevenLabsSimilarityBoost: Float = 0.75f, // 0-1: higher = closer to original voice
     val elevenLabsSpeed: Float = 1.0f, // 0.25-4.0: speech speed multiplier
     val ttsPitch: Float = 1.1f,
-    val ttsSpeechRate: Float = 0.95f
+    val ttsSpeechRate: Float = 0.95f,
+    val ttsLocale: String = "en_IN" // TTS language: en_IN (Indian), en_GB (British), en_US (American)
 )
 
 class VoiceSettingsManager(context: Context) {
@@ -21,14 +22,15 @@ class VoiceSettingsManager(context: Context) {
     fun getSettings(): VoiceSettings {
         return VoiceSettings(
             voiceEnabled = prefs.getBoolean("voice_enabled", true),
-            useElevenLabs = prefs.getBoolean("use_elevenlabs", true),
+            useElevenLabs = prefs.getBoolean("use_elevenlabs", false), // Default to false (use local TTS)
             elevenLabsApiKey = prefs.getString("elevenlabs_api_key", "") ?: "",
             elevenLabsVoiceId = prefs.getString("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB") ?: "pNInz6obpgDQGcFmaJgB",
             elevenLabsStability = prefs.getFloat("elevenlabs_stability", 0.5f),
             elevenLabsSimilarityBoost = prefs.getFloat("elevenlabs_similarity_boost", 0.75f),
             elevenLabsSpeed = prefs.getFloat("elevenlabs_speed", 1.0f),
             ttsPitch = prefs.getFloat("tts_pitch", 1.1f),
-            ttsSpeechRate = prefs.getFloat("tts_speech_rate", 0.95f)
+            ttsSpeechRate = prefs.getFloat("tts_speech_rate", 0.95f),
+            ttsLocale = prefs.getString("tts_locale", "en_IN") ?: "en_IN"
         )
     }
     
@@ -43,6 +45,7 @@ class VoiceSettingsManager(context: Context) {
             putFloat("elevenlabs_speed", settings.elevenLabsSpeed)
             putFloat("tts_pitch", settings.ttsPitch)
             putFloat("tts_speech_rate", settings.ttsSpeechRate)
+            putString("tts_locale", settings.ttsLocale)
             apply()
         }
     }

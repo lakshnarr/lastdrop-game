@@ -43,29 +43,29 @@ data class TurnResult(
  */
 class GameEngine {
 
-    // 20-tile board matching RULEBOOK.md
+    // 20-tile board matching RULEBOOK.md (Updated layout)
     // Position is 1-based; index 0 in the list is tile 1.
     val tiles: List<Tile> = listOf(
-        Tile(1,  "Launch Pad",           TileType.START),
-        Tile(2,  "Nature Guardian",      TileType.BONUS),
-        Tile(3,  "Polluting Factory",    TileType.PENALTY),
-        Tile(4,  "Flower Garden",        TileType.BONUS),
-        Tile(5,  "Tree Cutting",         TileType.DISASTER),
-        Tile(6,  "Marsh Swamp",          TileType.CHANCE),
-        Tile(7,  "Recycled Water",       TileType.WATER_DOCK),
-        Tile(8,  "Wasted Water",         TileType.PENALTY),
-        Tile(9,  "River Robber",         TileType.DISASTER),
-        Tile(10, "Lilly Pond",           TileType.BONUS),
-        Tile(11, "Sanctuary Cove",       TileType.CHANCE),
-        Tile(12, "Shrinking Lake",       TileType.DISASTER),
-        Tile(13, "Crystal Glacier",      TileType.BONUS),
-        Tile(14, "Dry City",             TileType.PENALTY),
-        Tile(15, "Rain Harvest",         TileType.BONUS),
-        Tile(16, "Mangrove Trail",       TileType.CHANCE),
-        Tile(17, "Wasted Well",          TileType.PENALTY),
-        Tile(18, "Evergreen Forest",     TileType.WATER_DOCK),
-        Tile(19, "Plant Grower",         TileType.BONUS),
-        Tile(20, "Dirty Water Lane",     TileType.PENALTY)
+        Tile(1,  "LAUNCH PAD",           TileType.START),        // +10 start, +5 pass
+        Tile(2,  "NATURE GUARDIAN",      TileType.BONUS),        // +1 & Immunity (SHIELD)
+        Tile(3,  "POLLUTING FACTORY",    TileType.PENALTY),      // -2 (LOSS)
+        Tile(4,  "FLOWER GARDEN",        TileType.WATER_DOCK),   // +1 (ECO SAVE)
+        Tile(5,  "TREE CUTTING",         TileType.DISASTER),     // -3 (GREAT CRISIS)
+        Tile(6,  "MARSH SWAMP",          TileType.CHANCE),       // Card (MYSTERY)
+        Tile(7,  "RECYCLED WATER",       TileType.WATER_DOCK),   // +3 (MIGHTY SAVE)
+        Tile(8,  "WASTED WATER",         TileType.PENALTY),      // -1 (LOSS)
+        Tile(9,  "RIVER ROBBER",         TileType.DISASTER),     // -5 (GREAT CRISIS)
+        Tile(10, "LILLY POND",           TileType.WATER_DOCK),   // +1 (ECO SAVE)
+        Tile(11, "SANCTUARY COVE",       TileType.CHANCE),       // Card (MYSTERY)
+        Tile(12, "SHRINKING LAKE",       TileType.DISASTER),     // -4 (GREAT CRISIS)
+        Tile(13, "CRYSTAL GLACIER",      TileType.WATER_DOCK),   // +2 (ECO SAVE)
+        Tile(14, "DRY CITY",             TileType.PENALTY),      // -2 (LOSS)
+        Tile(15, "RAIN HARVEST",         TileType.WATER_DOCK),   // +2 (ECO SAVE)
+        Tile(16, "MANGROVE TRAIL",       TileType.CHANCE),       // Card (MYSTERY)
+        Tile(17, "WASTED WELL",          TileType.PENALTY),      // -2 (LOSS)
+        Tile(18, "EVERGREEN FOREST",     TileType.SUPER_DOCK),   // +4 (MIGHTY SAVE)
+        Tile(19, "PLANT GROWER",         TileType.BONUS),        // +1 (SHIELD)
+        Tile(20, "DIRTY WATER LANE",     TileType.PENALTY)       // -2 (LOSS)
     )
 
     // All 20 chance cards from RULEBOOK.md (Elimination Mode)
@@ -97,7 +97,7 @@ class GameEngine {
     /**
      * Process one turn:
      * - Move player
-     * - Detect lap completion (+5 bonus)
+     * - Detect lap completion (NO BONUS - handled by IntroAiActivity with LAP_BONUS constant)
      * - Detect tile
      * - Apply tile effects (variable based on tile type)
      * - If CHANCE → pick random card and apply its effect
@@ -107,10 +107,11 @@ class GameEngine {
         var lapBonus = 0
 
         // Detect lap completion (wrapping past tile 20)
+        // NOTE: Lap bonus now handled in IntroAiActivity using LAP_BONUS constant
         val newPosition = when {
             rawPosition < 1 -> 1
             rawPosition > boardSize -> {
-                lapBonus = 5  // Lap bonus!
+                lapBonus = 0  // No hardcoded lap bonus - IntroAiActivity handles this
                 rawPosition - boardSize  // Wrap around
             }
             else -> rawPosition
@@ -123,26 +124,25 @@ class GameEngine {
 
         when (tile.type) {
             TileType.START -> {
-                // No score change on start
+                // LAUNCH PAD: +10 on game start (handled by IntroAiActivity), +5 on lap pass
+                scoreChange += 5  // Lap bonus when passing
             }
 
             TileType.NORMAL -> {
-                // Safe tiles - no effect
+                // Safe tiles - no effect (none in new layout)
             }
 
             TileType.BONUS -> {
-                // Variable bonus based on tile
+                // SHIELD tiles grant +1 and immunity
                 scoreChange += when (tile.index) {
                     2 -> +1   // Nature Guardian: +1 & Immunity
-                    4, 10 -> +1   // Flower Garden, Lilly Pond: +1
-                    13, 15 -> +2  // Crystal Glacier, Rain Harvest: +2
-                    19 -> +1  // Plant Grower: +1
+                    19 -> +1  // Plant Grower: +1 & Immunity
                     else -> +1
                 }
             }
 
             TileType.PENALTY -> {
-                // Variable penalty based on tile
+                // LOSS tiles
                 scoreChange += when (tile.index) {
                     3 -> -2   // Polluting Factory: -2
                     8 -> -1   // Wasted Water: -1
@@ -154,7 +154,7 @@ class GameEngine {
             }
 
             TileType.DISASTER -> {
-                // Major penalties (Great Crisis)
+                // GREAT CRISIS tiles (severe penalties)
                 scoreChange += when (tile.index) {
                     5 -> -3   // Tree Cutting: -3
                     9 -> -5   // River Robber: -5
@@ -164,21 +164,28 @@ class GameEngine {
             }
 
             TileType.WATER_DOCK -> {
-                // Mighty Save bonuses
+                // ECO SAVE & MIGHTY SAVE tiles
                 scoreChange += when (tile.index) {
-                    7 -> +3   // Recycled Water: +3
-                    18 -> +4  // Evergreen Forest: +4
-                    else -> +3
+                    4 -> +1   // Flower Garden: +1 (ECO SAVE)
+                    7 -> +3   // Recycled Water: +3 (MIGHTY SAVE)
+                    10 -> +1  // Lilly Pond: +1 (ECO SAVE)
+                    13 -> +2  // Crystal Glacier: +2 (ECO SAVE)
+                    15 -> +2  // Rain Harvest: +2 (ECO SAVE)
+                    else -> +2
                 }
             }
 
             TileType.SUPER_DOCK -> {
-                scoreChange += 4  // Unused in new layout
+                // MIGHTY SAVE
+                scoreChange += when (tile.index) {
+                    18 -> +4  // Evergreen Forest: +4 (MIGHTY SAVE)
+                    else -> +4
+                }
             }
 
             TileType.CHANCE -> {
-                // CHANGE: Don't auto-pick card here anymore
-                // Card selection is now done via dice roll in ChanceCardSelectionDialog
+                // MYSTERY tiles - CHANCE cards (tiles 6, 11, 16)
+                // Card selection is done via dice roll in ChanceCardSelectionDialog
                 // Score change will be applied separately after card selection
                 card = null
                 scoreChange += 0  // No effect until card is selected

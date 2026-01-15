@@ -131,6 +131,9 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
     private var pendingDiceValue: Int = 0
     private var isWaitingForChanceCardRoll = false
     private var currentChanceCards: List<ChanceCard> = emptyList()
+    private var pendingChanceTile = false  // Wait for ESP32 coin_placed before showing dialog
+    private var pendingChancePlayerIndex = 0
+    private var pendingChanceCurrentPos = 0
     
     // Undo state tracking
     private var lastRoll: Int? = null
@@ -238,6 +241,10 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     runOnUiThread {
                         Toast.makeText(this, "Cloudie voice unavailable", Toast.LENGTH_SHORT).show()
                     }
+                },
+                onFallback = { reason ->
+                    // Silently log fallback to debug - no popup dialog
+                    appendDebug("⚠️ Voice fallback: $reason (switching to TTS)")
                 }
             )
         }.getOrElse {
@@ -1907,6 +1914,35 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                     val winnerName = json.optString("winnerName", "Player")
                     DebugFileLogger.i("ESP32", "★ victory_complete received for $winnerName (id=$winnerId)")
                 }
+                "coin_placed", "roll_complete" -> {
+                    // ESP32 confirmed LED moved to tile - now show chance card dialog if pending
+                    val playerId = json.optInt("playerId", -1)
+                    val tile = json.optInt("tile", -1)
+                    DebugFileLogger.i("ESP32", "★ coin_placed/roll_complete - player $playerId on tile $tile, pendingChanceTile=$pendingChanceTile")
+                    
+                    // Sync score from ESP32 to fix score desync issues
+                    if (playerId >= 0 && playerId < playerScores.size) {
+                        val playerObj = json.optJSONObject("player")
+                        if (playerObj != null) {
+                            val esp32Score = playerObj.optInt("score", -1)
+                            if (esp32Score >= 0 && esp32Score != playerScores[playerId]) {
+                                DebugFileLogger.w("ESP32", "⚠️ Score desync detected! Android has ${playerScores[playerId]}, ESP32 has $esp32Score. Syncing to ESP32 value.")
+                                playerScores[playerId] = esp32Score
+                                runOnUiThread {
+                                    playerScoreboard.updatePlayerScore(playerId, esp32Score)
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (pendingChanceTile) {
+                        pendingChanceTile = false
+                        runOnUiThread {
+                            DebugFileLogger.i("GAME", "     🎴 LED moved to CHANCE tile - now showing card selection dialog!")
+                            showChanceCardSelectionDialog()
+                        }
+                    }
+                }
                 else -> {
                     DebugFileLogger.d("ESP32", "handleESP32Response: unhandled event '$event'")
                 }
@@ -2305,16 +2341,18 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         DebugFileLogger.i("GAME", "     → Score change: ${if (turnResult.scoreChange >= 0) "+" else ""}${turnResult.scoreChange}")
         DebugFileLogger.i("GAME", "     → Tile: ${turnResult.tile?.name ?: "unknown"}")
         
-        // Check if landing on CHANCE tile - show card selection dialog
+        // Check if landing on CHANCE tile - mark pending, show dialog AFTER ESP32 confirms coin_placed
         if (turnResult.tile.type == TileType.CHANCE) {
-            DebugFileLogger.i("GAME", "     🎴 CHANCE TILE! Showing card selection dialog...")
+            DebugFileLogger.i("GAME", "     🎴 CHANCE TILE! Will show card selection after LED moves...")
             pendingTurnResult = turnResult
             pendingDiceValue = diceValue
-            showChanceCardSelectionDialog()
-            return  // Wait for card selection
+            pendingChanceTile = true
+            pendingChancePlayerIndex = safeIndex
+            pendingChanceCurrentPos = currentPos
+            // Continue to send roll to ESP32 - dialog will show when coin_placed is received
         }
         
-        // Continue with normal turn processing
+        // Continue with normal turn processing (sends to ESP32)
         continueProcessingTurn(turnResult, diceValue, safeIndex, currentPos, currentProfile)
     }
     
@@ -2517,6 +2555,18 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             newScore = newScore
         )
         
+        // If chance tile pending, set fallback timer in case ESP32 doesn't respond
+        if (pendingChanceTile) {
+            lifecycleScope.launch {
+                delay(3000) // Wait 3 seconds for ESP32 response
+                if (pendingChanceTile) {
+                    DebugFileLogger.w("GAME", "  ⏱️ ESP32 timeout - showing chance dialog anyway")
+                    pendingChanceTile = false
+                    showChanceCardSelectionDialog()
+                }
+            }
+        }
+        
         // If position swap occurred, send second command for the swapped player
         if (nextPlayerIndexForSwap != null && nextPlayerOriginalPos != null) {
             DebugFileLogger.i("GAME", "  📡 Sending swap position to ESP32 for player $nextPlayerIndexForSwap...")
@@ -2533,6 +2583,10 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         // Update player state
         playerPositions[safeIndex] = finalPosition
         playerScores[safeIndex] = newScore
+        
+        // Update score UI immediately after updating the score
+        playerScoreboard.updatePlayerScore(safeIndex, newScore, animate = true)
+        updateGameUI()
         
         // Check for elimination (score <= 0)
         if (playerScores[safeIndex] <= 0) {
@@ -2663,11 +2717,8 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             }
         }
         
-        // Update NEW PlayerScoreboardView with animated score change
-        playerScoreboard.updatePlayerScore(safeIndex, newScore, animate = true)
-        
-        // Update legacy UI
-        updateGameUI()
+        // Score UI already updated above, no need to update again here
+        // Just update last event text for display
         updateLastEventText(currentProfile.nickname, diceValue, mutableTurnResult)
         
         // Push updated game state to live server (for web display)
@@ -2998,12 +3049,24 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
             // All players eliminated somehow - shouldn't happen normally
             AlertDialog.Builder(this)
                 .setTitle("🎮 Game Over")
-                .setMessage("No survivors! Everyone ran out of water!")
-                .setPositiveButton("OK") { _, _ ->
+                .setMessage("No survivors! Everyone ran out of water!\n\nBoard stays connected. What next?")
+                .setPositiveButton("Play Again") { _, _ ->
+                    // Keep board connected, reset LEDs to start
+                    performReset()
+                }
+                .setNeutralButton("Choose Players") { _, _ ->
+                    // Navigate to profile selection while keeping board connected
                     val intent = Intent(this, ProfileSelectionActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    startActivity(intent)
-                    finish()
+                    intent.putExtra("keep_board_connected", true)
+                    profileSelectionLauncher.launch(intent)
+                }
+                .setNegativeButton("Exit") { _, _ ->
+                    // Disconnect board and close app
+                    disconnectESP32()
+                    lifecycleScope.launch {
+                        delay(500) // Give time for disconnect command
+                        finish()
+                    }
                 }
                 .setCancelable(false)
                 .show()
@@ -3016,15 +3079,24 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
         
         AlertDialog.Builder(this)
             .setTitle("🏆 VICTORY!")
-            .setMessage("$winnerName wins with $score drops remaining!\n\nCongratulations, water champion!")
+            .setMessage("$winnerName wins with $score drops remaining!\n\nCongratulations, water champion!\n\nBoard stays connected. What next?")
             .setPositiveButton("Play Again") { _, _ ->
+                // Keep board connected, reset LEDs to start
                 performReset()
             }
-            .setNegativeButton("Exit") { _, _ ->
+            .setNeutralButton("Choose Players") { _, _ ->
+                // Navigate to profile selection while keeping board connected
                 val intent = Intent(this, ProfileSelectionActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                startActivity(intent)
-                finish()
+                intent.putExtra("keep_board_connected", true)
+                profileSelectionLauncher.launch(intent)
+            }
+            .setNegativeButton("Exit") { _, _ ->
+                // Disconnect board and close app
+                disconnectESP32()
+                lifecycleScope.launch {
+                    delay(500) // Give time for disconnect command
+                    finish()
+                }
             }
             .setCancelable(false)
             .show()
@@ -3472,6 +3544,11 @@ class IntroAiActivity : AppCompatActivity(), GoDiceSDK.Listener {
                 }
             }
         }
+    }
+
+    private fun disconnectESP32() {
+        // Alias for disconnectBoard - used in game over dialogs
+        disconnectBoard()
     }
 
     private fun disconnectBoard() {

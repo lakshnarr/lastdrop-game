@@ -4,7 +4,7 @@ $global:AndroidSdkPath = "C:\Users\ADMIN\AppData\Local\Android\Sdk"
 $global:JavaHome = "C:\Program Files\Android\Android Studio\jbr"
 $global:AdbPath = "$AndroidSdkPath\platform-tools\adb.exe"
 $global:ESP32Board = "esp32:esp32:esp32s3:CDCOnBoot=cdc"
-$global:ESP32Port = "COM10"
+$global:ESP32Port = "COM11"
 $global:ESP32BaudRate = 115200
 $global:ProjectRoot = "D:\PERSONAL\lakhna\DEVELOPMENT\LastDrop"
 $global:ESP32Firmware = "$ProjectRoot\sketch_ble\sketch_ble.ino"
@@ -71,13 +71,31 @@ function Start-ESP32Monitor {
         $port.DiscardInBuffer()
         $port.DiscardOutBuffer()
         Write-Host "✓ Connected to $global:ESP32Port @ $global:ESP32BaudRate baud" -ForegroundColor Green
+        Write-Host "⌨️  Type commands and press Enter to send to ESP32" -ForegroundColor Cyan
         Write-Host "Press Ctrl+C to stop monitoring`n" -ForegroundColor Yellow
         
         while ($true) {
             try {
+                # Read from serial port
                 if ($port.BytesToRead -gt 0) {
                     $line = $port.ReadLine()
                     Write-Host $line
+                }
+                
+                # Check for keyboard input (non-blocking)
+                if ([Console]::KeyAvailable) {
+                    $key = [Console]::ReadKey($true)
+                    
+                    # Send character to ESP32
+                    $port.Write($key.KeyChar.ToString())
+                    
+                    # Echo to console
+                    Write-Host -NoNewline $key.KeyChar -ForegroundColor Green
+                    
+                    # If Enter pressed, send newline
+                    if ($key.Key -eq 'Enter') {
+                        Write-Host ""
+                    }
                 }
             } catch { }
             Start-Sleep -Milliseconds 10

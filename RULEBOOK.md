@@ -61,39 +61,38 @@ LAST DROP Elimination Mode is a **survival-based, smart-board water conservation
 
 ## 20-Tile Elimination Layout
 
-| No. | Tile Name | Type | Effect | Description |
-|-----|-----------|------|--------|-------------|
-| 1 | **Start Point** | Start | 0 | Beginning of the game |
-| 2 | **Sunny Patch** | Penalty | -1 | Evaporation from heat |
-| 3 | **Rain Dock** | Water Dock | +3 | Rainwater collection |
-| 4 | **Leak Lane** | Penalty | -1 | Water leakage |
-| 5 | **Storm Zone** | Disaster | -3 | Severe weather damage |
-| 6 | **Cloud Hill** | Bonus | +1 | Cloud condensation bonus |
-| 7 | **Oil Spill Bay** | Disaster | -4 | Major contamination |
-| 8 | **Riverbank Road** | Safe | 0 | Neutral zone |
-| 9 | **Marsh Land** | Chance | Card | Draw chance card |
-| 10 | **Drought Desert** | Disaster | -3 | Severe water shortage |
-| 11 | **Clean Well** | Water Dock | +2 | Fresh water source |
-| 12 | **Waste Dump** | Disaster | -2 | Pollution damage |
-| 13 | **Sanctuary Stop** | Chance | Card | Draw chance card |
-| 14 | **Sewage Drain Street** | Penalty | -2 | Wastewater contamination |
-| 15 | **Filter Plant** | Water Dock | +1 | Water purification |
-| 16 | **Mangrove Mile** | Chance | Card | Draw chance card |
-| 17 | **Heatwave Road** | Penalty | -2 | Extreme heat evaporation |
-| 18 | **Spring Fountain** | Super Dock | +4 | Major water source |
-| 19 | **Eco Garden** | Safe | 0 | Neutral zone |
-| 20 | **Great Reservoir** | Safe | 0 | Safe zone before loop |
+| No. | Tile Name | Type | Effect | Color |
+|-----|-----------|------|--------|-------|
+| 1 | **LAUNCH PAD** | SOURCE | +10 (Start), +5 (Pass) | Mixed |
+| 2 | **NATURE GUARDIAN** | SHIELD | +1 & Immunity | Teal |
+| 3 | **POLLUTING FACTORY** | LOSS | -2 | Orange |
+| 4 | **FLOWER GARDEN** | ECO SAVE | +1 | Light Green |
+| 5 | **TREE CUTTING** | GREAT CRISIS | -3 | Red |
+| 6 | **MARSH SWAMP** | MYSTERY | Card | Purple |
+| 7 | **RECYCLED WATER** | MIGHTY SAVE | +3 | Dark Green |
+| 8 | **WASTED WATER** | LOSS | -1 | Orange |
+| 9 | **RIVER ROBBER** | GREAT CRISIS | -5 | Red |
+| 10 | **LILLY POND** | ECO SAVE | +1 | Light Green |
+| 11 | **SANCTUARY COVE** | MYSTERY | Card | Purple |
+| 12 | **SHRINKING LAKE** | GREAT CRISIS | -4 | Red |
+| 13 | **CRYSTAL GLACIER** | ECO SAVE | +2 | Light Green |
+| 14 | **DRY CITY** | LOSS | -2 | Orange |
+| 15 | **RAIN HARVEST** | ECO SAVE | +2 | Light Green |
+| 16 | **MANGROVE TRAIL** | MYSTERY | Card | Purple |
+| 17 | **WASTED WELL** | LOSS | -2 | Orange |
+| 18 | **EVERGREEN FOREST** | MIGHTY SAVE | +4 | Dark Green |
+| 19 | **PLANT GROWER** | SHIELD | +1 | Teal |
+| 20 | **DIRTY WATER LANE** | LOSS | -2 | Orange |
 
 ### Tile Type Summary
 
-- **Start** (1 tile): Starting position, no effect
-- **Safe** (3 tiles): No water change
-- **Penalty** (4 tiles): Lose 1-2 drops
-- **Disaster** (4 tiles): Lose 2-4 drops (severe)
-- **Water Dock** (3 tiles): Gain 1-3 drops
-- **Super Dock** (1 tile): Gain 4 drops
-- **Bonus** (1 tile): Gain 1 drop
-- **Chance** (3 tiles): Draw random chance card
+- **SOURCE** (1 tile): Starting position, +10 on game start, +5 when passing
+- **SHIELD** (2 tiles): +1 drop & grants immunity to next penalty
+- **LOSS** (6 tiles): Lose 1-2 drops
+- **GREAT CRISIS** (3 tiles): Lose 3-5 drops (severe)
+- **ECO SAVE** (4 tiles): Gain 1-2 drops
+- **MIGHTY SAVE** (2 tiles): Gain 3-4 drops
+- **MYSTERY** (3 tiles): Draw random chance card
 
 ---
 
@@ -103,30 +102,46 @@ LAST DROP Elimination Mode is a **survival-based, smart-board water conservation
 
 | No. | Card Description | Effect |
 |-----|------------------|--------|
-| 1 | You fixed a tap leak | +2 |
-| 2 | Rainwater harvested | +2 |
-| 3 | You planted two trees | +1 |
-| 4 | Cool clouds formed | +1 |
-| 5 | You cleaned a riverbank | +1 |
-| 6 | Discovered a tiny spring | +3 |
-| 7 | You saved a wetland animal | +1 |
-| 8 | You reused RO water | +1 |
-| 9 | Used bucket instead of shower | +2 |
-| 10 | Drip irrigation success | +2 |
+| 1 | Fixed tap leak | +2 |
+| 2 | Rain harvested | +2 |
+| 3 | Planted trees | +1 |
+| 4 | Clouds formed | +1 |
+| 5 | Preserved riverbank | +2 |
+| 6 | Cleaned well | +2 |
+| 7 | Saved plant | +1 |
+| 8 | Recycled water | +1 |
+| 9 | Bucket bath | +2 |
+| 10 | Drip irrigation | +2 |
 
 ### Special Cards (Strategic)
 
-| No. | Card Description | Effect |
-|-----|------------------|--------|
-| 11 | Skip next penalty | 0 (prevents next penalty tile damage) |
-| 12 | Move forward 2 tiles | 0 (bonus movement) |
-| 13 | Swap positions with next player | 0 (strategic positioning) |
-| 14 | Water Shield | 0 (next damage = 0) |
+| No. | Card Description | Effect | Notes |
+|-----|------------------|--------|-------|
+| 11 | Skip penalty | Immunity | If rolled to a tile where water shall be deducted, check if player has immunity. If yes, AI announces "Using immunity from [card source], no water loss." Works with SHIELD tiles (Tile 2 & 19). |
+| 12 | Move forward 2 | Move +2 tiles | AI voice asks player to move forward 2 tiles, LED moves 2 tiles ahead. |
+| 13 | Swap with next | Next player plays twice | AI voice asks next player to play twice, adjust game logic accordingly. |
+| 14 | Water Shield | Immunity | Same as chance card 11 - protects from next water loss. |
 
 ### Negative Cards (Water Loss)
 
 | No. | Card Description | Effect |
-### Starting the Game
+|-----|------------------|--------|
+| 15 | Left tap running | -1 |
+| 16 | Bottle spilled | -1 |
+| 17 | Pipe burst | -3 |
+| 18 | Climate dries water | -2 |
+| 19 | Sewage contamination | -2 |
+| 20 | Wasted papers | -3 |
+
+### Chance Card Summary
+
+- **Positive Cards**: 10 cards (effects: +1 to +2)
+- **Special Cards**: 4 cards (immunity, movement, strategic effects)
+- **Negative Cards**: 6 cards (effects: -1 to -3)
+
+---
+
+## Starting the Game
 
 1. **Choose number of players** (2-4 players, one acts as Water Cloud)
 
@@ -143,16 +158,15 @@ LAST DROP Elimination Mode is a **survival-based, smart-board water conservation
 
 4. **Each player selects a color** (red, green, blue, yellow)
 
-5. **All players start at Tile 1** with 10 Drops
+5. **All players start at Tile 1 (LAUNCH PAD)** with 10 Drops
 
 6. **Determine turn order** (highest dice roll goes first, Water Cloud can also play)
 
-7. **Place coins on Start Point** (magnetic coins on Tile 1)-3 |
+7. **Place coins on LAUNCH PAD** (magnetic coins on Tile 1)
 
-### Chance Card Summary
+---
 
-- **Positive Cards**: 10 cards (effects: +1 to +3)
-### Taking a Turn
+## Taking a Turn
 
 1. **Roll the dice** (1 or 2 dice, depending on mode)
    - Single die: Move 1-6 tiles
@@ -167,28 +181,32 @@ LAST DROP Elimination Mode is a **survival-based, smart-board water conservation
 5. **Hall sensor confirms** coin placement (ESP32 monitors coin position)
 
 6. **Tile effect applies automatically**:
-   - **Penalty/Disaster (Lose drops)**:
+   - **LOSS/GREAT CRISIS (Lose drops)**:
      - Player uses ink filler to remove drops from their bowl
      - Drops returned to Water Cloud bowl
      - Water Cloud verifies correct amount removed
-   - **Water Dock/Bonus (Gain drops)**:
+     - **Check for immunity**: If player has immunity from SHIELD tile or chance card, skip penalty
+   - **ECO SAVE/MIGHTY SAVE (Gain drops)**:
      - Water Cloud uses ink filler to add drops to player's bowl
      - Water Cloud takes drops from Water Cloud bowl
      - Player verifies correct amount received
-   - **Chance**: Draw random card, apply effect (add/remove drops accordingly)
+   - **SHIELD (Gain +1 & Immunity)**:
+     - Water Cloud adds +1 drop to player's bowl
+     - Player receives immunity for next penalty (stored in game state)
+   - **MYSTERY**: Draw random chance card, apply effect (add/remove drops accordingly)
 
 7. **Check for lap completion**: 
-   - If player crosses Start box (Tile 1) after completing Tile 20
+   - If player crosses LAUNCH PAD (Tile 1) after completing Tile 20
    - ESP32 detects lap via Hall sensor
    - **Water Cloud adds +5 drops** to player's bowl from Water Cloud bowl
 
 8. **Check for elimination**: 
 ### Board Looping & Lap Bonus
 
-- After Tile 20, **players loop back to Tile 1**
+- After Tile 20, **players loop back to Tile 1 (LAUNCH PAD)**
 - Board is **continuous** - no end zone
 - **Lap Completion Bonus**:
-  - When coin crosses Start box (Tile 1) after Tile 20, lap is complete
+  - When coin crosses LAUNCH PAD (Tile 1) after Tile 20, lap is complete
   - ESP32 Hall sensor detects lap completion
   - Android app notifies Water Cloud
   - **Water Cloud adds +5 drops** to player's bowl
@@ -196,8 +214,9 @@ LAST DROP Elimination Mode is a **survival-based, smart-board water conservation
 - Players continue until eliminated
 - Last player standing wins
 
-1. **Roll the dice** (1 or 2 dice, depending on mode)
-### Undo Function
+---
+
+## Undo Function
 
 - **Players can undo their last move** within 5 seconds
 - **Undo reverses**:

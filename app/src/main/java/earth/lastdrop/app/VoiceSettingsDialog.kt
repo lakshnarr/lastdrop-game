@@ -32,8 +32,24 @@ class VoiceSettingsDialog(
             .setPositiveButton("Save") { _, _ ->
                 Log.d("VoiceSettings", "💾 Saving settings - VoiceID: '${currentSettings.elevenLabsVoiceId}', UseElevenLabs: ${currentSettings.useElevenLabs}, ApiKey: ${if (currentSettings.elevenLabsApiKey.isNotEmpty()) "present (${currentSettings.elevenLabsApiKey.take(8)}...)" else "empty"}")
                 settingsManager.saveSettings(currentSettings)
+                
+                // Show message that activity needs restart for changes to take effect
+                AlertDialog.Builder(context)
+                    .setTitle("Settings Saved")
+                    .setMessage("Voice settings have been saved.\n\nPlease exit and restart the game for changes to take effect.")
+                    .setPositiveButton("Exit Game") { _, _ ->
+                        // Exit the activity to force restart
+                        if (context is android.app.Activity) {
+                            context.finish()
+                        }
+                    }
+                    .setNegativeButton("Continue") { dialog, _ -> 
+                        dialog.dismiss()
+                    }
+                    .setIcon(android.R.drawable.ic_dialog_info)
+                    .show()
+                
                 onSettingsSaved()
-                Toast.makeText(context, "Voice settings saved", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -136,7 +152,7 @@ class VoiceSettingsDialog(
             addView(voiceIdInput)
             
             addView(Button(context).apply {
-                text = "Test Voice"
+                text = "Test Voice ID"
                 setOnClickListener {
                     val apiKey = apiKeyInput.text.toString()
                     val voiceId = voiceIdInput.text.toString().ifBlank { "pNInz6obpgDQGcFmaJgB" }
@@ -147,14 +163,19 @@ class VoiceSettingsDialog(
                     }
                     
                     isEnabled = false
-                    text = "Testing Voice..."
+                    text = "Generating voice sample..."
                     
                     lifecycleScope.launch {
                         try {
+                            Log.d("VoiceSettings", "Testing voice - API Key: ${apiKey.take(8)}...${apiKey.takeLast(4)}, Voice ID: $voiceId")
                             val service = ElevenLabsService(apiKey, voiceId)
+                            
+                            // Generate a test audio sample with shorter text to save quota
                             val testFile = java.io.File(context.cacheDir, "voice_test_${System.currentTimeMillis()}.mp3")
+                            Log.d("VoiceSettings", "Generating test audio to: ${testFile.absolutePath}")
+                            
                             val audioFile = service.textToSpeech(
-                                text = "Hello, this is a test of the selected voice.",
+                                text = "Hello! I am Cloudie.",
                                 outputFile = testFile,
                                 stability = currentSettings.elevenLabsStability,
                                 similarityBoost = currentSettings.elevenLabsSimilarityBoost,
@@ -162,11 +183,12 @@ class VoiceSettingsDialog(
                             )
                             
                             isEnabled = true
-                            if (audioFile != null) {
-                                text = "✓ Test Voice"
+                            if (audioFile != null && audioFile.exists() && audioFile.length() > 0) {
+                                text = "✓ Test Voice ID"
                                 currentSettings = currentSettings.copy(elevenLabsVoiceId = voiceId)
+                                Log.d("VoiceSettings", "Audio generated successfully: ${audioFile.length()} bytes")
                                 
-                                // Play the audio
+                                // Play the audio sample
                                 val mediaPlayer = android.media.MediaPlayer().apply {
                                     setDataSource(audioFile.absolutePath)
                                     prepare()
@@ -179,13 +201,15 @@ class VoiceSettingsDialog(
                                 
                                 Toast.makeText(context, "Voice is valid! Playing sample...", Toast.LENGTH_SHORT).show()
                             } else {
-                                text = "Test Voice"
-                                Toast.makeText(context, "Invalid voice ID or API error", Toast.LENGTH_SHORT).show()
+                                text = "Test Voice ID"
+                                Log.e("VoiceSettings", "Audio generation returned null or empty file")
+                                Toast.makeText(context, "Failed to generate audio. Check logs for details. Voice ID might be invalid or quota exceeded.", Toast.LENGTH_LONG).show()
                             }
                         } catch (e: Exception) {
                             isEnabled = true
-                            text = "Test Voice"
-                            Toast.makeText(context, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            text = "Test Voice ID"
+                            Log.e("VoiceSettings", "Voice test exception: ${e.message}", e)
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -283,6 +307,47 @@ class VoiceSettingsDialog(
             
             // Phone TTS Settings
             addView(createSectionHeader("Phone TTS Fallback"))
+            
+            // TTS Voice/Locale Selection
+            addView(TextView(context).apply {
+                text = "Voice Language:"
+                setPadding(0, 16, 0, 8)
+            })
+            
+            val localeOptions = arrayOf(
+                "Indian English (Female)" to "en_IN",
+                "UK English" to "en_GB",
+                "US English" to "en_US",
+                "Australian English" to "en_AU"
+            )
+            
+            val localeSpinner = Spinner(context).apply {
+                adapter = ArrayAdapter(
+                    context,
+                    android.R.layout.simple_spinner_dropdown_item,
+                    localeOptions.map { it.first }
+                )
+                // Find current selection
+                val currentIndex = localeOptions.indexOfFirst { it.second == currentSettings.ttsLocale }
+                setSelection(if (currentIndex >= 0) currentIndex else 0)
+                
+                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        val selectedLocale = localeOptions[position].second
+                        currentSettings = currentSettings.copy(ttsLocale = selectedLocale)
+                        Log.d("VoiceSettings", "TTS Locale selected: $selectedLocale")
+                    }
+                    override fun onNothingSelected(parent: AdapterView<*>?) {}
+                }
+            }
+            addView(localeSpinner)
+            
+            addView(TextView(context).apply {
+                text = "💡 Tip: To download voice, go to:\nSettings → Accessibility → Text-to-speech → Install voice data"
+                textSize = 11f
+                setTextColor(Color.GRAY)
+                setPadding(0, 8, 0, 16)
+            })
             
             addView(TextView(context).apply {
                 text = "Voice Pitch: ${currentSettings.ttsPitch}"
